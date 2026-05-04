@@ -53,28 +53,6 @@ def term_width(default: int = 80) -> int:
 
 # -------------------- ASCII logo --------------------
 
-GLEAN_G_LOGO = r"""
-          ╔═══════════════════════════╗
-          ║                           ║
-          ║        ▄▄██████▄▄         ║
-          ║      ▄████████████▄       ║
-          ║     ████▀      ▀████      ║
-          ║    ███▀          ▀███     ║
-          ║    ███            ███     ║
-          ║    ███            ███     ║
-          ║    ███▄          ▄███     ║
-          ║     ████▄      ▄████      ║
-          ║      ▀████████████        ║
-          ║                ███        ║
-          ║                ███        ║
-          ║   ▄▄           ███        ║
-          ║   ████▄      ▄███▀        ║
-          ║    ▀███████████▀          ║
-          ║       ▀▀▀▀▀▀▀▀            ║
-          ║                           ║
-          ╚═══════════════════════════╝
-"""
-
 GLEAN_WORDMARK = r"""
    ██████╗ ██╗     ███████╗ █████╗ ███╗   ██╗     ██████╗ ██████╗ ██████╗ ███████╗
   ██╔════╝ ██║     ██╔════╝██╔══██╗████╗  ██║    ██╔════╝██╔═══██╗██╔══██╗██╔════╝
@@ -86,13 +64,12 @@ GLEAN_WORDMARK = r"""
 
 
 def render_banner(version: str, mode: str) -> str:
-    logo = style(GLEAN_G_LOGO, C.BLUE, C.BOLD)
     mark = style(GLEAN_WORDMARK, C.CYAN, C.BOLD)
     tag  = style("  Your work knowledge, at the command line.", C.GREY, C.ITALIC)
     meta = style(f"  v{version}  ·  mode: {mode}", C.GREY)
     hint = style("  Type /help for commands  ·  /login to connect  ·  /exit to quit",
                  C.TEAL)
-    return f"{logo}\n{mark}\n{tag}\n{meta}\n{hint}\n"
+    return f"{mark}\n{tag}\n{meta}\n{hint}\n"
 
 
 # -------------------- boxes and tables --------------------

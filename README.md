@@ -4,7 +4,7 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 
 ## What you get
 
-- A Claude Code style REPL with an ASCII Glean G logo and wordmark
+- A Claude Code style REPL with an ASCII wordmark
 - Slash commands for every major Glean Client API surface
 - Full in-terminal documentation for every command via `/help <command>`
 - Config stored at `~/.gleancode/config.json`
@@ -24,8 +24,8 @@ Python 3.9 or newer. No pip install required. Only the standard library is used.
 
 ## First run
 
-```
-/login --instance acme --token glean_tok_xxxxxxxx
+```text
+/login --instance acme-be.glean.com --token <bearer_token>
 /status
 /search "quarterly planning"
 /chat "summarise the Q2 plan"
@@ -62,7 +62,7 @@ Change any of them with `/config set <key> <value>`. Use `/mode live|mock|auto` 
 
 ## Project layout
 
-```
+```text
 glean-code/
   glean-code              launcher script
   glean_code/
@@ -80,7 +80,7 @@ glean-code/
 
 The client targets the documented Glean Client REST API at `https://<instance>-be.glean.com/rest/api/v1`. Paths used:
 
-```
+```text
 POST /chat
 POST /search
 POST /autocomplete
@@ -110,6 +110,6 @@ If your tenant uses a slightly different path for a given surface, change it in 
 
 Wrap the JSON in single quotes so the shell parser leaves the double quotes intact:
 
-```
+```text
 /tools.call search '{"query":"pto policy"}'
 ```
