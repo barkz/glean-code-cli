@@ -196,8 +196,8 @@ def cmd_login(s: Session, pos, flags):
     act_as   = flags.get("act-as") or flags.get("act_as")
     if not instance or not token:
         ui.print_err("Usage: /login --instance <host-or-url> --token <token>")
-        ui.print_info("Enter the full host, e.g. scio-prod-be.glean.com or "
-                      "https://scio-prod-be.glean.com. No auto-append.")
+        ui.print_info("Enter the full host, e.g. instance_name-be.glean.com or "
+                      "https://instance_name-be.glean.com. No auto-append.")
         return
 
     raw = str(instance).strip().rstrip("/")
@@ -217,7 +217,7 @@ def cmd_login(s: Session, pos, flags):
 
     if not host or "." not in host:
         ui.print_err(f"That does not look like a hostname: '{raw}'")
-        ui.print_info("Expected something like scio-prod-be.glean.com")
+        ui.print_info("Expected something like instance_name-be.glean.com")
         return
 
     if "/rest/api/" in path:

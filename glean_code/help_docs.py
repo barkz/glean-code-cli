@@ -49,17 +49,17 @@ DOCS: Dict[str, CommandDoc] = {
         "summary": "Store a Glean host and API token for live calls.",
         "usage": "/login --instance <host-or-url> --token <token> [--act-as <email>]",
         "params": [
-            ("--instance", "The full Glean host, e.g. scio-prod-be.glean.com, "
-                            "or a full URL like https://scio-prod-be.glean.com. "
+            ("--instance", "The full Glean host, e.g. instance_name-be.glean.com, "
+                            "or a full URL like https://instance_name-be.glean.com. "
                             "No suffix is auto-appended. You must include -be "
                             "(or whatever your tenant uses) yourself."),
             ("--token", "A Glean API token with Client scopes."),
             ("--act-as", "Optional user email to impersonate via X-Glean-ActAs."),
         ],
         "examples": [
-            "/login --instance scio-prod-be.glean.com --token glean_tok_xxx",
-            "/login --instance https://scio-prod-be.glean.com --token glean_tok_xxx",
-            "/login --instance scio-prod-be.glean.com --token glean_tok_xxx --act-as jane@scio.com",
+            "/login --instance instance_name-be.glean.com --token glean_tok_xxx",
+            "/login --instance https://instance_name-be.glean.com --token glean_tok_xxx",
+            "/login --instance instance_name-be.glean.com --token glean_tok_xxx --act-as jane@example.com",
         ],
         "endpoint": "(local, affects Authorization header)",
     },
