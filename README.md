@@ -4,7 +4,6 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 
 ## What you get
 
-- A Claude Code style REPL with an ASCII wordmark
 - Slash commands for every major Glean Client API surface
 - Full in-terminal documentation for every command via `/help <command>`
 - Config stored at `~/.gleancode/config.json`
@@ -35,22 +34,59 @@ Without a token the CLI runs in mock mode and returns realistic fake data. Set a
 
 ## Commands at a glance
 
-Shell
-  /help /status /login /logout /config /mode /history /clear /exit
+### Shell
 
-Chat and Search
-  /chat /search /autocomplete /recommendations /feedback
+```text
+/help
+/status
+/login
+/logout
+/config
+/mode
+/history
+/clear
+/exit
+```
 
-Agents and Tools
-  /agents.list /agents.run /tools.list /tools.call
+### Chat and Search
 
-Docs and People
-  /docs.get /docs.permissions /entities.list /people.get
+```text
+/chat
+/search
+/autocomplete
+/recommendations
+/feedback
+```
 
-Announcements, Collections, Pins
-  /announcements.list /announcements.create /announcements.delete
-  /collections.list /collections.create
-  /pins.list /pins.create
+### Agents and Tools
+
+```text
+/agents.list
+/agents.run
+/tools.list
+/tools.call
+```
+
+### Docs and People
+
+```text
+/docs.get
+/docs.permissions
+/entities.list
+/people.get
+```
+
+### Announcements, Collections, Pins
+
+```text
+/announcements.list
+/announcements.create
+/announcements.delete
+/collections.list
+/collections.create
+/pins.list
+/pins.create
+```
 
 Type `/help <command>` for parameters, examples and the underlying REST endpoint. Bare text with no leading slash is a shortcut for `/chat`.
 
