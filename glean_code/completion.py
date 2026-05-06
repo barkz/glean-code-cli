@@ -113,6 +113,12 @@ class _Completer:
                 partial = "" if ends_with_space else tokens[-1]
                 return sorted(c for c in DOCS if c.startswith(partial))
 
+        # ── /scaffold <template-tab> ─────────────────────────────────────
+        if cmd == "scaffold":
+            if ends_with_space or len(tokens) == 2:
+                partial = "" if ends_with_space else tokens[-1]
+                return [t for t in ("chat", "search", "agent") if t.startswith(partial)]
+
         # ── fallback: show available flags when cursor is at a blank slot ─
         if text == "" and doc:
             return [p[0] for p in doc.get("params", []) if p[0].startswith("--")]

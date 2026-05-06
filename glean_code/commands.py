@@ -18,6 +18,7 @@ from . import ui
 from .client import GleanClient, GleanError
 from .config import Config
 from .help_docs import DOCS, COMMAND_GROUPS
+from .scaffold import TEMPLATES, write_scaffold, default_dir as _scaffold_default_dir
 
 
 # -------------------- arg parsing --------------------
@@ -704,6 +705,54 @@ def cmd_pins_create(s: Session, pos, flags):
         print(_render_json(s.client.pin_create(str(url), str(query))))
     except GleanError as e:
         ui.print_err(str(e))
+
+
+
+# -------------------- scaffold --------------------
+
+@register("scaffold")
+def cmd_scaffold(s: Session, pos, flags):
+    valid = sorted(TEMPLATES)
+    if not pos or pos[0] not in TEMPLATES:
+        ui.print_err(f"Usage: /scaffold <template>  — templates: {', '.join(valid)}")
+        return
+    template = pos[0]
+
+    output_dir = flags.get("output") or flags.get("o")
+    if not output_dir:
+        default = _scaffold_default_dir(template)
+        try:
+            output_dir = input(
+                ui.style(f"Output directory [{default}]: ", ui.C.CYAN)
+            ).strip() or default
+        except (EOFError, KeyboardInterrupt):
+            print()
+            ui.print_info("Cancelled.")
+            return
+
+    from pathlib import Path
+    dest = Path(output_dir).expanduser().resolve()
+    if not dest.exists():
+        try:
+            confirm = input(
+                ui.style(f"Directory '{dest}' does not exist. Create it? [Y/n]: ", ui.C.CYAN)
+            ).strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            ui.print_info("Cancelled.")
+            return
+        if confirm not in ("", "y", "yes"):
+            ui.print_info("Cancelled.")
+            return
+
+    try:
+        out_path = write_scaffold(template, output_dir)
+    except Exception as e:
+        ui.print_err(f"Could not write scaffold: {e}")
+        return
+
+    ui.print_ok(f"Created {out_path}")
+    ui.print_info(f"Run with:  python3 {out_path}")
 
 
 # -------------------- dispatcher --------------------

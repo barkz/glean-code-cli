@@ -322,6 +322,22 @@ DOCS: Dict[str, CommandDoc] = {
         "examples": ["/pins.create --query pto --url https://hr.acme.com/pto"],
         "endpoint": "POST /rest/api/v1/createpin",
     },
+
+    # ---------------- scaffold ----------------
+    "scaffold": {
+        "summary": "Generate a standalone Python starter project for a Glean API surface.",
+        "usage": "/scaffold <chat|search|agent> [--output <dir>]",
+        "params": [
+            ("template", "Which template to generate: chat, search, or agent."),
+            ("--output",  "Output directory. Prompted interactively if omitted."),
+        ],
+        "examples": [
+            "/scaffold chat",
+            "/scaffold search --output ~/projects/glean-search",
+            "/scaffold agent --output ./my-agent-app",
+        ],
+        "endpoint": "(local, writes a standalone .py file)",
+    },
 }
 
 
@@ -333,4 +349,5 @@ COMMAND_GROUPS: List[Tuple[str, List[str]]] = [
     ("Announcements",  ["announcements.list", "announcements.create", "announcements.delete"]),
     ("Collections",    ["collections.list", "collections.create"]),
     ("Pins",           ["pins.list", "pins.create"]),
+    ("Scaffold",       ["scaffold"]),
 ]
