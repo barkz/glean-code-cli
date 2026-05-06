@@ -25,6 +25,14 @@ python3 -m glean_code
 
 Python 3.9 or newer. No pip install required. Only the standard library is used.
 
+## Create an alias
+
+After opening up a new terminal just run `glean`.
+
+```bash
+alias glean="PYTHONPATH=<YOUR_PATH>>/glean-code-cli python3 -m glean_code"
+```
+
 ## First run
 
 ```text
