@@ -7,9 +7,38 @@ integrated terminal.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import sys
-from typing import Iterable, List
+from typing import Iterable, List, Optional
+
+_ANSI_RE = re.compile(r"\033\[[0-9;]*m")
+
+
+def _vis(s: str) -> int:
+    """Visible length of s, ignoring ANSI escape sequences."""
+    return len(_ANSI_RE.sub("", s))
+
+
+def _ljust(s: str, width: int) -> str:
+    """Pad s with spaces so its visible width equals width."""
+    pad = width - _vis(s)
+    return s + " " * max(0, pad)
+
+
+def _split_at(s: str, n: int) -> tuple:
+    """Split s at visible position n, returning (head, tail)."""
+    vis, i = 0, 0
+    while i < len(s):
+        if s[i] == "\033":
+            end = s.find("m", i)
+            i = end + 1 if end != -1 else len(s)
+        else:
+            if vis == n:
+                break
+            vis += 1
+            i += 1
+    return s[:i], s[i:]
 
 # -------------------- colours --------------------
 
@@ -79,15 +108,14 @@ def box(title: str, body: str, colour: str = C.BLUE) -> str:
     inner = width - 2
     top = "╭" + "─" * inner + "╮"
     bot = "╰" + "─" * inner + "╯"
-    title_line = f"│ {style(title, C.BOLD)}".ljust(inner + len(C.BOLD) + len(C.RESET) + 2) + "│"
+    title_line = _ljust("│ " + style(title, C.BOLD), inner + 1) + "│"
     lines = [style(top, colour), style(title_line, colour)]
     lines.append(style("│" + " " * inner + "│", colour))
     for raw in body.splitlines() or [""]:
-        # crude wrap
-        while len(raw) > inner - 2:
-            chunk, raw = raw[: inner - 2], raw[inner - 2:]
-            lines.append(style("│ ", colour) + chunk.ljust(inner - 2) + style(" │", colour))
-        lines.append(style("│ ", colour) + raw.ljust(inner - 2) + style(" │", colour))
+        while _vis(raw) > inner - 2:
+            chunk, raw = _split_at(raw, inner - 2)
+            lines.append(style("│ ", colour) + _ljust(chunk, inner - 2) + style(" │", colour))
+        lines.append(style("│ ", colour) + _ljust(raw, inner - 2) + style(" │", colour))
     lines.append(style("│" + " " * inner + "│", colour))
     lines.append(style(bot, colour))
     return "\n".join(lines)
@@ -133,3 +161,59 @@ def prompt_str(mode: str) -> str:
     label = style("glean", C.BLUE, C.BOLD) + style("-code", C.CYAN, C.BOLD)
     arrow = style("›", C.GREY)
     return f"{dot} {label} {arrow} "
+
+
+# -------------------- status bar --------------------
+
+def status_bar(
+    mode: str,
+    instance: Optional[str] = None,
+    has_token: bool = False,
+    act_as: Optional[str] = None,
+    chat_id: Optional[str] = None,
+) -> str:
+    """Full-width coloured status bar. Returns '' when colour is unsupported."""
+    if not supports_colour():
+        return ""
+
+    # Each entry: (bg_256, fg_256, visible_text)
+    segs: List[tuple] = []
+
+    if mode == "live":
+        segs.append(("28",  "255", " ● LIVE "))
+    elif mode == "mock":
+        segs.append(("136", "0",   " ● MOCK "))
+    else:
+        segs.append(("241", "255", " ● AUTO "))
+
+    if instance:
+        host = instance
+        if "://" in host:
+            host = host.split("://", 1)[1].split("/")[0]
+        segs.append(("24", "255", f"  {host} "))
+    else:
+        segs.append(("238", "244", "  no instance "))
+
+    if has_token:
+        label = f"  {act_as} " if act_as else "  token ✓ "
+        segs.append(("23", "255", label))
+    else:
+        segs.append(("52", "203", "  no token "))
+
+    if chat_id:
+        short = (chat_id[:12] + "…") if len(chat_id) > 13 else chat_id
+        segs.append(("54", "255", f"  ◉ {short} "))
+
+    parts: List[str] = []
+    for i, (bg, fg, text) in enumerate(segs):
+        parts.append(f"\033[48;5;{bg}m\033[38;5;{fg}m{text}")
+        if i + 1 < len(segs):
+            next_bg = segs[i + 1][0]
+            # Arrow separator: current bg behind, next bg as fg colour
+            parts.append(f"\033[48;5;{bg}m\033[38;5;{next_bg}m▶")
+
+    visible = sum(len(t) for _, _, t in segs) + (len(segs) - 1)
+    fill = max(0, term_width() - visible)
+    parts.append(f"\033[48;5;235m{' ' * fill}\033[0m")
+
+    return "".join(parts)

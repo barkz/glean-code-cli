@@ -5,6 +5,7 @@ import sys
 
 from . import __version__, ui
 from .commands import Session, dispatch
+from .completion import setup_readline
 from .config import Config
 
 
@@ -20,8 +21,19 @@ def main() -> None:
             dispatch(session, line)
         return
 
+    setup_readline()
+
     while session.running:
         try:
+            bar = ui.status_bar(
+                mode=config.effective_mode,
+                instance=config.instance,
+                has_token=bool(config.api_token),
+                act_as=config.act_as,
+                chat_id=session.current_chat_id,
+            )
+            if bar:
+                print(bar)
             line = input(ui.prompt_str(config.effective_mode))
         except (EOFError, KeyboardInterrupt):
             print()

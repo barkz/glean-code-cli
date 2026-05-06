@@ -2,10 +2,14 @@
 
 A local, terminal-first client for the Glean Client REST API. Inspired by Claude Code. Built in Python with zero runtime dependencies.
 
+![Glean Code terminal screenshot](assets/glean_code_cli_example.png)
+
 ## What you get
 
 - Slash commands for every major Glean Client API surface
 - Full in-terminal documentation for every command via `/help <command>`
+- Tab completion for command names, `--flags`, and known enum values
+- Live status bar showing mode, connected instance, auth state, and active chat thread
 - Config stored at `~/.gleancode/config.json`
 - Mock mode by default, so you can try every command offline
 - Live mode the moment you add an instance and token
