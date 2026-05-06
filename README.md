@@ -161,8 +161,17 @@ and Cursor can call Glean search, chat, and agents as native tools.
 
 **Install the MCP package (one-time):**
 
+`pip`
+
 ```bash
 pip install "mcp[cli]"
+```
+
+`brew`
+
+```bash
+brew install pipx
+pipx install "mcp[cli]"
 ```
 
 **Claude Code** — add to `.claude/settings.json` in your project, or to
