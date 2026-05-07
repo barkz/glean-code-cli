@@ -551,19 +551,21 @@ DOCS: Dict[str, CommandDoc] = {
     # ---------------- insights ----------------
     "insights": {
         "summary": "Retrieve aggregate usage insights from the Glean Insights Dashboard.",
-        "usage": "/insights [--assistant] [--agents] [--all] [--no-per-user]",
+        "usage": "/insights [--assistant] [--agents] [--all] [--no-per-user] [--export <file>]",
         "params": [
             ("--assistant", "Include Assistant usage metrics "
                             "(MAU, WAU, chat messages, AI answers)."),
             ("--agents",    "Include Agents usage metrics."),
             ("--all",       "Include Overview, Assistant and Agents in one call."),
             ("--no-per-user", "Suppress per-user breakdown in the response."),
+            ("--export",    "Write results to a CSV file. Columns: section, metric, value."),
         ],
         "examples": [
             "/insights",
             "/insights --all",
             "/insights --assistant",
             "/insights --agents --no-per-user",
+            "/insights --all --export insights.csv",
         ],
         "endpoint": "POST /rest/api/v1/insights",
     },

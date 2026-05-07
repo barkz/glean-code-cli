@@ -5,6 +5,7 @@ Quoted strings are preserved. JSON arguments can be passed as a single token.
 """
 from __future__ import annotations
 
+import csv
 import json
 import shlex
 import socket
@@ -1228,12 +1229,53 @@ def _render_insights(resp: Dict[str, Any]) -> None:
     print(ui.rule())
 
 
+def _export_insights_csv(resp: Dict[str, Any], path: str) -> None:
+    """Write insights data to a CSV file with columns: section, metric, value."""
+    rows: List[Tuple[str, str, str]] = []
+
+    overview = resp.get("overviewResponse")
+    if overview:
+        sat = overview.get("searchSessionSatisfaction")
+        rows += [
+            ("overview", "monthly_active_users",  str(overview.get("monthlyActiveUsers", ""))),
+            ("overview", "weekly_active_users",   str(overview.get("weeklyActiveUsers", ""))),
+            ("overview", "employee_count",        str(overview.get("employeeCount", ""))),
+            ("overview", "total_signups",         str(overview.get("totalSignups", ""))),
+            ("overview", "search_satisfaction",   f"{sat:.4f}" if sat is not None else ""),
+            ("overview", "last_updated",          _fmt_ts(overview.get("lastUpdatedTs"))),
+        ]
+        for ds, count in sorted((overview.get("searchDatasourceCounts") or {}).items()):
+            rows.append(("datasource_clicks", ds, str(count)))
+
+    assistant = resp.get("assistantResponse")
+    if assistant:
+        rows += [
+            ("assistant", "monthly_active_users", str(assistant.get("monthlyActiveUsers", ""))),
+            ("assistant", "weekly_active_users",  str(assistant.get("weeklyActiveUsers", ""))),
+            ("assistant", "last_updated",         _fmt_ts(assistant.get("lastUpdatedTs"))),
+        ]
+
+    agents = resp.get("agentsResponse")
+    if agents:
+        rows += [
+            ("agents", "monthly_active_users", str(agents.get("monthlyActiveUsers", ""))),
+            ("agents", "weekly_active_users",  str(agents.get("weeklyActiveUsers", ""))),
+            ("agents", "last_updated",         _fmt_ts(agents.get("lastUpdatedTs"))),
+        ]
+
+    with open(path, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.writer(fh)
+        writer.writerow(["section", "metric", "value"])
+        writer.writerows(rows)
+
+
 @register("insights")
 def cmd_insights(s: Session, pos, flags):
     show_assistant = bool(flags.get("assistant"))
     show_agents    = bool(flags.get("agents"))
     show_all       = bool(flags.get("all"))
     no_per_user    = bool(flags.get("no-per-user") or flags.get("no_per_user"))
+    export_path    = flags.get("export")
     # default: overview always on; --all enables assistant + agents too
     try:
         resp = s.client.insights(
@@ -1246,6 +1288,12 @@ def cmd_insights(s: Session, pos, flags):
         ui.print_err(str(e))
         return
     _render_insights(resp)
+    if export_path:
+        try:
+            _export_insights_csv(resp, export_path)
+            ui.print_ok(f"Exported to {export_path}")
+        except OSError as e:
+            ui.print_err(f"Could not write CSV: {e}")
 
 
 

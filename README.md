@@ -83,6 +83,7 @@ Without a token the CLI runs in mock mode and returns realistic fake data. Set a
 - [`/insights --all`](#insights)
 - [`/insights --assistant`](#insights)
 - [`/insights --agents`](#insights)
+- [`/insights --all --export <file>`](#insights)
 
 ### Agents and Tools
 
@@ -1403,6 +1404,7 @@ Uses the same Client API token as search and chat — no extra credentials requi
 | `--agents` | Adds Agents metrics: MAU, WAU |
 | `--all` | All three surfaces in one call |
 | `--no-per-user` | Suppresses the per-user breakdown in the response |
+| `--export <file>` | Write all returned metrics to a CSV file (columns: `section`, `metric`, `value`) |
 
 ### Examples
 
@@ -1411,6 +1413,7 @@ Uses the same Client API token as search and chat — no extra credentials requi
 /insights --all
 /insights --assistant
 /insights --agents --no-per-user
+/insights --all --export insights.csv
 ```
 
 ### What the output shows
