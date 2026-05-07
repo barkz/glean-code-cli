@@ -6,7 +6,7 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 
 ## What you get
 
-- Slash commands for every major Glean Client API surface: chat, search, agents, tools, docs, people, announcements, collections, pins, and insights
+- Slash commands covering every major Glean Client API surface: chat, search, agents, tools, docs, people, shortcuts (Go Links), answers, summarize, verification, messages, activity, announcements, collections, pins, and insights
 - Full in-terminal documentation for every command via `/help <command>`
 - Tab completion that cycles through matches as you type — press Tab to step forward, Shift+Tab to step back
 - Powerline-style status bar showing mode, connected instance, auth state, and active chat thread
@@ -105,8 +105,44 @@ Without a token the CLI runs in mock mode and returns realistic fake data. Set a
 - [`/announcements.delete`](#announcementsdelete)
 - [`/collections.list`](#collectionslist)
 - [`/collections.create`](#collectionscreate)
+- [`/collections.delete`](#collectionsdelete)
 - [`/pins.list`](#pinslist)
 - [`/pins.create`](#pinscreate)
+- [`/pins.delete`](#pinsdelete)
+
+### Shortcuts
+
+- [`/shortcuts.list`](#shortcutslist)
+- [`/shortcuts.get`](#shortcutsget)
+- [`/shortcuts.create`](#shortcutscreate)
+- [`/shortcuts.update`](#shortcutsupdate)
+- [`/shortcuts.delete`](#shortcutsdelete)
+
+### Answers
+
+- [`/answers.list`](#answerslist)
+- [`/answers.get`](#answersget)
+- [`/answers.create`](#answerscreate)
+- [`/answers.update`](#answersupdate)
+- [`/answers.delete`](#answersdelete)
+
+### Summarize
+
+- [`/summarize`](#summarize)
+
+### Verification
+
+- [`/verification.list`](#verificationlist)
+- [`/verification.verify`](#verificationverify)
+- [`/verification.remind`](#verificationremind)
+
+### Messages
+
+- [`/messages.get`](#messagesget)
+
+### Activity
+
+- [`/activity.report`](#activityreport)
 
 ### Scaffold templates
 
@@ -881,6 +917,442 @@ Pin a URL to a search query so it appears as the top result for that query.
 
 ---
 
+#### /pins.delete
+
+Remove a pinned result by id.
+
+```text
+/pins.delete <id>
+```
+
+| Parameter | Description |
+| --- | --- |
+| `id` | Pin id from `/pins.list`. |
+
+```text
+/pins.delete pin_1
+```
+
+**Output** — Confirms the pin was removed.
+
+**Endpoint** — `POST /rest/api/v1/unpin`
+
+---
+
+#### /collections.delete
+
+Delete one or more collections by id.
+
+```text
+/collections.delete <id> [<id>...]
+```
+
+| Parameter | Description |
+| --- | --- |
+| `id` | Collection id(s) from `/collections.list`. Repeatable. |
+
+```text
+/collections.delete 1
+/collections.delete 1 2 3
+```
+
+**Output** — Confirms the collection(s) were deleted.
+
+**Endpoint** — `POST /rest/api/v1/deletecollection`
+
+---
+
+---
+
+#### /shortcuts.list
+
+List Go Links (shortcuts) owned by the current user.
+
+```text
+/shortcuts.list [--query <text>] [--page-size <n>]
+```
+
+| Parameter | Description |
+| --- | --- |
+| `--query` | Filter shortcuts by alias or description. |
+| `--page-size` | Number of results. Default `20`. |
+
+```text
+/shortcuts.list
+/shortcuts.list --query eng
+```
+
+**Output** — Table of shortcut ids, `go/<alias>`, destination URLs, and descriptions.
+
+**Endpoint** — `POST /rest/api/v1/listshortcuts`
+
+---
+
+#### /shortcuts.get
+
+Look up a single Go Link by alias.
+
+```text
+/shortcuts.get <alias>
+```
+
+| Parameter | Description |
+| --- | --- |
+| `alias` | The shortcut alias, e.g. `pto`. |
+
+```text
+/shortcuts.get pto
+/shortcuts.get oncall
+```
+
+**Output** — Id, alias, destination URL, and description.
+
+**Endpoint** — `POST /rest/api/v1/getshortcut`
+
+---
+
+#### /shortcuts.create
+
+Create a new Go Link.
+
+```text
+/shortcuts.create --alias <alias> --url <url> [--description <text>] [--unlisted]
+```
+
+| Parameter | Description |
+| --- | --- |
+| `--alias` | Short alias for the link, e.g. `pto`. |
+| `--url` | Destination URL. |
+| `--description` | Optional description shown in search. |
+| `--unlisted` | Hide from public listing. |
+
+```text
+/shortcuts.create --alias pto --url https://hr.acme.com/pto
+/shortcuts.create --alias oncall --url https://wiki.acme.com/oncall --description "On-call runbook"
+```
+
+**Output** — Confirms creation with the new shortcut id.
+
+**Endpoint** — `POST /rest/api/v1/createshortcut`
+
+---
+
+#### /shortcuts.update
+
+Update an existing Go Link's alias, URL, or description.
+
+```text
+/shortcuts.update <id> [--alias <alias>] [--url <url>] [--description <text>]
+```
+
+| Parameter | Description |
+| --- | --- |
+| `id` | Shortcut id from `/shortcuts.list`. |
+| `--alias` | New alias. |
+| `--url` | New destination URL. |
+| `--description` | New description. |
+
+```text
+/shortcuts.update 1 --url https://hr.acme.com/new-pto
+/shortcuts.update 1 --alias vacay --description "Updated vacation policy"
+```
+
+**Output** — Confirms the update.
+
+**Endpoint** — `POST /rest/api/v1/updateshortcut`
+
+---
+
+#### /shortcuts.delete
+
+Delete a Go Link by id.
+
+```text
+/shortcuts.delete <id>
+```
+
+| Parameter | Description |
+| --- | --- |
+| `id` | Shortcut id from `/shortcuts.list`. |
+
+```text
+/shortcuts.delete 1
+```
+
+**Output** — Confirms deletion.
+
+**Endpoint** — `POST /rest/api/v1/deleteshortcut`
+
+---
+
+---
+
+#### /answers.list
+
+List Q&A answers created by the current user.
+
+```text
+/answers.list
+```
+
+```text
+/answers.list
+```
+
+**Output** — Each answer's id, question, and body text.
+
+**Endpoint** — `POST /rest/api/v1/listanswers`
+
+---
+
+#### /answers.get
+
+Fetch the full details of a single answer by id.
+
+```text
+/answers.get <id>
+```
+
+| Parameter | Description |
+| --- | --- |
+| `id` | Answer id from `/answers.list`. |
+
+```text
+/answers.get 1
+```
+
+**Output** — Question and answer body in a styled box.
+
+**Endpoint** — `POST /rest/api/v1/getanswer`
+
+---
+
+#### /answers.create
+
+Create a new Q&A answer in the knowledge base.
+
+```text
+/answers.create --question <text> --body <text> [--audience <filter>]
+```
+
+| Parameter | Description |
+| --- | --- |
+| `--question` | The question text. |
+| `--body` | The answer body text. |
+| `--audience` | Optional audience filter string. |
+
+```text
+/answers.create --question "What is our PTO policy?" --body "20 days per year."
+```
+
+**Output** — Confirms creation with the new answer id.
+
+**Endpoint** — `POST /rest/api/v1/createanswer`
+
+---
+
+#### /answers.update
+
+Edit an existing answer's question or body.
+
+```text
+/answers.update <id> [--question <text>] [--body <text>]
+```
+
+| Parameter | Description |
+| --- | --- |
+| `id` | Answer id from `/answers.list`. |
+| `--question` | Updated question text. |
+| `--body` | Updated answer body text. |
+
+```text
+/answers.update 1 --body "25 days per year effective Jan 1."
+```
+
+**Output** — Confirms the update.
+
+**Endpoint** — `POST /rest/api/v1/editanswer`
+
+---
+
+#### /answers.delete
+
+Delete an answer by id.
+
+```text
+/answers.delete <id>
+```
+
+| Parameter | Description |
+| --- | --- |
+| `id` | Answer id from `/answers.list`. |
+
+```text
+/answers.delete 1
+```
+
+**Output** — Confirms deletion.
+
+**Endpoint** — `POST /rest/api/v1/deleteanswer`
+
+---
+
+---
+
+#### /summarize
+
+Ask Glean AI to summarize a document by URL or id. Optionally focus the summary with a question.
+
+```text
+/summarize [--url <url>] [--id <doc-id>] [--query <focus>]
+```
+
+| Parameter | Description |
+| --- | --- |
+| `--url` | Document URL to summarize. |
+| `--id` | Glean document id to summarize. |
+| `--query` | Optional focus question to guide the summary. |
+
+```text
+/summarize --url https://docs.acme.com/q2-plan
+/summarize --id doc_123 --query "What are the key risks?"
+```
+
+**Output** — AI-generated summary in a styled box.
+
+**Endpoint** — `POST /rest/api/v1/summarize`
+
+---
+
+---
+
+#### /verification.list
+
+List documents pending or due for verification.
+
+```text
+/verification.list [--count <n>]
+```
+
+| Parameter | Description |
+| --- | --- |
+| `--count` | Max number of items to return. Default `20`. |
+
+```text
+/verification.list
+/verification.list --count 50
+```
+
+**Output** — Table of documents with their verification status (`VERIFIED` / `UNVERIFIED`), title, id, and last verified timestamp.
+
+**Endpoint** — `POST /rest/api/v1/listverifications`
+
+---
+
+#### /verification.verify
+
+Mark a document as verified or unverify it.
+
+```text
+/verification.verify <doc-id> [--action VERIFY|UNVERIFY]
+```
+
+| Parameter | Description |
+| --- | --- |
+| `doc-id` | Glean document id. |
+| `--action` | `VERIFY` (default) or `UNVERIFY`. |
+
+```text
+/verification.verify doc_123
+/verification.verify doc_123 --action UNVERIFY
+```
+
+**Output** — Confirms the new verification status.
+
+**Endpoint** — `POST /rest/api/v1/verify`
+
+---
+
+#### /verification.remind
+
+Set a verification reminder for a document, optionally assigning it to someone.
+
+```text
+/verification.remind <doc-id> [--days <n>] [--assignee <email>] [--reason <text>]
+```
+
+| Parameter | Description |
+| --- | --- |
+| `doc-id` | Glean document id. |
+| `--days` | Remind in this many days. Default `30`. |
+| `--assignee` | Email of the person to assign the reminder to. |
+| `--reason` | Optional reason for the reminder. |
+
+```text
+/verification.remind doc_123
+/verification.remind doc_123 --days 7 --assignee alice@acme.com --reason "Quarterly review"
+```
+
+**Output** — Confirms the reminder was set.
+
+**Endpoint** — `POST /rest/api/v1/addverificationreminder`
+
+---
+
+---
+
+#### /messages.get
+
+Retrieve a message thread from a connected datasource such as Slack or Microsoft Teams.
+
+```text
+/messages.get --id <id> --datasource <name> [--id-type <type>] [--direction BEFORE|AFTER]
+```
+
+| Parameter | Description |
+| --- | --- |
+| `--id` | Message id. |
+| `--datasource` | Datasource name, e.g. `slack`, `msteams`. |
+| `--id-type` | Id type. Default `MESSAGE_ID`. |
+| `--direction` | `BEFORE` or `AFTER` — fetch surrounding thread context. |
+
+```text
+/messages.get --id 1234567890.123456 --datasource slack
+/messages.get --id 1234567890.123456 --datasource slack --direction AFTER
+```
+
+**Output** — Author and text for each message in the thread.
+
+**Endpoint** — `POST /rest/api/v1/messages`
+
+---
+
+---
+
+#### /activity.report
+
+Report a document view or edit event. Helps Glean improve search ranking and recommendations.
+
+```text
+/activity.report --url <url> [--action VIEW|EDIT]
+```
+
+| Parameter | Description |
+| --- | --- |
+| `--url` | URL of the document the activity occurred on. |
+| `--action` | Activity type: `VIEW` (default) or `EDIT`. |
+
+```text
+/activity.report --url https://docs.acme.com/plan
+/activity.report --url https://docs.acme.com/plan --action EDIT
+```
+
+**Output** — Confirms the number of events processed.
+
+**Endpoint** — `POST /rest/api/v1/activity`
+
+---
+
 ### Scaffold
 
 ---
@@ -1192,6 +1664,24 @@ POST /listcollections
 POST /createcollection
 POST /listpins
 POST /createpin
+POST /unpin
+POST /deletecollection
+POST /listshortcuts
+POST /getshortcut
+POST /createshortcut
+POST /updateshortcut
+POST /deleteshortcut
+POST /listanswers
+POST /getanswer
+POST /createanswer
+POST /editanswer
+POST /deleteanswer
+POST /summarize
+POST /listverifications
+POST /verify
+POST /addverificationreminder
+POST /messages
+POST /activity
 POST /insights
 ```
 

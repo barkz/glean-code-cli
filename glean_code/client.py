@@ -276,6 +276,140 @@ class GleanClient:
     def pin_create(self, url: str, query: str) -> Dict[str, Any]:
         return self._post("/createpin", {"url": url, "query": query})
 
+    def pin_delete(self, pin_id: str) -> Dict[str, Any]:
+        return self._post("/unpin", {"id": pin_id})
+
+    # ---------------- collections delete ----------------
+
+    def collection_delete(self, ids: List[int]) -> Dict[str, Any]:
+        return self._post("/deletecollection", {"ids": ids})
+
+    # ---------------- shortcuts ----------------
+
+    def shortcuts_list(self, query: Optional[str] = None,
+                       page_size: int = 20) -> Dict[str, Any]:
+        body: Dict[str, Any] = {"pageSize": page_size}
+        if query:
+            body["query"] = query
+        return self._post("/listshortcuts", body)
+
+    def shortcut_get(self, alias: str) -> Dict[str, Any]:
+        return self._post("/getshortcut", {"alias": alias})
+
+    def shortcut_create(self, alias: str, url: str,
+                        description: Optional[str] = None,
+                        unlisted: bool = False) -> Dict[str, Any]:
+        data: Dict[str, Any] = {"inputAlias": alias, "destinationUrl": url,
+                                 "unlisted": unlisted}
+        if description:
+            data["description"] = description
+        return self._post("/createshortcut", {"data": data})
+
+    def shortcut_update(self, shortcut_id: int,
+                        alias: Optional[str] = None,
+                        url: Optional[str] = None,
+                        description: Optional[str] = None) -> Dict[str, Any]:
+        body: Dict[str, Any] = {"id": shortcut_id}
+        if alias:
+            body["inputAlias"] = alias
+        if url:
+            body["destinationUrl"] = url
+        if description is not None:
+            body["description"] = description
+        return self._post("/updateshortcut", body)
+
+    def shortcut_delete(self, shortcut_id: int) -> Dict[str, Any]:
+        return self._post("/deleteshortcut", {"id": shortcut_id})
+
+    # ---------------- answers ----------------
+
+    def answers_list(self) -> Dict[str, Any]:
+        return self._post("/listanswers", {})
+
+    def answer_get(self, answer_id: int) -> Dict[str, Any]:
+        return self._post("/getanswer", {"id": answer_id})
+
+    def answer_create(self, question: str, body_text: str,
+                      audience: Optional[str] = None) -> Dict[str, Any]:
+        data: Dict[str, Any] = {"question": question, "bodyText": body_text}
+        if audience:
+            data["audienceFilters"] = [{"filter": audience}]
+        return self._post("/createanswer", {"data": data})
+
+    def answer_update(self, answer_id: int,
+                      question: Optional[str] = None,
+                      body_text: Optional[str] = None) -> Dict[str, Any]:
+        body: Dict[str, Any] = {"id": answer_id}
+        if question:
+            body["question"] = question
+        if body_text:
+            body["bodyText"] = body_text
+        return self._post("/editanswer", body)
+
+    def answer_delete(self, answer_id: int) -> Dict[str, Any]:
+        return self._post("/deleteanswer", {"id": answer_id})
+
+    # ---------------- summarize ----------------
+
+    def summarize(self, url: Optional[str] = None,
+                  doc_id: Optional[str] = None,
+                  query: Optional[str] = None) -> Dict[str, Any]:
+        body: Dict[str, Any] = {}
+        if doc_id:
+            body["documentSpec"] = {"id": doc_id}
+        elif url:
+            body["documentSpec"] = {"url": url}
+        if query:
+            body["query"] = query
+        return self._post("/summarize", body)
+
+    # ---------------- verification ----------------
+
+    def verification_list(self, count: Optional[int] = None) -> Dict[str, Any]:
+        body: Dict[str, Any] = {}
+        if count:
+            body["count"] = count
+        return self._post("/listverifications", body)
+
+    def verification_verify(self, doc_id: str,
+                             action: Optional[str] = None) -> Dict[str, Any]:
+        body: Dict[str, Any] = {"documentId": doc_id}
+        if action:
+            body["action"] = action
+        return self._post("/verify", body)
+
+    def verification_remind(self, doc_id: str,
+                             remind_in_days: Optional[int] = None,
+                             assignee: Optional[str] = None,
+                             reason: Optional[str] = None) -> Dict[str, Any]:
+        body: Dict[str, Any] = {"documentId": doc_id}
+        if remind_in_days:
+            body["remindInDays"] = remind_in_days
+        if assignee:
+            body["assignee"] = assignee
+        if reason:
+            body["reason"] = reason
+        return self._post("/addverificationreminder", body)
+
+    # ---------------- messages ----------------
+
+    def messages_get(self, msg_id: str, id_type: str,
+                     datasource: str,
+                     direction: Optional[str] = None) -> Dict[str, Any]:
+        body: Dict[str, Any] = {"id": msg_id, "idType": id_type,
+                                 "datasource": datasource}
+        if direction:
+            body["direction"] = direction
+        return self._post("/messages", body)
+
+    # ---------------- activity ----------------
+
+    def activity_report(self, url: str,
+                         action: str = "VIEW") -> Dict[str, Any]:
+        body = {"events": [{"url": url, "action": action,
+                             "timestamp": int(time.time())}]}
+        return self._post("/activity", body)
+
     # ---------------- insights ----------------
 
     def insights(self, overview: bool = True, assistant: bool = False,
@@ -402,6 +536,82 @@ def _mock_response(path: str, body: Dict[str, Any]) -> Dict[str, Any]:
         return {"pins": [{"id": "pin_1", "query": "pto", "url": "https://example.com/pto"}]}
     if path == "/createpin":
         return {"id": f"pin_{uuid.uuid4().hex[:6]}", "status": "created"}
+    if path == "/unpin":
+        return {"id": body.get("id"), "status": "unpinned"}
+    if path == "/deletecollection":
+        return {"ids": body.get("ids"), "status": "deleted"}
+    if path == "/listshortcuts":
+        q = body.get("query", "")
+        return {"shortcuts": [
+            {"id": 1, "inputAlias": "pto", "destinationUrl": "https://hr.acme.com/pto",
+             "description": "PTO policy"},
+            {"id": 2, "inputAlias": "oncall", "destinationUrl": "https://wiki.acme.com/oncall",
+             "description": "On-call runbook"},
+        ] if not q else [
+            {"id": 1, "inputAlias": q, "destinationUrl": f"https://acme.com/{q}",
+             "description": f"Shortcut for {q}"}
+        ]}
+    if path == "/getshortcut":
+        alias = body.get("alias", "")
+        return {"shortcut": {"id": 1, "inputAlias": alias,
+                              "destinationUrl": f"https://acme.com/{alias}",
+                              "description": f"Shortcut for {alias}"}}
+    if path == "/createshortcut":
+        data = body.get("data", {})
+        return {"id": int(uuid.uuid4().int % 10000),
+                "inputAlias": data.get("inputAlias"),
+                "destinationUrl": data.get("destinationUrl"),
+                "status": "created"}
+    if path == "/updateshortcut":
+        return {"id": body.get("id"), "status": "updated"}
+    if path == "/deleteshortcut":
+        return {"id": body.get("id"), "status": "deleted"}
+    if path == "/listanswers":
+        return {"answers": [
+            {"id": 1, "question": "What is our PTO policy?",
+             "bodyText": "Employees get 20 days of PTO per year."},
+            {"id": 2, "question": "Where is the oncall runbook?",
+             "bodyText": "See go/oncall for the full runbook."},
+        ]}
+    if path == "/getanswer":
+        return {"answer": {"id": body.get("id"),
+                           "question": "Mock question?",
+                           "bodyText": "Mock answer body."}}
+    if path == "/createanswer":
+        data = body.get("data", {})
+        return {"id": int(uuid.uuid4().int % 10000),
+                "question": data.get("question"),
+                "status": "created"}
+    if path == "/editanswer":
+        return {"id": body.get("id"), "status": "updated"}
+    if path == "/deleteanswer":
+        return {"id": body.get("id"), "status": "deleted"}
+    if path == "/summarize":
+        spec = body.get("documentSpec", {})
+        src = spec.get("url") or spec.get("id") or "the document"
+        return {"summary": f"[mock] This is a summary of {src}. "
+                           "Configure a real token with /login to get a live summary."}
+    if path == "/listverifications":
+        return {"verifications": [
+            {"documentId": "doc_123", "title": "Q2 Planning Doc",
+             "url": "https://example.com/q2", "lastVerifiedTs": None,
+             "status": "UNVERIFIED"},
+            {"documentId": "doc_456", "title": "Onboarding Guide",
+             "url": "https://example.com/onboarding",
+             "lastVerifiedTs": int(time.time()) - 86400 * 30,
+             "status": "VERIFIED"},
+        ]}
+    if path == "/verify":
+        return {"documentId": body.get("documentId"), "status": "VERIFIED"}
+    if path == "/addverificationreminder":
+        return {"documentId": body.get("documentId"), "status": "reminder_set"}
+    if path == "/messages":
+        return {"messages": [
+            {"id": body.get("id"), "text": "[mock] Message content from thread.",
+             "author": "alice@example.com", "timestampMillis": int(time.time() * 1000)}
+        ]}
+    if path == "/activity":
+        return {"status": "ok", "processed": len(body.get("events", []))}
     if path == "/insights":
         resp: Dict[str, Any] = {}
         if "overviewRequest" in body:

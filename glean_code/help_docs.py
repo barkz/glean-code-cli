@@ -343,6 +343,210 @@ DOCS: Dict[str, CommandDoc] = {
         "examples": ["/pins.create --query pto --url https://hr.acme.com/pto"],
         "endpoint": "POST /rest/api/v1/createpin",
     },
+    "pins.delete": {
+        "summary": "Remove a pinned result by id.",
+        "usage": "/pins.delete <id>",
+        "params": [("id", "Pin id from /pins.list.")],
+        "examples": ["/pins.delete pin_1"],
+        "endpoint": "POST /rest/api/v1/unpin",
+    },
+
+    # ---------------- collections delete ----------------
+    "collections.delete": {
+        "summary": "Delete one or more collections by id.",
+        "usage": "/collections.delete <id> [<id>...]",
+        "params": [("id", "Collection id(s) from /collections.list. Repeatable.")],
+        "examples": ["/collections.delete 1", "/collections.delete 1 2 3"],
+        "endpoint": "POST /rest/api/v1/deletecollection",
+    },
+
+    # ---------------- shortcuts ----------------
+    "shortcuts.list": {
+        "summary": "List Go Links (shortcuts) owned by the current user.",
+        "usage": "/shortcuts.list [--query <text>] [--page-size <n>]",
+        "params": [
+            ("--query", "Filter shortcuts by alias or description."),
+            ("--page-size", "Number of results. Default 20."),
+        ],
+        "examples": ["/shortcuts.list", "/shortcuts.list --query eng"],
+        "endpoint": "POST /rest/api/v1/listshortcuts",
+    },
+    "shortcuts.get": {
+        "summary": "Look up a Go Link by alias.",
+        "usage": "/shortcuts.get <alias>",
+        "params": [("alias", "The shortcut alias, e.g. pto.")],
+        "examples": ["/shortcuts.get pto", "/shortcuts.get oncall"],
+        "endpoint": "POST /rest/api/v1/getshortcut",
+    },
+    "shortcuts.create": {
+        "summary": "Create a new Go Link.",
+        "usage": "/shortcuts.create --alias <alias> --url <url> [--description <text>] [--unlisted]",
+        "params": [
+            ("--alias", "Short alias for the link, e.g. pto."),
+            ("--url", "Destination URL."),
+            ("--description", "Optional description shown in search."),
+            ("--unlisted", "Hide from public listing."),
+        ],
+        "examples": [
+            "/shortcuts.create --alias pto --url https://hr.acme.com/pto",
+            "/shortcuts.create --alias oncall --url https://wiki.acme.com/oncall --description \"On-call runbook\"",
+        ],
+        "endpoint": "POST /rest/api/v1/createshortcut",
+    },
+    "shortcuts.update": {
+        "summary": "Update an existing Go Link.",
+        "usage": "/shortcuts.update <id> [--alias <alias>] [--url <url>] [--description <text>]",
+        "params": [
+            ("id", "Shortcut id from /shortcuts.list."),
+            ("--alias", "New alias."),
+            ("--url", "New destination URL."),
+            ("--description", "New description."),
+        ],
+        "examples": [
+            "/shortcuts.update 1 --url https://hr.acme.com/new-pto",
+            "/shortcuts.update 1 --alias vacay --description \"Updated vacation policy\"",
+        ],
+        "endpoint": "POST /rest/api/v1/updateshortcut",
+    },
+    "shortcuts.delete": {
+        "summary": "Delete a Go Link by id.",
+        "usage": "/shortcuts.delete <id>",
+        "params": [("id", "Shortcut id from /shortcuts.list.")],
+        "examples": ["/shortcuts.delete 1"],
+        "endpoint": "POST /rest/api/v1/deleteshortcut",
+    },
+
+    # ---------------- answers ----------------
+    "answers.list": {
+        "summary": "List Q&A answers created by the current user.",
+        "usage": "/answers.list",
+        "params": [],
+        "examples": ["/answers.list"],
+        "endpoint": "POST /rest/api/v1/listanswers",
+    },
+    "answers.get": {
+        "summary": "Fetch a single answer by id.",
+        "usage": "/answers.get <id>",
+        "params": [("id", "Answer id from /answers.list.")],
+        "examples": ["/answers.get 1"],
+        "endpoint": "POST /rest/api/v1/getanswer",
+    },
+    "answers.create": {
+        "summary": "Create a new Q&A answer.",
+        "usage": "/answers.create --question <text> --body <text> [--audience <filter>]",
+        "params": [
+            ("--question", "The question text."),
+            ("--body", "The answer body text."),
+            ("--audience", "Optional audience filter string."),
+        ],
+        "examples": [
+            "/answers.create --question \"What is our PTO policy?\" --body \"20 days per year.\"",
+        ],
+        "endpoint": "POST /rest/api/v1/createanswer",
+    },
+    "answers.update": {
+        "summary": "Edit an existing answer.",
+        "usage": "/answers.update <id> [--question <text>] [--body <text>]",
+        "params": [
+            ("id", "Answer id from /answers.list."),
+            ("--question", "Updated question text."),
+            ("--body", "Updated answer body text."),
+        ],
+        "examples": ["/answers.update 1 --body \"25 days per year effective Jan 1.\""],
+        "endpoint": "POST /rest/api/v1/editanswer",
+    },
+    "answers.delete": {
+        "summary": "Delete an answer by id.",
+        "usage": "/answers.delete <id>",
+        "params": [("id", "Answer id from /answers.list.")],
+        "examples": ["/answers.delete 1"],
+        "endpoint": "POST /rest/api/v1/deleteanswer",
+    },
+
+    # ---------------- summarize ----------------
+    "summarize": {
+        "summary": "Ask Glean AI to summarize a document by URL or id.",
+        "usage": "/summarize [--url <url>] [--id <doc-id>] [--query <focus>]",
+        "params": [
+            ("--url", "Document URL to summarize."),
+            ("--id", "Glean document id to summarize."),
+            ("--query", "Optional focus question to guide the summary."),
+        ],
+        "examples": [
+            "/summarize --url https://docs.acme.com/q2-plan",
+            "/summarize --id doc_123 --query \"What are the key risks?\"",
+        ],
+        "endpoint": "POST /rest/api/v1/summarize",
+    },
+
+    # ---------------- verification ----------------
+    "verification.list": {
+        "summary": "List documents pending or due for verification.",
+        "usage": "/verification.list [--count <n>]",
+        "params": [("--count", "Max number of items to return. Default 20.")],
+        "examples": ["/verification.list", "/verification.list --count 50"],
+        "endpoint": "POST /rest/api/v1/listverifications",
+    },
+    "verification.verify": {
+        "summary": "Mark a document as verified (or unverify it).",
+        "usage": "/verification.verify <doc-id> [--action VERIFY|UNVERIFY]",
+        "params": [
+            ("doc-id", "Glean document id."),
+            ("--action", "VERIFY (default) or UNVERIFY."),
+        ],
+        "examples": [
+            "/verification.verify doc_123",
+            "/verification.verify doc_123 --action UNVERIFY",
+        ],
+        "endpoint": "POST /rest/api/v1/verify",
+    },
+    "verification.remind": {
+        "summary": "Set a verification reminder for a document.",
+        "usage": "/verification.remind <doc-id> [--days <n>] [--assignee <email>] [--reason <text>]",
+        "params": [
+            ("doc-id", "Glean document id."),
+            ("--days", "Remind in this many days. Default 30."),
+            ("--assignee", "Email of the person to assign the reminder to."),
+            ("--reason", "Optional reason for the reminder."),
+        ],
+        "examples": [
+            "/verification.remind doc_123",
+            "/verification.remind doc_123 --days 7 --assignee alice@acme.com",
+        ],
+        "endpoint": "POST /rest/api/v1/addverificationreminder",
+    },
+
+    # ---------------- messages ----------------
+    "messages.get": {
+        "summary": "Retrieve a message thread from Slack, Teams, or another datasource.",
+        "usage": "/messages.get --id <id> --datasource <name> [--id-type <type>] [--direction BEFORE|AFTER]",
+        "params": [
+            ("--id", "Message id."),
+            ("--datasource", "Datasource name, e.g. slack, msteams."),
+            ("--id-type", "Id type. Default MESSAGE_ID."),
+            ("--direction", "BEFORE or AFTER — fetch surrounding context."),
+        ],
+        "examples": [
+            "/messages.get --id 1234567890.123456 --datasource slack",
+            "/messages.get --id 1234567890.123456 --datasource slack --direction AFTER",
+        ],
+        "endpoint": "POST /rest/api/v1/messages",
+    },
+
+    # ---------------- activity ----------------
+    "activity.report": {
+        "summary": "Report a document view or edit event to improve search quality.",
+        "usage": "/activity.report --url <url> [--action VIEW|EDIT]",
+        "params": [
+            ("--url", "URL of the document the activity occurred on."),
+            ("--action", "Activity type: VIEW (default) or EDIT."),
+        ],
+        "examples": [
+            "/activity.report --url https://docs.acme.com/plan",
+            "/activity.report --url https://docs.acme.com/plan --action EDIT",
+        ],
+        "endpoint": "POST /rest/api/v1/activity",
+    },
 
     # ---------------- insights ----------------
     "insights": {
@@ -387,9 +591,15 @@ COMMAND_GROUPS: List[Tuple[str, List[str]]] = [
     ("Chat & Search",  ["chat", "search", "datasources.list", "datasources.status", "autocomplete", "recommendations", "feedback"]),
     ("Agents & Tools", ["agents.list", "agents.run", "tools.list", "tools.call"]),
     ("Docs & People",  ["docs.get", "docs.permissions", "entities.list", "people.get"]),
+    ("Shortcuts",      ["shortcuts.list", "shortcuts.get", "shortcuts.create", "shortcuts.update", "shortcuts.delete"]),
+    ("Answers",        ["answers.list", "answers.get", "answers.create", "answers.update", "answers.delete"]),
+    ("Summarize",      ["summarize"]),
+    ("Verification",   ["verification.list", "verification.verify", "verification.remind"]),
+    ("Messages",       ["messages.get"]),
+    ("Activity",       ["activity.report"]),
     ("Announcements",  ["announcements.list", "announcements.create", "announcements.delete"]),
-    ("Collections",    ["collections.list", "collections.create"]),
-    ("Pins",           ["pins.list", "pins.create"]),
+    ("Collections",    ["collections.list", "collections.create", "collections.delete"]),
+    ("Pins",           ["pins.list", "pins.create", "pins.delete"]),
     ("Indexing",       ["datasources.status", "indexing.rotate-token"]),
     ("Insights",       ["insights"]),
     ("Scaffold",       ["scaffold"]),

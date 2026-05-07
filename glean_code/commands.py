@@ -819,6 +819,353 @@ def cmd_pins_create(s: Session, pos, flags):
         ui.print_err(str(e))
 
 
+@register("pins.delete")
+def cmd_pins_delete(s: Session, pos, flags):
+    if not pos:
+        ui.print_err("Usage: /pins.delete <id>")
+        return
+    try:
+        print(_render_json(s.client.pin_delete(pos[0])))
+    except GleanError as e:
+        ui.print_err(str(e))
+
+
+# -------------------- collections delete --------------------
+
+@register("collections.delete")
+def cmd_col_delete(s: Session, pos, flags):
+    if not pos:
+        ui.print_err("Usage: /collections.delete <id> [<id>...]")
+        return
+    try:
+        ids = [int(i) for i in pos]
+    except ValueError:
+        ui.print_err("Collection ids must be integers.")
+        return
+    try:
+        print(_render_json(s.client.collection_delete(ids)))
+    except GleanError as e:
+        ui.print_err(str(e))
+
+
+# -------------------- shortcuts --------------------
+
+@register("shortcuts.list")
+def cmd_shortcuts_list(s: Session, pos, flags):
+    try:
+        resp = s.client.shortcuts_list(
+            query=flags.get("query"),
+            page_size=int(flags.get("page-size") or flags.get("page_size") or 20),
+        )
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    shortcuts = resp.get("shortcuts") or []
+    if not shortcuts:
+        print(ui.style("(no shortcuts)", ui.C.GREY))
+        return
+    rows = [(f"[{sc.get('id')}] go/{sc.get('inputAlias', '')}",
+             f"{sc.get('destinationUrl', '')}  {ui.style(sc.get('description',''), ui.C.GREY)}")
+            for sc in shortcuts]
+    print(ui.kv_table(rows))
+
+
+@register("shortcuts.get")
+def cmd_shortcuts_get(s: Session, pos, flags):
+    if not pos:
+        ui.print_err("Usage: /shortcuts.get <alias>")
+        return
+    try:
+        resp = s.client.shortcut_get(pos[0])
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    sc = resp.get("shortcut") or resp
+    rows = [
+        ("ID",          str(sc.get("id", "—"))),
+        ("Alias",       f"go/{sc.get('inputAlias', '—')}"),
+        ("Destination", sc.get("destinationUrl", "—")),
+        ("Description", sc.get("description", "—")),
+    ]
+    print(ui.kv_table(rows))
+
+
+@register("shortcuts.create")
+def cmd_shortcuts_create(s: Session, pos, flags):
+    alias = flags.get("alias")
+    url   = flags.get("url")
+    if not alias or not url:
+        ui.print_err("Usage: /shortcuts.create --alias <alias> --url <url> [--description <text>] [--unlisted]")
+        return
+    try:
+        resp = s.client.shortcut_create(
+            alias=str(alias), url=str(url),
+            description=flags.get("description"),
+            unlisted=bool(flags.get("unlisted")),
+        )
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    print(ui.style(f"Created go/{alias}  (id {resp.get('id')})", ui.C.GREEN))
+
+
+@register("shortcuts.update")
+def cmd_shortcuts_update(s: Session, pos, flags):
+    if not pos:
+        ui.print_err("Usage: /shortcuts.update <id> [--alias <alias>] [--url <url>] [--description <text>]")
+        return
+    try:
+        sc_id = int(pos[0])
+    except ValueError:
+        ui.print_err("Shortcut id must be an integer.")
+        return
+    try:
+        print(_render_json(s.client.shortcut_update(
+            shortcut_id=sc_id,
+            alias=flags.get("alias"),
+            url=flags.get("url"),
+            description=flags.get("description"),
+        )))
+    except GleanError as e:
+        ui.print_err(str(e))
+
+
+@register("shortcuts.delete")
+def cmd_shortcuts_delete(s: Session, pos, flags):
+    if not pos:
+        ui.print_err("Usage: /shortcuts.delete <id>")
+        return
+    try:
+        sc_id = int(pos[0])
+    except ValueError:
+        ui.print_err("Shortcut id must be an integer.")
+        return
+    try:
+        print(_render_json(s.client.shortcut_delete(sc_id)))
+    except GleanError as e:
+        ui.print_err(str(e))
+
+
+# -------------------- answers --------------------
+
+@register("answers.list")
+def cmd_answers_list(s: Session, pos, flags):
+    try:
+        resp = s.client.answers_list()
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    answers = resp.get("answers") or []
+    if not answers:
+        print(ui.style("(no answers)", ui.C.GREY))
+        return
+    for a in answers:
+        print(ui.style(f"[{a.get('id')}] {a.get('question','')}", ui.C.WHITE, ui.C.BOLD))
+        print(f"       {ui.style(a.get('bodyText',''), ui.C.GREY)}")
+        print()
+
+
+@register("answers.get")
+def cmd_answers_get(s: Session, pos, flags):
+    if not pos:
+        ui.print_err("Usage: /answers.get <id>")
+        return
+    try:
+        answer_id = int(pos[0])
+    except ValueError:
+        ui.print_err("Answer id must be an integer.")
+        return
+    try:
+        resp = s.client.answer_get(answer_id)
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    a = resp.get("answer") or resp
+    print(ui.rule(f"Answer {a.get('id', '')}"))
+    print(ui.style(a.get("question", ""), ui.C.WHITE, ui.C.BOLD))
+    print(ui.style(a.get("bodyText", ""), ui.C.WHITE))
+    print(ui.rule())
+
+
+@register("answers.create")
+def cmd_answers_create(s: Session, pos, flags):
+    question = flags.get("question")
+    body_text = flags.get("body")
+    if not question or not body_text:
+        ui.print_err("Usage: /answers.create --question <text> --body <text> [--audience <filter>]")
+        return
+    try:
+        resp = s.client.answer_create(str(question), str(body_text),
+                                      audience=flags.get("audience"))
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    print(ui.style(f"Created answer id {resp.get('id')}", ui.C.GREEN))
+
+
+@register("answers.update")
+def cmd_answers_update(s: Session, pos, flags):
+    if not pos:
+        ui.print_err("Usage: /answers.update <id> [--question <text>] [--body <text>]")
+        return
+    try:
+        answer_id = int(pos[0])
+    except ValueError:
+        ui.print_err("Answer id must be an integer.")
+        return
+    try:
+        print(_render_json(s.client.answer_update(
+            answer_id,
+            question=flags.get("question"),
+            body_text=flags.get("body"),
+        )))
+    except GleanError as e:
+        ui.print_err(str(e))
+
+
+@register("answers.delete")
+def cmd_answers_delete(s: Session, pos, flags):
+    if not pos:
+        ui.print_err("Usage: /answers.delete <id>")
+        return
+    try:
+        answer_id = int(pos[0])
+    except ValueError:
+        ui.print_err("Answer id must be an integer.")
+        return
+    try:
+        print(_render_json(s.client.answer_delete(answer_id)))
+    except GleanError as e:
+        ui.print_err(str(e))
+
+
+# -------------------- summarize --------------------
+
+@register("summarize")
+def cmd_summarize(s: Session, pos, flags):
+    url    = flags.get("url")
+    doc_id = flags.get("id")
+    query  = flags.get("query") or (" ".join(pos) if pos else None)
+    if not url and not doc_id:
+        ui.print_err("Usage: /summarize [--url <url>] [--id <doc-id>] [--query <focus>]")
+        return
+    try:
+        resp = s.client.summarize(url=url, doc_id=doc_id, query=query)
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    summary = resp.get("summary") or resp.get("text") or _render_json(resp)
+    label = url or doc_id or "document"
+    print(ui.box(f"Summary: {label}", summary))
+
+
+# -------------------- verification --------------------
+
+@register("verification.list")
+def cmd_verification_list(s: Session, pos, flags):
+    count = int(flags.get("count") or flags.get("limit") or 20)
+    try:
+        resp = s.client.verification_list(count=count)
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    items = resp.get("verifications") or []
+    if not items:
+        print(ui.style("(no documents pending verification)", ui.C.GREY))
+        return
+    print(ui.rule("Verification queue"))
+    for v in items:
+        status = v.get("status", "UNKNOWN")
+        colour = ui.C.GREEN if status == "VERIFIED" else ui.C.YELLOW
+        ts = _fmt_ts(v.get("lastVerifiedTs"))
+        print(f"  {ui.style(status.ljust(12), colour)}  "
+              f"{ui.style(v.get('title',''), ui.C.WHITE)}  "
+              f"{ui.style(v.get('documentId',''), ui.C.GREY)}")
+        if ts != "—":
+            print(f"  {'':12}  last verified {ts}")
+    print(ui.rule())
+
+
+@register("verification.verify")
+def cmd_verification_verify(s: Session, pos, flags):
+    if not pos:
+        ui.print_err("Usage: /verification.verify <doc-id> [--action VERIFY|UNVERIFY]")
+        return
+    try:
+        resp = s.client.verification_verify(pos[0], action=flags.get("action"))
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    print(ui.style(f"Marked {pos[0]} as {resp.get('status','verified')}", ui.C.GREEN))
+
+
+@register("verification.remind")
+def cmd_verification_remind(s: Session, pos, flags):
+    if not pos:
+        ui.print_err("Usage: /verification.remind <doc-id> [--days <n>] [--assignee <email>] [--reason <text>]")
+        return
+    days = int(flags.get("days") or 30)
+    try:
+        resp = s.client.verification_remind(
+            pos[0],
+            remind_in_days=days,
+            assignee=flags.get("assignee"),
+            reason=flags.get("reason"),
+        )
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    print(ui.style(f"Reminder set for {pos[0]} in {days} day(s).", ui.C.GREEN))
+
+
+# -------------------- messages --------------------
+
+@register("messages.get")
+def cmd_messages_get(s: Session, pos, flags):
+    msg_id     = flags.get("id") or (pos[0] if pos else None)
+    id_type    = flags.get("id-type") or flags.get("id_type") or "MESSAGE_ID"
+    datasource = flags.get("datasource")
+    if not msg_id or not datasource:
+        ui.print_err("Usage: /messages.get --id <id> --datasource <name> [--id-type <type>] [--direction BEFORE|AFTER]")
+        return
+    try:
+        resp = s.client.messages_get(
+            msg_id=str(msg_id),
+            id_type=str(id_type),
+            datasource=str(datasource),
+            direction=flags.get("direction"),
+        )
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    messages = resp.get("messages") or []
+    if not messages:
+        print(ui.style("(no messages found)", ui.C.GREY))
+        return
+    for m in messages:
+        author = ui.style(m.get("author", ""), ui.C.CYAN, ui.C.BOLD)
+        text   = m.get("text", "")
+        print(f"  {author}  {text}")
+
+
+# -------------------- activity --------------------
+
+@register("activity.report")
+def cmd_activity_report(s: Session, pos, flags):
+    url    = flags.get("url") or (pos[0] if pos else None)
+    action = (flags.get("action") or "VIEW").upper()
+    if not url:
+        ui.print_err("Usage: /activity.report --url <url> [--action VIEW|EDIT]")
+        return
+    try:
+        resp = s.client.activity_report(str(url), action=action)
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    processed = resp.get("processed", 1)
+    print(ui.style(f"Reported {processed} activity event(s).", ui.C.GREEN))
+
+
 # -------------------- insights --------------------
 
 def _fmt_ts(ts: Optional[int]) -> str:
