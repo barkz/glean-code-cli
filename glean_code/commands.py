@@ -17,9 +17,68 @@ from typing import Any, Callable, Dict, List, Optional, Tuple  # noqa: F401
 
 from . import ui
 from .client import GleanClient, GleanError
-from .config import Config
+from .config import Config, SECURE_REFS, is_secure_ref, resolve_secure
 from .help_docs import DOCS, COMMAND_GROUPS
 from .scaffold import TEMPLATES, write_scaffold, default_dir as _scaffold_default_dir
+
+
+# -------------------- token display + sanitization --------------------
+
+def _display_token(value: Optional[str]) -> str:
+    """Render a stored token for display.
+
+    - Secure refs are shown verbatim with an env-var-set indicator.
+    - Literal tokens are masked to last 4 chars.
+    - None / empty renders as a dim placeholder.
+    """
+    if not value:
+        return ui.style("(unset)", ui.C.YELLOW)
+    if is_secure_ref(value):
+        env_var = SECURE_REFS[value]
+        if resolve_secure(value):
+            return f"{value} {ui.style(f'(${env_var} set)', ui.C.GREEN)}"
+        return f"{value} {ui.style(f'(${env_var} not set)', ui.C.RED)}"
+    return ui.style("***" + str(value)[-4:], ui.C.GREEN)
+
+
+def _sanitize_for_history(line: str) -> str:
+    """Strip secret-looking values from a command line before storing it.
+
+    Masks:
+      - the value after --token / --indexing-token / --indexing_token
+      - the value after `/config set api_token` and `/config set indexing_token`
+    Secure-ref pointers (e.g. `token.secure.client`) are kept verbatim — they
+    are not secrets.
+    """
+    try:
+        toks = shlex.split(line)
+    except ValueError:
+        return line
+    out: List[str] = []
+    i = 0
+    sensitive_flags = {"--token", "--indexing-token", "--indexing_token"}
+    sensitive_keys  = {"api_token", "indexing_token"}
+    while i < len(toks):
+        cur = toks[i]
+        out.append(cur)
+        # `--token <value>` style
+        if cur in sensitive_flags and i + 1 < len(toks):
+            nxt = toks[i + 1]
+            out.append(nxt if is_secure_ref(nxt) else "***")
+            i += 2
+            continue
+        # `/config set <key> <value>` style
+        if (cur == "set"
+                and i >= 1 and toks[i - 1].lstrip("/") == "config"
+                and i + 2 < len(toks)
+                and toks[i + 1] in sensitive_keys):
+            out.append(toks[i + 1])
+            val = toks[i + 2]
+            out.append(val if is_secure_ref(val) else "***")
+            i += 3
+            continue
+        i += 1
+    return " ".join(shlex.quote(t) for t in out)
 
 
 # -------------------- arg parsing --------------------
@@ -181,7 +240,8 @@ def cmd_status(s: Session, pos, flags):
     rows = [
         ("instance",      cfg.instance or ui.style("(unset)", ui.C.GREY)),
         ("base_url",      cfg.effective_base_url or ui.style("(computed from instance)", ui.C.GREY)),
-        ("api_token",     ui.style("set", ui.C.GREEN) if cfg.api_token else ui.style("(unset)", ui.C.YELLOW)),
+        ("api_token",     _display_token(cfg.api_token)),
+        ("indexing_token", _display_token(cfg.indexing_token)),
         ("act_as",        cfg.act_as or ui.style("(none)", ui.C.GREY)),
         ("mode",          ui.style(cfg.effective_mode, ui.C.GREEN if cfg.effective_mode == "live" else ui.C.YELLOW)),
         ("mode setting",  cfg.mode),
@@ -256,8 +316,13 @@ def cmd_logout(s: Session, pos, flags):
 def cmd_config(s: Session, pos, flags):
     if not pos or pos[0] == "list":
         data = s.config.to_dict()
-        if data.get("api_token"):
-            data["api_token"] = "***" + str(data["api_token"])[-4:]
+        for key in ("api_token", "indexing_token"):
+            v = data.get(key)
+            if not v:
+                continue
+            if is_secure_ref(v):
+                continue  # ref names are not secrets — leave verbatim
+            data[key] = "***" + str(v)[-4:]
         print(ui.rule("config"))
         print(_render_json(data))
         print(ui.rule())
@@ -312,7 +377,14 @@ def cmd_doctor(s: Session, pos, flags):
         line("instance", "WARN", "not set, will use mock mode", ui.C.YELLOW)
 
     if cfg.api_token:
-        line("token", "OK", "***" + str(cfg.api_token)[-4:])
+        if is_secure_ref(cfg.api_token):
+            env_var = SECURE_REFS[cfg.api_token]
+            if resolve_secure(cfg.api_token):
+                line("token", "OK", f"{cfg.api_token} (${env_var} set)")
+            else:
+                line("token", "FAIL", f"{cfg.api_token} but ${env_var} is not set", ui.C.RED)
+        else:
+            line("token", "OK", "***" + str(cfg.api_token)[-4:])
     else:
         line("token", "WARN", "not set, will use mock mode", ui.C.YELLOW)
 
@@ -1350,7 +1422,7 @@ def dispatch(session: Session, line: str) -> None:
     line = line.strip()
     if not line:
         return
-    session.command_history.append(line)
+    session.command_history.append(_sanitize_for_history(line))
 
     # bare text = /chat shortcut
     if not line.startswith("/"):

@@ -59,8 +59,8 @@ class GleanClient:
             "Accept": "application/json",
             "User-Agent": "glean-code/0.1",
         }
-        if self.config.api_token:
-            h["Authorization"] = f"Bearer {self.config.api_token}"
+        if self.config.effective_api_token:
+            h["Authorization"] = f"Bearer {self.config.effective_api_token}"
         if self.config.act_as:
             h["X-Glean-ActAs"] = self.config.act_as
         return h
@@ -94,13 +94,13 @@ class GleanClient:
             "Content-Type": "application/json",
             "Accept": "application/json",
             "User-Agent": "glean-code/0.1",
-            "Authorization": f"Bearer {self.config.indexing_token}",
+            "Authorization": f"Bearer {self.config.effective_indexing_token}",
         }
 
     def _indexing_post(self, path: str, body: Dict[str, Any]) -> Dict[str, Any]:
-        if not self.config.indexing_token:
+        if not self.config.effective_indexing_token:
             raise GleanError(
-                "No indexing token set. Add one with: /config set indexing_token <token>"
+                "No indexing token set. Add one with: /config set indexing_token <token-or-secure-ref>"
             )
         base = self.config.effective_indexing_base_url
         if not base:

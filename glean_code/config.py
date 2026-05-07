@@ -13,12 +13,33 @@ from typing import Any, Dict, Optional
 CONFIG_DIR = Path.home() / ".gleancode"
 CONFIG_PATH = CONFIG_DIR / "config.json"
 
+# Secure-token references. Stored verbatim in config; resolved to the value of
+# the matching env var at request time. The token itself never lands in
+# config.json or the command history.
+SECURE_REFS: Dict[str, str] = {
+    "token.secure.client":   "GLEAN_CLIENT_TOKEN",
+    "token.secure.indexing": "GLEAN_INDEXING_TOKEN",
+}
+
+
+def is_secure_ref(value: Optional[str]) -> bool:
+    return isinstance(value, str) and value in SECURE_REFS
+
+
+def resolve_secure(value: Optional[str]) -> Optional[str]:
+    """Return the env-resolved token if value is a secure ref, else value."""
+    if not value:
+        return value
+    if value in SECURE_REFS:
+        return os.environ.get(SECURE_REFS[value]) or None
+    return value
+
 
 @dataclass
 class Config:
     instance: Optional[str] = None            # e.g. "acme-be.glean.com"
-    api_token: Optional[str] = None           # Glean Client API token
-    indexing_token: Optional[str] = None      # Glean Indexing API token
+    api_token: Optional[str] = None           # Glean Client API token (literal or secure ref)
+    indexing_token: Optional[str] = None      # Glean Indexing API token (literal or secure ref)
     act_as: Optional[str] = None              # Optional email to impersonate
     base_url: Optional[str] = None            # Overrides the computed base URL
     mode: str = "auto"                        # auto | live | mock
@@ -71,8 +92,16 @@ class Config:
         return None
 
     @property
+    def effective_api_token(self) -> Optional[str]:
+        return resolve_secure(self.api_token)
+
+    @property
+    def effective_indexing_token(self) -> Optional[str]:
+        return resolve_secure(self.indexing_token)
+
+    @property
     def is_live_ready(self) -> bool:
-        return bool(self.api_token and self.effective_base_url)
+        return bool(self.effective_api_token and self.effective_base_url)
 
     @property
     def effective_mode(self) -> str:
