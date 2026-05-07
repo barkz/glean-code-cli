@@ -158,9 +158,8 @@ def cmd_help(s: Session, pos, flags):
 @register("exit")
 def cmd_exit(s: Session, pos, flags):
     s.running = False
-    email = ui.hyperlink("mailto:barkz@glean.com", "barkz@glean.com")
     print(ui.style(
-        f"Thank you for using Glean Code. If you have any issues or questions send me a message, {email}.",
+        "Thank you for using Glean Code. If you have any issues or questions DM me, @barkz.",
         ui.C.CYAN,
     ))
 
