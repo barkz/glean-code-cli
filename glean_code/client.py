@@ -102,6 +102,8 @@ class GleanClient:
             raise GleanError(
                 "No indexing token set. Add one with: /config set indexing_token <token-or-secure-ref>"
             )
+        if self.config.effective_mode == "mock":
+            return _mock_indexing_response(path, body)
         base = self.config.effective_indexing_base_url
         if not base:
             raise GleanError("No instance configured for indexing API calls.")
@@ -127,6 +129,153 @@ class GleanClient:
     def rotate_indexing_token(self) -> Dict[str, Any]:
         """POST /api/index/v1/rotatetoken — rotates the indexing token secret."""
         return self._indexing_post("/rotatetoken", {})
+
+    # ---- Tier 1: read-only inspection ----
+
+    def get_datasource_config(self, datasource: str) -> Dict[str, Any]:
+        return self._indexing_post("/getdatasourceconfig", {"datasource": datasource})
+
+    def get_document_status(self, datasource: str, object_type: str, doc_id: str) -> Dict[str, Any]:
+        return self._indexing_post(
+            "/getdocumentstatus",
+            {"datasource": datasource, "objectType": object_type, "docId": doc_id},
+        )
+
+    def get_document_count(self, datasource: str) -> Dict[str, Any]:
+        return self._indexing_post("/getdocumentcount", {"datasource": datasource})
+
+    def get_user_count(self, datasource: str) -> Dict[str, Any]:
+        return self._indexing_post("/getusercount", {"datasource": datasource})
+
+    def check_document_access(self, datasource: str, object_type: str,
+                              doc_id: str, user_email: str) -> Dict[str, Any]:
+        return self._indexing_post("/checkdocumentaccess", {
+            "datasource": datasource, "objectType": object_type,
+            "docId": doc_id, "userEmail": user_email,
+        })
+
+    def debug_document(self, datasource: str, object_type: str, doc_id: str) -> Dict[str, Any]:
+        return self._indexing_post(
+            f"/debug/{datasource}/document",
+            {"objectType": object_type, "docId": doc_id},
+        )
+
+    def debug_documents(self, datasource: str, items: List[Dict[str, Any]]) -> Dict[str, Any]:
+        return self._indexing_post(
+            f"/debug/{datasource}/documents",
+            {"debugDocuments": items},
+        )
+
+    def debug_user(self, datasource: str, email: str) -> Dict[str, Any]:
+        return self._indexing_post(f"/debug/{datasource}/user", {"email": email})
+
+    # ---- Tier 3: single-record CRUD ----
+
+    def index_document(self, document: Dict[str, Any],
+                       version: Optional[int] = None) -> Dict[str, Any]:
+        body: Dict[str, Any] = {"document": document}
+        if version:
+            body["version"] = version
+        return self._indexing_post("/indexdocument", body)
+
+    def delete_document(self, datasource: str, object_type: str, doc_id: str,
+                        version: Optional[int] = None) -> Dict[str, Any]:
+        body: Dict[str, Any] = {"datasource": datasource, "objectType": object_type, "id": doc_id}
+        if version:
+            body["version"] = version
+        return self._indexing_post("/deletedocument", body)
+
+    def update_permissions(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        return self._indexing_post("/updatepermissions", body)
+
+    def index_user(self, datasource: str, user: Dict[str, Any],
+                   version: Optional[int] = None) -> Dict[str, Any]:
+        body: Dict[str, Any] = {"datasource": datasource, "user": user}
+        if version:
+            body["version"] = version
+        return self._indexing_post("/indexuser", body)
+
+    def delete_user(self, datasource: str, email: str,
+                    version: Optional[int] = None) -> Dict[str, Any]:
+        body: Dict[str, Any] = {"datasource": datasource, "email": email}
+        if version:
+            body["version"] = version
+        return self._indexing_post("/deleteuser", body)
+
+    def index_group(self, datasource: str, group: Dict[str, Any],
+                    version: Optional[int] = None) -> Dict[str, Any]:
+        body: Dict[str, Any] = {"datasource": datasource, "group": group}
+        if version:
+            body["version"] = version
+        return self._indexing_post("/indexgroup", body)
+
+    def delete_group(self, datasource: str, group_name: str,
+                     version: Optional[int] = None) -> Dict[str, Any]:
+        body: Dict[str, Any] = {"datasource": datasource, "groupName": group_name}
+        if version:
+            body["version"] = version
+        return self._indexing_post("/deletegroup", body)
+
+    def index_membership(self, datasource: str, membership: Dict[str, Any],
+                         version: Optional[int] = None) -> Dict[str, Any]:
+        body: Dict[str, Any] = {"datasource": datasource, "membership": membership}
+        if version:
+            body["version"] = version
+        return self._indexing_post("/indexmembership", body)
+
+    def delete_membership(self, datasource: str, membership: Dict[str, Any],
+                          version: Optional[int] = None) -> Dict[str, Any]:
+        body: Dict[str, Any] = {"datasource": datasource, "membership": membership}
+        if version:
+            body["version"] = version
+        return self._indexing_post("/deletemembership", body)
+
+    # ---- Tier 5: bulk + process-all ----
+
+    def index_documents(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        return self._indexing_post("/indexdocuments", body)
+
+    def bulk_index_documents(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        return self._indexing_post("/bulkindexdocuments", body)
+
+    def bulk_index_users(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        return self._indexing_post("/bulkindexusers", body)
+
+    def bulk_index_groups(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        return self._indexing_post("/bulkindexgroups", body)
+
+    def bulk_index_memberships(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        return self._indexing_post("/bulkindexmemberships", body)
+
+    def bulk_index_employees(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        return self._indexing_post("/bulkindexemployees", body)
+
+    def bulk_index_teams(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        return self._indexing_post("/bulkindexteams", body)
+
+    def bulk_index_shortcuts(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        return self._indexing_post("/bulkindexshortcuts", body)
+
+    def upload_shortcuts(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        return self._indexing_post("/uploadshortcuts", body)
+
+    def index_employee_list(self, employees: List[Dict[str, Any]]) -> Dict[str, Any]:
+        return self._indexing_post("/indexemployeelist", {"employees": employees})
+
+    def process_all_documents(self, datasource: Optional[str] = None) -> Dict[str, Any]:
+        body: Dict[str, Any] = {}
+        if datasource:
+            body["datasource"] = datasource
+        return self._indexing_post("/processalldocuments", body)
+
+    def process_all_memberships(self, datasource: Optional[str] = None) -> Dict[str, Any]:
+        body: Dict[str, Any] = {}
+        if datasource:
+            body["datasource"] = datasource
+        return self._indexing_post("/processallmemberships", body)
+
+    def process_all_employees_teams(self) -> Dict[str, Any]:
+        return self._indexing_post("/processallemployeesandteams", {})
 
     # ---------------- chat ----------------
 
@@ -640,4 +789,85 @@ def _mock_response(path: str, body: Dict[str, Any]) -> Dict[str, Any]:
                 "lastUpdatedTs": int(time.time()) - 3600,
             }
         return resp
+    return {"mock": True, "path": path, "body": body}
+
+
+def _mock_indexing_response(path: str, body: Dict[str, Any]) -> Dict[str, Any]:
+    time.sleep(0.15)
+    now = int(time.time())
+
+    # ---- read-only / debug ----
+    if path.endswith("/status") and path.startswith("/debug/"):
+        return {
+            "datasourceStatusOverview": "OK",
+            "documents": {"uploadedCount": 12450, "indexedCount": 12318,
+                          "lastIndexedTs": now, "lastUploadedTs": now - 600},
+            "users": {"uploadedCount": 980, "indexedCount": 980, "lastUploadedTs": now - 3600},
+            "groups": {"uploadedCount": 64, "indexedCount": 64},
+            "memberships": {"uploadedCount": 4210, "indexedCount": 4210},
+            "recentEvents": [
+                {"ts": now - 300,  "type": "INDEX_BATCH", "status": "SUCCESS", "count": 218},
+                {"ts": now - 1200, "type": "INDEX_BATCH", "status": "SUCCESS", "count": 184},
+            ],
+        }
+    if path.startswith("/debug/") and path.endswith("/document"):
+        return {
+            "status": {"uploadStatus": "UPLOADED",
+                       "lastUploadedAt": now - 600,
+                       "lastIndexedAt": now - 540,
+                       "errors": []},
+            "uploadedPermissions": {"allowedUsers": ["alice@example.com"],
+                                     "allowedGroups": ["engineering"]},
+        }
+    if path.startswith("/debug/") and path.endswith("/documents"):
+        items = body.get("debugDocuments") or []
+        return {"debugResults": [{
+            "docId": d.get("docId", ""),
+            "objectType": d.get("objectType", ""),
+            "debugInfo": {"status": {"uploadStatus": "UPLOADED",
+                                      "lastUploadedAt": now - 600}},
+        } for d in items]}
+    if path.startswith("/debug/") and path.endswith("/user"):
+        return {
+            "status": {"uploadStatus": "UPLOADED", "lastUploadedAt": now - 1800},
+            "uploadedGroups": [{"name": "engineering"}, {"name": "all-hands"}],
+        }
+
+    if path == "/getdatasourceconfig":
+        return {"datasource": body.get("datasource"),
+                "displayName": (body.get("datasource") or "").title(),
+                "objectDefinitions": [
+                    {"name": "Article",   "displayLabel": "Article"},
+                    {"name": "Comment",   "displayLabel": "Comment"},
+                ],
+                "isUserReferencedByEmail": True,
+                "trustedDomains": ["example.com"],
+                "iconUrl": "https://example.com/icon.png",
+                "datasourceCategory": "PUBLISHED_CONTENT"}
+    if path == "/getdocumentstatus":
+        return {"uploadStatus": "UPLOADED",
+                "lastUploadedAt": now - 600,
+                "lastIndexedAt": now - 540,
+                "indexingErrors": []}
+    if path == "/getdocumentcount":
+        return {"documentCount": 12450}
+    if path == "/getusercount":
+        return {"userCount": 980}
+    if path == "/checkdocumentaccess":
+        return {"hasAccess": True}
+
+    # ---- write / bulk / process — ack-style ----
+    if path.startswith("/bulkindex") or path == "/uploadshortcuts":
+        return {"uploadId": body.get("uploadId") or f"upload_{now}",
+                "ack": True}
+    if path == "/indexdocuments":
+        return {"uploadId": body.get("uploadId") or f"upload_{now}",
+                "documentsAccepted": len(body.get("documents") or [])}
+    if path == "/indexemployeelist":
+        return {"employeesAccepted": len(body.get("employees") or [])}
+    if path.startswith("/processall"):
+        return {"status": "STARTED", "datasource": body.get("datasource")}
+    if path.startswith("/index") or path.startswith("/delete") or path == "/updatepermissions":
+        return {"status": "ACCEPTED"}
+
     return {"mock": True, "path": path, "body": body}

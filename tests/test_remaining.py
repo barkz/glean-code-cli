@@ -31,13 +31,13 @@ from glean_code.config import Config
 # ---------------------------------------------------------------------------
 
 def _sess(**cfg_kwargs):
-    s = Session(Config(mode="mock", **cfg_kwargs))
+    cfg_kwargs.setdefault("mode", "mock")
+    s = Session(Config(**cfg_kwargs))
     s.client = MagicMock()
     return s
 
 
 def _output(fn, *args, **kwargs):
-    """Capture all print() calls made by fn and return as joined string."""
     lines = []
     with patch("builtins.print",
                side_effect=lambda *a, **k: lines.append(" ".join(str(x) for x in a))):
@@ -154,13 +154,11 @@ _GOOD_ADDRINFO = [(socket.AF_INET, socket.SOCK_STREAM, 0, "", ("1.2.3.4", 443))]
 
 
 class _MockConn:
-    """Context manager mimicking socket.create_connection."""
     def __enter__(self): return self
     def __exit__(self, *a): pass
 
 
 class _MockResp:
-    """Context manager mimicking urllib.request.urlopen."""
     def __init__(self, status=200): self.status = status
     def __enter__(self): return self
     def __exit__(self, *a): pass
@@ -186,7 +184,6 @@ class TestCmdDoctor(unittest.TestCase):
         self.assertIn("WARN", out)
 
     def test_no_base_url_prints_fail_and_stops(self):
-        # no instance -> effective_base_url is None -> FAIL, returns early
         out = self._doctor()
         self.assertIn("FAIL", out)
 
@@ -194,7 +191,7 @@ class TestCmdDoctor(unittest.TestCase):
         with patch("glean_code.commands.socket.getaddrinfo", return_value=_GOOD_ADDRINFO), \
              patch("glean_code.commands.socket.create_connection", return_value=_MockConn()), \
              patch("glean_code.ui.supports_colour", return_value=False):
-            s = _sess(instance="acme-be.glean.com", api_token="tok", mode="mock")
+            s = _sess(instance="acme-be.glean.com", api_token="tok")
             out = _output(cmd_doctor, s, [], {})
         self.assertIn("acme-be.glean.com", out)
 
@@ -202,7 +199,7 @@ class TestCmdDoctor(unittest.TestCase):
         with patch("glean_code.commands.socket.getaddrinfo",
                    side_effect=socket.gaierror("NXDOMAIN")), \
              patch("glean_code.ui.supports_colour", return_value=False):
-            s = _sess(instance="bad.glean.com", api_token="tok", mode="mock")
+            s = _sess(instance="bad.glean.com", api_token="tok")
             out = _output(cmd_doctor, s, [], {})
         self.assertIn("FAIL", out)
         self.assertIn("dns", out.lower())
@@ -212,7 +209,7 @@ class TestCmdDoctor(unittest.TestCase):
              patch("glean_code.commands.socket.create_connection",
                    side_effect=OSError("connection refused")), \
              patch("glean_code.ui.supports_colour", return_value=False):
-            s = _sess(instance="acme-be.glean.com", api_token="tok", mode="mock")
+            s = _sess(instance="acme-be.glean.com", api_token="tok")
             out = _output(cmd_doctor, s, [], {})
         self.assertIn("FAIL", out)
         self.assertIn("tcp", out.lower())
@@ -274,7 +271,7 @@ class TestCmdDoctor(unittest.TestCase):
              patch("glean_code.commands.socket.create_connection", return_value=_MockConn()), \
              patch("glean_code.ui.supports_colour", return_value=False), \
              patch.dict("os.environ", {"GLEAN_CLIENT_TOKEN": "real_tok"}):
-            s = _sess(instance="acme-be.glean.com", api_token="token.secure.client", mode="mock")
+            s = _sess(instance="acme-be.glean.com", api_token="token.secure.client")
             out = _output(cmd_doctor, s, [], {})
         self.assertIn("OK", out)
 
@@ -282,7 +279,7 @@ class TestCmdDoctor(unittest.TestCase):
         clean_env = {k: v for k, v in os.environ.items() if k != "GLEAN_CLIENT_TOKEN"}
         with patch("glean_code.ui.supports_colour", return_value=False), \
              patch.dict("os.environ", clean_env, clear=True):
-            s = _sess(instance="acme-be.glean.com", api_token="token.secure.client", mode="mock")
+            s = _sess(instance="acme-be.glean.com", api_token="token.secure.client")
             out = _output(cmd_doctor, s, [], {})
         self.assertIn("FAIL", out)
 
@@ -307,7 +304,6 @@ class TestHyperlink(unittest.TestCase):
     def test_osc8_contains_closing_sequence(self):
         with patch("glean_code.ui.supports_colour", return_value=True):
             result = ui.hyperlink("https://example.com", "text")
-        # Closing sequence is ESC ] 8 ; ; ESC backslash
         self.assertIn("\033]8;;\033\\", result)
 
 
@@ -334,7 +330,6 @@ class TestRenderBanner(unittest.TestCase):
     def test_contains_block_char_from_wordmark(self):
         with patch("glean_code.ui.supports_colour", return_value=False):
             result = ui.render_banner("0.0.1", "mock")
-        # GLEAN_WORDMARK contains \u2588 (full block) characters
         self.assertIn("\u2588", result)
 
     def test_contains_help_hint(self):

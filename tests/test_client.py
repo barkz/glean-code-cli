@@ -431,7 +431,7 @@ class TestGleanClientIndexingErrors(unittest.TestCase):
         self.assertIn("indexing token", str(ctx.exception).lower())
 
     def test_indexing_post_raises_without_instance(self):
-        c = GleanClient(Config(indexing_token="tok"))
+        c = GleanClient(Config(indexing_token="tok", mode="live"))
         with self.assertRaises(GleanError) as ctx:
             c._indexing_post("/rotatetoken", {})
         self.assertIn("instance", str(ctx.exception).lower())

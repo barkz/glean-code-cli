@@ -1,7 +1,16 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python3 -m unittest discover tests/)"
+      "Bash(python3 -m unittest discover tests/)",
+      "Bash(curl -sL -H \"Accept: application/json\" \"https://developers.glean.com/oas/indexing\" -o /tmp/glean_indexing_oas.json -w \"%{http_code} %{content_type}\\\\n\" --max-time 30)",
+      "Read(//tmp/**)",
+      "Bash(curl -sL \"https://gleanwork.github.io/open-api/specs/final/indexing.yaml\" -o /tmp/glean_indexing.yaml --max-time 30)",
+      "Bash(grep -nE \"^\\(  /|  +operationId|tags:|^paths:\\)\" /tmp/glean_indexing.yaml | head -150)",
+      "Read(//private/tmp/**)",
+      "Bash(awk '/^  \\\\/api\\\\/index\\\\/v1\\\\/[^ ]+:/ {gsub\\(\":\",\"\"\\); path=$1; getline; method=\"\"} /^    \\(post|get|put|delete|patch\\):/ {gsub\\(\":\",\"\"\\); print toupper\\($1\\)\" \"path}' /tmp/glean_indexing.yaml)",
+      "Bash(awk '/^  \\\\/api\\\\/index\\\\/v1\\\\/\\(getdatasourceconfig|getdocumentstatus|getdocumentcount|getusercount|checkdocumentaccess|debug\\\\/{datasource}\\\\/document|debug\\\\/{datasource}\\\\/documents|debug\\\\/{datasource}\\\\/user\\):/,/^  \\\\/api/ {print}' /tmp/glean_indexing.yaml)",
+      "Bash(python3 -c ' *)",
+      "Bash(python3 -c \"import glean_code.commands; print\\('imports OK'\\)\")"
     ]
   }
 }

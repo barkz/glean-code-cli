@@ -1,9 +1,8 @@
 """Tests for glean_code.cli.main()"""
 import sys
 import unittest
-from io import StringIO
 from pathlib import Path
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, MagicMock
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -14,25 +13,21 @@ from glean_code.config import Config
 # helpers
 # ---------------------------------------------------------------------------
 
-def _run_main(*, isatty=True, stdin_lines=None, input_side_effect=None,
-              config=None):
-    """Run cli.main() with mocked I/O.  Returns (printed_lines, session)."""
+def _run_main(*, isatty=True, stdin_lines=None, input_side_effect=None, config=None):
+    """Run cli.main() with mocked I/O.  Returns (captured_lines, mock_dispatch)."""
     if config is None:
         config = Config(mode="mock")
 
     captured = []
 
-    # We use a mutable list so inner closures can append to it
-    sessions_created = []
-
-    _orig_session_init = None
-
     with patch("glean_code.cli.Config.load", return_value=config), \
          patch("glean_code.cli.setup_readline"), \
          patch("glean_code.ui.supports_colour", return_value=False), \
          patch("sys.stdin") as mock_stdin, \
-         patch("builtins.print", side_effect=lambda *a, **k: captured.append(" ".join(str(x) for x in a))), \
-         patch("builtins.input", side_effect=input_side_effect or [EOFError]):
+         patch("builtins.print",
+               side_effect=lambda *a, **k: captured.append(" ".join(str(x) for x in a))), \
+         patch("builtins.input",
+               side_effect=input_side_effect if input_side_effect is not None else [EOFError]):
 
         mock_stdin.isatty.return_value = isatty
         if stdin_lines is not None:
@@ -66,17 +61,10 @@ class TestMainNonInteractive(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# banner printed at startup
+# setup_readline called in interactive mode only
 # ---------------------------------------------------------------------------
 
-class TestMainBanner(unittest.TestCase):
-    def test_banner_printed_on_startup(self):
-        captured, _ = _run_main(input_side_effect=[EOFError])
-        # banner contains the GLEAN wordmark block
-        all_output = "\n".join(captured)
-        # render_banner returns glean wordmark + meta; at minimum check version-ish content
-        self.assertTrue(len(all_output) > 0)
-
+class TestMainReadlineSetup(unittest.TestCase):
     def test_setup_readline_called_in_interactive_mode(self):
         with patch("glean_code.cli.Config.load", return_value=Config(mode="mock")), \
              patch("glean_code.ui.supports_colour", return_value=False), \
@@ -109,18 +97,14 @@ class TestMainBanner(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestMainInteractiveLoop(unittest.TestCase):
-    def test_eoferror_exits_loop(self):
-        """EOFError from input() should exit cleanly (no crash)."""
-        captured, _ = _run_main(input_side_effect=[EOFError])
-        # No exception propagated; just verifying no crash
+    def test_eoferror_exits_loop_cleanly(self):
+        # Should not raise; just exits
+        _run_main(input_side_effect=[EOFError])
 
-    def test_keyboardinterrupt_exits_loop(self):
-        """KeyboardInterrupt from input() should exit cleanly."""
-        captured, _ = _run_main(input_side_effect=[KeyboardInterrupt])
-        # No exception propagated
+    def test_keyboardinterrupt_exits_loop_cleanly(self):
+        _run_main(input_side_effect=[KeyboardInterrupt])
 
     def test_dispatch_called_for_each_input_line(self):
-        # Two normal inputs then EOFError to stop the loop
         with patch("glean_code.cli.Config.load", return_value=Config(mode="mock")), \
              patch("glean_code.cli.setup_readline"), \
              patch("glean_code.ui.supports_colour", return_value=False), \
@@ -134,7 +118,10 @@ class TestMainInteractiveLoop(unittest.TestCase):
         self.assertEqual(mock_dispatch.call_count, 2)
 
     def test_unhandled_exception_in_dispatch_does_not_crash_repl(self):
-        """An exception thrown by dispatch should be caught and printed, not propagated."""
+        """An exception thrown by dispatch is caught; the REPL continues."""
+        def _raise(*a, **k):
+            raise RuntimeError("test explosion")
+
         with patch("glean_code.cli.Config.load", return_value=Config(mode="mock")), \
              patch("glean_code.cli.setup_readline"), \
              patch("glean_code.ui.supports_colour", return_value=False), \
@@ -143,16 +130,11 @@ class TestMainInteractiveLoop(unittest.TestCase):
              patch("builtins.input", side_effect=["boom", EOFError]):
             mock_stdin.isatty.return_value = True
             from glean_code import cli
-
-            def _raise(*a, **k):
-                raise RuntimeError("test explosion")
-
             with patch("glean_code.cli.dispatch", side_effect=_raise):
-                # Should complete without raising
-                cli.main()
+                cli.main()  # must not raise
 
     def test_session_running_false_exits_loop(self):
-        """If dispatch sets session.running=False, the loop should exit."""
+        """/exit sets session.running=False which stops the REPL."""
         with patch("glean_code.cli.Config.load", return_value=Config(mode="mock")), \
              patch("glean_code.cli.setup_readline"), \
              patch("glean_code.ui.supports_colour", return_value=False), \
@@ -161,9 +143,13 @@ class TestMainInteractiveLoop(unittest.TestCase):
              patch("builtins.input", return_value="/exit"):
             mock_stdin.isatty.return_value = True
             from glean_code import cli
-            # Let the real dispatch run; /exit sets session.running=False
             cli.main()
-            # If we get here without hanging, the loop exited correctly
+            # Getting here without hanging means the loop exited
+
+    def test_banner_printed_at_startup(self):
+        captured, _ = _run_main(input_side_effect=[EOFError])
+        all_output = "\n".join(captured)
+        self.assertTrue(len(all_output) > 0)
 
 
 if __name__ == "__main__":

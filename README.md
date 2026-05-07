@@ -7,17 +7,22 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 ## What you get
 
 - Slash commands covering every major Glean Client API surface: chat, search, agents, tools, docs, people, shortcuts (Go Links), answers, summarize, verification, messages, activity, announcements, collections, pins, and insights
+- **Near-complete Indexing API coverage** — 32 of 37 endpoints exposed as commands across read/debug, single-record write, bulk, and process-all tiers
 - Full in-terminal documentation for every command via `/help <command>`
 - Tab completion that cycles through matches as you type — press Tab to step forward, Shift+Tab to step back
 - Powerline-style status bar showing mode, connected instance, auth state, and active chat thread
 - Datasource status enrichment via the Indexing API — uploaded/indexed counts, coverage %, and processing history
+- Indexing **debug toolkit** — `/debug.document`, `/debug.documents`, `/debug.user`, and `/documents.access` answer "is this doc uploaded?", "why can't user X see doc Y?", and "what groups did we upload for this user?" without leaving the REPL
+- Indexing **observability counters** — `/datasources.config`, `/documents.count`, `/documents.status`, and `/users.count` for quick health checks of any custom datasource
+- Indexing **write surface** — single-record `/index.document`, `/index.user`, `/index.group`, `/index.membership` (plus their `/index.delete-*` partners) and `/index.permissions`, all driven by `--from-file <json>` so request bodies stay auditable
+- Indexing **bulk + paged uploads** — `/index.bulk-documents|users|groups|memberships`, `/people.bulk-employees|teams`, `/shortcuts.bulk-index`, `/shortcuts.upload`, plus `/index.process-all-*` and `/people.process-all-employees-teams` to kick off long-running rebuilds
 - `/scaffold` to generate a self-contained Python starter project for chat, search, or agent use cases
 - MCP server (`glean_mcp.py`) for Claude Code, Claude Desktop, and Cursor
 - Config stored at `~/.gleancode/config.json` — supports both Client and Indexing API tokens
-- Mock mode by default so you can try every command offline; switches to live the moment you add credentials
+- Mock mode by default so you can try every command offline (now including the 30 new indexing commands); switches to live the moment you add credentials
 - `/insights --export <file>` dumps all returned metrics (overview, assistant, agents, datasource clicks) to a flat CSV — pipe it straight into Slack, Sheets, or any BI tool
 - Secure-ref token storage — store `token.secure.client` / `token.secure.indexing` in config and have the actual secret resolved from `$GLEAN_CLIENT_TOKEN` / `$GLEAN_INDEXING_TOKEN` at request time, with masking everywhere tokens are displayed
-- Test suite in `tests/` covering the client, config, and UI layers — run with `python3 -m pytest tests/`
+- Test suite in `tests/` covering the client, config, and UI layers — run with `python3 -m pytest tests/` (579 tests)
 
 ## Coming soon
 
@@ -86,10 +91,49 @@ Without a token the CLI runs in mock mode and returns realistic fake data. Set a
 - [`/recommendations`](#recommendations)
 - [`/feedback`](#feedback)
 
-### Indexing
+### Indexing — read & debug
 
 - [`/datasources.status <name>`](#datasourcesstatus)
+- [`/datasources.config <name>`](#datasourcesconfig)
+- [`/documents.status`](#documentsstatus)
+- [`/documents.count`](#documentscount)
+- [`/users.count`](#userscount)
+- [`/documents.access`](#documentsaccess)
+- [`/debug.document`](#debugdocument)
+- [`/debug.documents`](#debugdocuments)
+- [`/debug.user`](#debuguser)
 - [`/indexing.rotate-token`](#indexingrotate-token)
+
+### Indexing — single-record write
+
+- [`/index.document`](#indexdocument)
+- [`/index.delete-document`](#indexdelete-document)
+- [`/index.permissions`](#indexpermissions)
+- [`/index.user`](#indexuser)
+- [`/index.delete-user`](#indexdelete-user)
+- [`/index.group`](#indexgroup)
+- [`/index.delete-group`](#indexdelete-group)
+- [`/index.membership`](#indexmembership)
+- [`/index.delete-membership`](#indexdelete-membership)
+
+### Indexing — bulk & process-all
+
+- [`/index.documents`](#indexdocuments)
+- [`/index.bulk-documents`](#indexbulk-documents)
+- [`/index.bulk-users`](#indexbulk-users)
+- [`/index.bulk-groups`](#indexbulk-groups)
+- [`/index.bulk-memberships`](#indexbulk-memberships)
+- [`/shortcuts.bulk-index`](#shortcutsbulk-index)
+- [`/shortcuts.upload`](#shortcutsupload)
+- [`/index.process-all-documents`](#indexprocess-all-documents)
+- [`/index.process-all-memberships`](#indexprocess-all-memberships)
+
+### Indexing — people (org chart)
+
+- [`/people.bulk-employees`](#peoplebulk-employees)
+- [`/people.bulk-teams`](#peoplebulk-teams)
+- [`/people.index-employee-list`](#peopleindex-employee-list)
+- [`/people.process-all-employees-teams`](#peopleprocess-all-employees-teams)
 
 ### Insights & Activity
 
@@ -580,6 +624,509 @@ Rotate the indexing API token secret and print the new raw secret. Store it imme
 **Output** — The new raw secret and a reminder to run `/config set indexing_token <new-secret>`.
 
 **Endpoint** — `POST /api/index/v1/rotatetoken`
+
+---
+
+#### /datasources.config
+
+Get the live configuration for a custom datasource — object definitions, ACL settings, trusted domains, icon URL.
+
+```text
+/datasources.config <datasource>
+```
+
+```text
+/datasources.config gdrive
+/datasources.config custom1
+```
+
+**Output** — Datasource config object (object types, isUserReferencedByEmail, trustedDomains, datasourceCategory, etc.).
+
+**Endpoint** — `POST /api/index/v1/getdatasourceconfig`
+
+---
+
+#### /documents.status
+
+Get upload + indexing status for a single document.
+
+```text
+/documents.status --datasource <ds> --object-type <type> --id <doc-id>
+```
+
+```text
+/documents.status --datasource gdrive --object-type Article --id doc-1
+```
+
+**Output** — `uploadStatus`, `lastUploadedAt`, `lastIndexedAt`, any indexing errors.
+
+**Endpoint** — `POST /api/index/v1/getdocumentstatus`
+
+---
+
+#### /documents.count
+
+Count uploaded documents in a custom datasource.
+
+```text
+/documents.count --datasource <ds>
+```
+
+```text
+/documents.count --datasource custom1
+```
+
+**Output** — Document count.
+
+**Endpoint** — `POST /api/index/v1/getdocumentcount`
+
+---
+
+#### /users.count
+
+Count users uploaded for a custom datasource.
+
+```text
+/users.count --datasource <ds>
+```
+
+```text
+/users.count --datasource custom1
+```
+
+**Output** — User count.
+
+**Endpoint** — `POST /api/index/v1/getusercount`
+
+---
+
+#### /documents.access
+
+Check whether a specific user has access to a specific document — useful for debugging "why can't user X see doc Y?"
+
+```text
+/documents.access --datasource <ds> --object-type <type> --id <doc> --user <email>
+```
+
+```text
+/documents.access --datasource gdrive --object-type Article --id doc-1 --user alice@example.com
+```
+
+**Output** — `YES` / `NO` access decision.
+
+**Endpoint** — `POST /api/index/v1/checkdocumentaccess`
+
+---
+
+#### /debug.document
+
+Get debug info (status + uploaded permissions) for a single document.
+
+```text
+/debug.document <datasource> <doc-id> [--object-type <type>]
+```
+
+```text
+/debug.document gdrive doc-1 --object-type Article
+```
+
+**Output** — Document upload status, last-uploaded/indexed timestamps, ACL permissions.
+
+**Endpoint** — `POST /api/index/v1/debug/{datasource}/document`
+
+---
+
+#### /debug.documents
+
+Bulk debug for multiple documents in a datasource.
+
+```text
+/debug.documents <datasource> --from-file <items.json>
+```
+
+The JSON file should be an array of `{objectType, docId}` entries.
+
+```text
+/debug.documents gdrive --from-file ./batch.json
+```
+
+**Output** — Per-document debug results.
+
+**Endpoint** — `POST /api/index/v1/debug/{datasource}/documents`
+
+---
+
+#### /debug.user
+
+Get debug info for a user in a datasource — upload status + uploaded group memberships.
+
+```text
+/debug.user <datasource> <email>
+```
+
+```text
+/debug.user gdrive alice@example.com
+```
+
+**Output** — User upload status and groups uploaded via the permissions API.
+
+**Endpoint** — `POST /api/index/v1/debug/{datasource}/user`
+
+---
+
+#### /index.document
+
+Index a single document.
+
+```text
+/index.document --from-file <doc.json> [--version <n>]
+```
+
+The JSON file should contain a `DocumentDefinition` body.
+
+```text
+/index.document --from-file ./doc.json
+/index.document --from-file ./doc.json --version 3
+```
+
+**Output** — Acceptance status.
+
+**Endpoint** — `POST /api/index/v1/indexdocument`
+
+---
+
+#### /index.delete-document
+
+Delete a single document by id.
+
+```text
+/index.delete-document --datasource <ds> --object-type <type> --id <doc-id> [--version <n>]
+```
+
+```text
+/index.delete-document --datasource gdrive --object-type Article --id doc-1
+```
+
+**Output** — Acceptance status.
+
+**Endpoint** — `POST /api/index/v1/deletedocument`
+
+---
+
+#### /index.permissions
+
+Update document permissions (ACL).
+
+```text
+/index.permissions --from-file <perms.json>
+```
+
+```text
+/index.permissions --from-file ./perms.json
+```
+
+**Output** — Acceptance status.
+
+**Endpoint** — `POST /api/index/v1/updatepermissions`
+
+---
+
+#### /index.user
+
+Index a single user record.
+
+```text
+/index.user --datasource <ds> --from-file <user.json> [--version <n>]
+```
+
+```text
+/index.user --datasource custom1 --from-file ./user.json
+```
+
+**Output** — Acceptance status.
+
+**Endpoint** — `POST /api/index/v1/indexuser`
+
+---
+
+#### /index.delete-user
+
+Delete a user from a datasource.
+
+```text
+/index.delete-user --datasource <ds> --email <email> [--version <n>]
+```
+
+```text
+/index.delete-user --datasource custom1 --email alice@example.com
+```
+
+**Output** — Acceptance status.
+
+**Endpoint** — `POST /api/index/v1/deleteuser`
+
+---
+
+#### /index.group
+
+Index a single group.
+
+```text
+/index.group --datasource <ds> --from-file <group.json> [--version <n>]
+```
+
+```text
+/index.group --datasource custom1 --from-file ./group.json
+```
+
+**Output** — Acceptance status.
+
+**Endpoint** — `POST /api/index/v1/indexgroup`
+
+---
+
+#### /index.delete-group
+
+Delete a group from a datasource.
+
+```text
+/index.delete-group --datasource <ds> --name <group-name> [--version <n>]
+```
+
+```text
+/index.delete-group --datasource custom1 --name engineering
+```
+
+**Output** — Acceptance status.
+
+**Endpoint** — `POST /api/index/v1/deletegroup`
+
+---
+
+#### /index.membership
+
+Index a single group membership.
+
+```text
+/index.membership --datasource <ds> --from-file <membership.json> [--version <n>]
+```
+
+```text
+/index.membership --datasource custom1 --from-file ./membership.json
+```
+
+**Output** — Acceptance status.
+
+**Endpoint** — `POST /api/index/v1/indexmembership`
+
+---
+
+#### /index.delete-membership
+
+Delete a single group membership.
+
+```text
+/index.delete-membership --datasource <ds> --from-file <membership.json> [--version <n>]
+```
+
+```text
+/index.delete-membership --datasource custom1 --from-file ./membership.json
+```
+
+**Output** — Acceptance status.
+
+**Endpoint** — `POST /api/index/v1/deletemembership`
+
+---
+
+#### /index.documents
+
+Index a batch of documents (paged).
+
+```text
+/index.documents --from-file <body.json>
+```
+
+The JSON file should contain the full `IndexDocumentsRequest` body (`uploadId`, `datasource`, `documents`).
+
+**Output** — Upload id and accepted count.
+
+**Endpoint** — `POST /api/index/v1/indexdocuments`
+
+---
+
+#### /index.bulk-documents
+
+Bulk index documents in pages — supports `uploadId`, `isFirstPage`, `isLastPage`, `forceRestartUpload`, `disableStaleDocumentDeletionCheck`.
+
+```text
+/index.bulk-documents --from-file <body.json>
+```
+
+**Output** — Upload acknowledgement.
+
+**Endpoint** — `POST /api/index/v1/bulkindexdocuments`
+
+---
+
+#### /index.bulk-users
+
+Bulk index users in pages.
+
+```text
+/index.bulk-users --from-file <body.json>
+```
+
+**Output** — Upload acknowledgement.
+
+**Endpoint** — `POST /api/index/v1/bulkindexusers`
+
+---
+
+#### /index.bulk-groups
+
+Bulk index groups in pages.
+
+```text
+/index.bulk-groups --from-file <body.json>
+```
+
+**Output** — Upload acknowledgement.
+
+**Endpoint** — `POST /api/index/v1/bulkindexgroups`
+
+---
+
+#### /index.bulk-memberships
+
+Bulk index group memberships in pages.
+
+```text
+/index.bulk-memberships --from-file <body.json>
+```
+
+**Output** — Upload acknowledgement.
+
+**Endpoint** — `POST /api/index/v1/bulkindexmemberships`
+
+---
+
+#### /shortcuts.bulk-index
+
+Bulk index shortcuts via the **Indexing API** (distinct from the Client API `/shortcuts.*` commands which target end-user Go Links).
+
+```text
+/shortcuts.bulk-index --from-file <body.json>
+```
+
+**Output** — Upload acknowledgement.
+
+**Endpoint** — `POST /api/index/v1/bulkindexshortcuts`
+
+---
+
+#### /shortcuts.upload
+
+Upload shortcuts via the Indexing API.
+
+```text
+/shortcuts.upload --from-file <body.json>
+```
+
+**Output** — Upload acknowledgement.
+
+**Endpoint** — `POST /api/index/v1/uploadshortcuts`
+
+---
+
+#### /index.process-all-documents
+
+Trigger processing of all uploaded documents — long-running.
+
+```text
+/index.process-all-documents [--datasource <ds>]
+```
+
+```text
+/index.process-all-documents
+/index.process-all-documents --datasource custom1
+```
+
+**Output** — Process status.
+
+**Endpoint** — `POST /api/index/v1/processalldocuments`
+
+---
+
+#### /index.process-all-memberships
+
+Trigger processing of all uploaded group memberships.
+
+```text
+/index.process-all-memberships [--datasource <ds>]
+```
+
+**Output** — Process status.
+
+**Endpoint** — `POST /api/index/v1/processallmemberships`
+
+---
+
+#### /people.bulk-employees
+
+Bulk index employee records (org chart side).
+
+```text
+/people.bulk-employees --from-file <body.json>
+```
+
+**Output** — Upload acknowledgement.
+
+**Endpoint** — `POST /api/index/v1/bulkindexemployees`
+
+---
+
+#### /people.bulk-teams
+
+Bulk index team records (org chart side).
+
+```text
+/people.bulk-teams --from-file <body.json>
+```
+
+**Output** — Upload acknowledgement.
+
+**Endpoint** — `POST /api/index/v1/bulkindexteams`
+
+---
+
+#### /people.index-employee-list
+
+Index a list of employees with optional per-employee versions.
+
+```text
+/people.index-employee-list --from-file <list.json>
+```
+
+The JSON file may be a plain array of employee objects or `{"employees": [...]}`.
+
+**Output** — Accepted employee count.
+
+**Endpoint** — `POST /api/index/v1/indexemployeelist`
+
+---
+
+#### /people.process-all-employees-teams
+
+Trigger processing of all uploaded employees and teams.
+
+```text
+/people.process-all-employees-teams
+```
+
+**Output** — Process status.
+
+**Endpoint** — `POST /api/index/v1/processallemployeesandteams`
 
 ---
 
@@ -1457,35 +2004,100 @@ POST /rest/api/v1/insights
 
 ---
 
-## Datasource Status
+## Indexing API
 
-`/datasources.list --with-status` enriches each datasource with live indexing data from the Glean Indexing API. `/datasources.status <name>` shows the full status for a single datasource including document counts and recent processing events.
-
-These commands require an indexing token. Obtain one from your Glean admin UI (workspace settings → API tokens → Indexing), then store it:
+Glean Code exposes 32 of the 37 documented Indexing API endpoints — read/debug, single-record writes, bulk uploads, and long-running process-all triggers. All Indexing-API commands require a separate indexing token (Client API tokens cannot reach `/api/index/v1`):
 
 ```text
-/config set indexing_token <token>
+/config set indexing_token <token-or-secure-ref>
 ```
 
-| Command | Description |
+The token can be a literal value or the secure reference `token.secure.indexing` (resolved from `$GLEAN_INDEXING_TOKEN` at request time — see [Secure tokens](#secure-tokens)). Get a real token from your Glean admin UI (workspace settings → API tokens → Indexing).
+
+### Read & debug
+
+These are non-destructive lookups — start here when answering questions like "is this doc indexed?", "why can't user X see doc Y?", or "what's the upload count for datasource Z?"
+
+| Command | Purpose |
 | --- | --- |
-| `/datasources.list --with-status` | Lists all datasources with uploaded/indexed counts and coverage |
-| `/datasources.status <name>` | Full status for one datasource: visibility, counts, last 5 processing events |
-| `/indexing.rotate-token` | Rotates your indexing token secret and prints the new raw secret |
-
-Example:
+| [`/datasources.status <name>`](#datasourcesstatus) | Full status for one datasource: visibility, counts, last 5 processing events |
+| [`/datasources.config <name>`](#datasourcesconfig) | Live config: object types, ACL settings, trusted domains, icon URL |
+| [`/datasources.list --with-status`](#datasourceslist) | All datasources with uploaded/indexed counts and coverage |
+| [`/documents.status`](#documentsstatus) | Upload + indexing status for one document |
+| [`/documents.count`](#documentscount) | Document count for a custom datasource |
+| [`/users.count`](#userscount) | User count for a custom datasource |
+| [`/documents.access`](#documentsaccess) | Whether a specific user has access to a specific document |
+| [`/debug.document`](#debugdocument) | Per-doc debug payload (status + uploaded permissions) |
+| [`/debug.documents`](#debugdocuments) | Bulk debug for many documents (`--from-file`) |
+| [`/debug.user`](#debuguser) | Per-user debug payload (status + uploaded groups) |
 
 ```text
-/datasources.status slack
-/datasources.list --with-status
-/indexing.rotate-token
+/datasources.config gdrive
+/documents.access --datasource gdrive --object-type Article --id doc-1 --user alice@example.com
+/debug.user gdrive alice@example.com
 ```
 
-After rotating a token, store the new secret immediately:
+### Single-record write
+
+Each write command takes a JSON request body via `--from-file`. Deletes use convenience flags. All accept `--version <n>` for optimistic concurrency.
+
+| Command | Purpose |
+| --- | --- |
+| [`/index.document`](#indexdocument) | Index one document |
+| [`/index.delete-document`](#indexdelete-document) | Delete one document by id |
+| [`/index.permissions`](#indexpermissions) | Update document ACL |
+| [`/index.user`](#indexuser) | Index one user |
+| [`/index.delete-user`](#indexdelete-user) | Delete one user |
+| [`/index.group`](#indexgroup) | Index one group |
+| [`/index.delete-group`](#indexdelete-group) | Delete one group |
+| [`/index.membership`](#indexmembership) | Index one group membership |
+| [`/index.delete-membership`](#indexdelete-membership) | Delete one group membership |
 
 ```text
+/index.document --from-file ./doc.json
+/index.delete-document --datasource gdrive --object-type Article --id doc-1
+/index.permissions --from-file ./perms.json
+```
+
+### Bulk + paged uploads
+
+Bulk endpoints use the standard upload-paging contract (`uploadId`, `isFirstPage`, `isLastPage`, optional `forceRestartUpload`). Wrap your full request body in a JSON file and pass it via `--from-file`.
+
+| Command | Endpoint family |
+| --- | --- |
+| [`/index.documents`](#indexdocuments) | Paged document index |
+| [`/index.bulk-documents`](#indexbulk-documents) | Bulk document index |
+| [`/index.bulk-users`](#indexbulk-users) | Bulk user index |
+| [`/index.bulk-groups`](#indexbulk-groups) | Bulk group index |
+| [`/index.bulk-memberships`](#indexbulk-memberships) | Bulk group memberships |
+| [`/people.bulk-employees`](#peoplebulk-employees) | Bulk employee records (org chart) |
+| [`/people.bulk-teams`](#peoplebulk-teams) | Bulk team records (org chart) |
+| [`/people.index-employee-list`](#peopleindex-employee-list) | Versioned employee list |
+| [`/shortcuts.bulk-index`](#shortcutsbulk-index) | Bulk shortcuts via Indexing API ⚠ distinct from Client API `/shortcuts.*` |
+| [`/shortcuts.upload`](#shortcutsupload) | Upload shortcuts via Indexing API |
+
+### Process-all (long-running)
+
+Trigger a tenant-wide reprocess after a bulk upload completes. These commands accept an optional `--datasource` filter where applicable.
+
+| Command | Purpose |
+| --- | --- |
+| [`/index.process-all-documents`](#indexprocess-all-documents) | Reprocess all uploaded documents |
+| [`/index.process-all-memberships`](#indexprocess-all-memberships) | Reprocess all uploaded memberships |
+| [`/people.process-all-employees-teams`](#peopleprocess-all-employees-teams) | Reprocess all uploaded employees + teams |
+
+### Token rotation
+
+```text
+/indexing.rotate-token
 /config set indexing_token <new-raw-secret>
 ```
+
+`/indexing.rotate-token` prints the new raw secret — store it immediately, the old one is invalidated.
+
+### Mock mode for indexing
+
+All 32 indexing commands work in mock mode as long as an indexing token is set in config — it can be any non-empty string (e.g. `mock_idx_token`). The CLI returns realistic shapes (datasource configs, doc/user counts, debug payloads, accept-style write responses) so you can rehearse a workflow before pointing at a live tenant.
 
 ---
 
@@ -1766,8 +2378,46 @@ POST /insights
 Indexing API paths (require a separate indexing token, base `https://<instance>-be.glean.com/api/index/v1`):
 
 ```text
-POST /api/index/v1/debug/{datasource}/status
 POST /api/index/v1/rotatetoken
+
+# Read & debug
+POST /api/index/v1/getdatasourceconfig
+POST /api/index/v1/getdocumentstatus
+POST /api/index/v1/getdocumentcount
+POST /api/index/v1/getusercount
+POST /api/index/v1/checkdocumentaccess
+POST /api/index/v1/debug/{datasource}/status
+POST /api/index/v1/debug/{datasource}/document
+POST /api/index/v1/debug/{datasource}/documents
+POST /api/index/v1/debug/{datasource}/user
+
+# Single-record write
+POST /api/index/v1/indexdocument
+POST /api/index/v1/deletedocument
+POST /api/index/v1/updatepermissions
+POST /api/index/v1/indexuser
+POST /api/index/v1/deleteuser
+POST /api/index/v1/indexgroup
+POST /api/index/v1/deletegroup
+POST /api/index/v1/indexmembership
+POST /api/index/v1/deletemembership
+
+# Bulk / paged
+POST /api/index/v1/indexdocuments
+POST /api/index/v1/bulkindexdocuments
+POST /api/index/v1/bulkindexusers
+POST /api/index/v1/bulkindexgroups
+POST /api/index/v1/bulkindexmemberships
+POST /api/index/v1/bulkindexshortcuts
+POST /api/index/v1/uploadshortcuts
+POST /api/index/v1/bulkindexemployees
+POST /api/index/v1/bulkindexteams
+POST /api/index/v1/indexemployeelist
+
+# Process-all (long running)
+POST /api/index/v1/processalldocuments
+POST /api/index/v1/processallmemberships
+POST /api/index/v1/processallemployeesandteams
 ```
 
 If your tenant uses a slightly different path for a given surface, change it in `glean_code/client.py`. Every method is a small wrapper around `self._post(path, body)` so the swap is a one-liner.

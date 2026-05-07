@@ -1,4 +1,4 @@
-"""Tests for glean_code.help_docs — structure validation."""
+"""Tests for glean_code.help_docs -- structure validation."""
 import sys
 import unittest
 from pathlib import Path
@@ -96,28 +96,18 @@ class TestCommandGroups(unittest.TestCase):
                         f"which is not in DOCS"
                     )
 
-    def test_no_duplicate_command_across_groups(self):
-        seen = {}
-        for group_name, cmds in COMMAND_GROUPS:
-            for cmd in cmds:
-                if cmd in seen:
-                    # datasources.status and indexing.rotate-token appear in
-                    # both Chat & Search and Indexing groups intentionally;
-                    # allow intentional duplicates but flag anything else.
-                    # For now, just record duplicates and note them.
-                    pass
-                seen.setdefault(cmd, group_name)
-
     def test_group_names_are_nonempty(self):
         for group_name, _ in COMMAND_GROUPS:
             self.assertTrue(group_name.strip(), "Group name is blank")
 
 
 class TestHandlerAndDocsCoverage(unittest.TestCase):
-    """Every registered handler should have a DOCS entry."""
+    """Every registered handler should have a DOCS entry and vice versa."""
 
     def test_every_handler_has_a_doc(self):
         for cmd in HANDLERS:
+            if cmd in _UNDOCUMENTED_ALIASES:
+                continue
             with self.subTest(cmd=cmd):
                 self.assertIn(
                     cmd, DOCS,
@@ -135,3 +125,6 @@ class TestHandlerAndDocsCoverage(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+# 'quit' is a registered alias for 'exit' — intentionally undocumented
+_UNDOCUMENTED_ALIASES = {"quit"}

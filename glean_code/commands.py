@@ -654,6 +654,480 @@ def cmd_indexing_rotate_token(s: Session, pos, flags):
     ui.print_info("Update your stored token with: /config set indexing_token <new_secret>")
 
 
+# -------------------- shared indexing helpers --------------------
+
+def _require_indexing_token(s: "Session") -> bool:
+    if not s.config.indexing_token:
+        ui.print_err(
+            "No indexing token configured. Set one with: "
+            "/config set indexing_token <token-or-secure-ref>"
+        )
+        return False
+    return True
+
+
+def _load_json_file(path: str) -> Optional[Any]:
+    """Load and parse a JSON file. Prints an error and returns None on failure."""
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            return json.load(fh)
+    except OSError as e:
+        ui.print_err(f"Could not read {path}: {e}")
+    except ValueError as e:
+        ui.print_err(f"Invalid JSON in {path}: {e}")
+    return None
+
+
+def _print_kv_response(resp: Dict[str, Any], title: str = "") -> None:
+    if title:
+        print(ui.rule(title))
+    rows = []
+    for k, v in resp.items():
+        if isinstance(v, (dict, list)):
+            rows.append((k, json.dumps(v, indent=2)))
+        else:
+            rows.append((k, str(v)))
+    print(ui.kv_table(rows))
+    print(ui.rule())
+
+
+# -------------------- Tier 1: read-only inspection --------------------
+
+@register("datasources.config")
+def cmd_datasources_config(s: Session, pos, flags):
+    if not pos:
+        ui.print_err("Usage: /datasources.config <datasource>")
+        return
+    if not _require_indexing_token(s):
+        return
+    try:
+        resp = s.client.get_datasource_config(pos[0])
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    _print_kv_response(resp, f"datasource config: {pos[0]}")
+
+
+@register("documents.status")
+def cmd_documents_status(s: Session, pos, flags):
+    ds = flags.get("datasource") or flags.get("ds")
+    obj = flags.get("object-type") or flags.get("object_type")
+    doc = flags.get("id") or (pos[0] if pos else None)
+    if not (ds and obj and doc):
+        ui.print_err("Usage: /documents.status --datasource <ds> --object-type <type> --id <doc-id>")
+        return
+    if not _require_indexing_token(s):
+        return
+    try:
+        resp = s.client.get_document_status(ds, obj, doc)
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    _print_kv_response(resp, "document status")
+
+
+@register("documents.count")
+def cmd_documents_count(s: Session, pos, flags):
+    ds = flags.get("datasource") or (pos[0] if pos else None)
+    if not ds:
+        ui.print_err("Usage: /documents.count --datasource <ds>")
+        return
+    if not _require_indexing_token(s):
+        return
+    try:
+        resp = s.client.get_document_count(ds)
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    n = resp.get("documentCount")
+    print(ui.kv_table([("datasource", ds), ("documents", f"{n:,}" if isinstance(n, int) else str(n))]))
+
+
+@register("users.count")
+def cmd_users_count(s: Session, pos, flags):
+    ds = flags.get("datasource") or (pos[0] if pos else None)
+    if not ds:
+        ui.print_err("Usage: /users.count --datasource <ds>")
+        return
+    if not _require_indexing_token(s):
+        return
+    try:
+        resp = s.client.get_user_count(ds)
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    n = resp.get("userCount")
+    print(ui.kv_table([("datasource", ds), ("users", f"{n:,}" if isinstance(n, int) else str(n))]))
+
+
+@register("documents.access")
+def cmd_documents_access(s: Session, pos, flags):
+    ds   = flags.get("datasource")
+    obj  = flags.get("object-type") or flags.get("object_type")
+    doc  = flags.get("id") or (pos[0] if pos else None)
+    user = flags.get("user") or flags.get("email")
+    if not (ds and obj and doc and user):
+        ui.print_err("Usage: /documents.access --datasource <ds> --object-type <type> --id <doc> --user <email>")
+        return
+    if not _require_indexing_token(s):
+        return
+    try:
+        resp = s.client.check_document_access(ds, obj, doc, user)
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    has = resp.get("hasAccess")
+    label = ui.style("YES", ui.C.GREEN) if has else ui.style("NO", ui.C.RED)
+    print(ui.kv_table([
+        ("user",  user),
+        ("doc",   f"{ds}/{obj}/{doc}"),
+        ("access", label),
+    ]))
+
+
+@register("debug.document")
+def cmd_debug_document(s: Session, pos, flags):
+    if len(pos) < 2:
+        ui.print_err("Usage: /debug.document <datasource> <doc-id> [--object-type <type>]")
+        return
+    ds, doc = pos[0], pos[1]
+    obj = flags.get("object-type") or flags.get("object_type") or "Article"
+    if not _require_indexing_token(s):
+        return
+    try:
+        resp = s.client.debug_document(ds, obj, doc)
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    _print_kv_response(resp, f"debug: {ds}/{obj}/{doc}")
+
+
+@register("debug.documents")
+def cmd_debug_documents(s: Session, pos, flags):
+    if not pos:
+        ui.print_err("Usage: /debug.documents <datasource> --from-file <items.json>")
+        return
+    ds = pos[0]
+    src = flags.get("from-file") or flags.get("from_file")
+    if not src:
+        ui.print_err("--from-file required (a JSON array of {objectType, docId} entries)")
+        return
+    items = _load_json_file(src)
+    if items is None:
+        return
+    if not isinstance(items, list):
+        ui.print_err("--from-file must contain a JSON array")
+        return
+    if not _require_indexing_token(s):
+        return
+    try:
+        resp = s.client.debug_documents(ds, items)
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    _print_kv_response(resp, f"debug documents: {ds}")
+
+
+@register("debug.user")
+def cmd_debug_user(s: Session, pos, flags):
+    if len(pos) < 2:
+        ui.print_err("Usage: /debug.user <datasource> <email>")
+        return
+    ds, email = pos[0], pos[1]
+    if not _require_indexing_token(s):
+        return
+    try:
+        resp = s.client.debug_user(ds, email)
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    _print_kv_response(resp, f"debug user: {ds}/{email}")
+
+
+# -------------------- Tier 3: single-record CRUD --------------------
+
+def _read_body_from_flag(flags, default_key: str = "from-file") -> Optional[Any]:
+    src = flags.get(default_key) or flags.get(default_key.replace("-", "_"))
+    if not src:
+        ui.print_err(f"--{default_key} <path> is required")
+        return None
+    return _load_json_file(src)
+
+
+def _opt_version(flags) -> Optional[int]:
+    v = flags.get("version")
+    if v in (None, True):
+        return None
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        ui.print_err("--version must be an integer")
+        return None
+
+
+@register("index.document")
+def cmd_index_document(s: Session, pos, flags):
+    body = _read_body_from_flag(flags)
+    if body is None:
+        return
+    if not _require_indexing_token(s):
+        return
+    try:
+        resp = s.client.index_document(body, version=_opt_version(flags))
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    ui.print_ok("indexdocument accepted.")
+    _print_kv_response(resp)
+
+
+@register("index.delete-document")
+def cmd_index_delete_document(s: Session, pos, flags):
+    ds  = flags.get("datasource")
+    obj = flags.get("object-type") or flags.get("object_type")
+    doc = flags.get("id")
+    if not (ds and obj and doc):
+        ui.print_err("Usage: /index.delete-document --datasource <ds> --object-type <type> --id <doc-id>")
+        return
+    if not _require_indexing_token(s):
+        return
+    try:
+        resp = s.client.delete_document(ds, obj, doc, version=_opt_version(flags))
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    ui.print_ok(f"delete accepted for {ds}/{obj}/{doc}")
+    _print_kv_response(resp)
+
+
+@register("index.permissions")
+def cmd_index_permissions(s: Session, pos, flags):
+    body = _read_body_from_flag(flags)
+    if body is None:
+        return
+    if not _require_indexing_token(s):
+        return
+    try:
+        resp = s.client.update_permissions(body)
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    ui.print_ok("updatepermissions accepted.")
+    _print_kv_response(resp)
+
+
+@register("index.user")
+def cmd_index_user(s: Session, pos, flags):
+    ds = flags.get("datasource")
+    if not ds:
+        ui.print_err("--datasource is required")
+        return
+    user = _read_body_from_flag(flags)
+    if user is None:
+        return
+    if not _require_indexing_token(s):
+        return
+    try:
+        resp = s.client.index_user(ds, user, version=_opt_version(flags))
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    ui.print_ok("indexuser accepted.")
+    _print_kv_response(resp)
+
+
+@register("index.delete-user")
+def cmd_index_delete_user(s: Session, pos, flags):
+    ds    = flags.get("datasource")
+    email = flags.get("email")
+    if not (ds and email):
+        ui.print_err("Usage: /index.delete-user --datasource <ds> --email <email>")
+        return
+    if not _require_indexing_token(s):
+        return
+    try:
+        resp = s.client.delete_user(ds, email, version=_opt_version(flags))
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    ui.print_ok(f"delete user accepted for {ds}/{email}")
+    _print_kv_response(resp)
+
+
+@register("index.group")
+def cmd_index_group(s: Session, pos, flags):
+    ds = flags.get("datasource")
+    if not ds:
+        ui.print_err("--datasource is required")
+        return
+    group = _read_body_from_flag(flags)
+    if group is None:
+        return
+    if not _require_indexing_token(s):
+        return
+    try:
+        resp = s.client.index_group(ds, group, version=_opt_version(flags))
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    ui.print_ok("indexgroup accepted.")
+    _print_kv_response(resp)
+
+
+@register("index.delete-group")
+def cmd_index_delete_group(s: Session, pos, flags):
+    ds   = flags.get("datasource")
+    name = flags.get("name") or flags.get("group")
+    if not (ds and name):
+        ui.print_err("Usage: /index.delete-group --datasource <ds> --name <group-name>")
+        return
+    if not _require_indexing_token(s):
+        return
+    try:
+        resp = s.client.delete_group(ds, name, version=_opt_version(flags))
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    ui.print_ok(f"delete group accepted for {ds}/{name}")
+    _print_kv_response(resp)
+
+
+@register("index.membership")
+def cmd_index_membership(s: Session, pos, flags):
+    ds = flags.get("datasource")
+    if not ds:
+        ui.print_err("--datasource is required")
+        return
+    membership = _read_body_from_flag(flags)
+    if membership is None:
+        return
+    if not _require_indexing_token(s):
+        return
+    try:
+        resp = s.client.index_membership(ds, membership, version=_opt_version(flags))
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    ui.print_ok("indexmembership accepted.")
+    _print_kv_response(resp)
+
+
+@register("index.delete-membership")
+def cmd_index_delete_membership(s: Session, pos, flags):
+    ds = flags.get("datasource")
+    if not ds:
+        ui.print_err("--datasource is required")
+        return
+    membership = _read_body_from_flag(flags)
+    if membership is None:
+        return
+    if not _require_indexing_token(s):
+        return
+    try:
+        resp = s.client.delete_membership(ds, membership, version=_opt_version(flags))
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    ui.print_ok("deletemembership accepted.")
+    _print_kv_response(resp)
+
+
+# -------------------- Tier 5: bulk + process-all --------------------
+
+def _bulk_handler(method_name: str, label: str):
+    """Build a generic bulk-index handler that loads a JSON request body."""
+    def handler(s: Session, pos, flags):
+        body = _read_body_from_flag(flags)
+        if body is None:
+            return
+        if not isinstance(body, dict):
+            ui.print_err("--from-file must contain a JSON object (the full request body)")
+            return
+        if not _require_indexing_token(s):
+            return
+        try:
+            resp = getattr(s.client, method_name)(body)
+        except GleanError as e:
+            ui.print_err(str(e))
+            return
+        ui.print_ok(f"{label} accepted.")
+        _print_kv_response(resp)
+    handler.__name__ = f"cmd_{method_name}"
+    return handler
+
+
+HANDLERS["index.documents"]            = _bulk_handler("index_documents",        "indexdocuments")
+HANDLERS["index.bulk-documents"]       = _bulk_handler("bulk_index_documents",   "bulkindexdocuments")
+HANDLERS["index.bulk-users"]           = _bulk_handler("bulk_index_users",       "bulkindexusers")
+HANDLERS["index.bulk-groups"]          = _bulk_handler("bulk_index_groups",      "bulkindexgroups")
+HANDLERS["index.bulk-memberships"]     = _bulk_handler("bulk_index_memberships", "bulkindexmemberships")
+HANDLERS["people.bulk-employees"]      = _bulk_handler("bulk_index_employees",   "bulkindexemployees")
+HANDLERS["people.bulk-teams"]          = _bulk_handler("bulk_index_teams",       "bulkindexteams")
+HANDLERS["shortcuts.bulk-index"]       = _bulk_handler("bulk_index_shortcuts",   "bulkindexshortcuts")
+HANDLERS["shortcuts.upload"]           = _bulk_handler("upload_shortcuts",       "uploadshortcuts")
+
+
+@register("people.index-employee-list")
+def cmd_index_employee_list(s: Session, pos, flags):
+    body = _read_body_from_flag(flags)
+    if body is None:
+        return
+    employees = body if isinstance(body, list) else body.get("employees") if isinstance(body, dict) else None
+    if not isinstance(employees, list):
+        ui.print_err("--from-file must contain a JSON array of employee objects, or {'employees': [...]}")
+        return
+    if not _require_indexing_token(s):
+        return
+    try:
+        resp = s.client.index_employee_list(employees)
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    ui.print_ok("indexemployeelist accepted.")
+    _print_kv_response(resp)
+
+
+@register("index.process-all-documents")
+def cmd_process_all_documents(s: Session, pos, flags):
+    ds = flags.get("datasource") or (pos[0] if pos else None)
+    if not _require_indexing_token(s):
+        return
+    try:
+        resp = s.client.process_all_documents(ds)
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    ui.print_ok("processalldocuments started.")
+    _print_kv_response(resp)
+
+
+@register("index.process-all-memberships")
+def cmd_process_all_memberships(s: Session, pos, flags):
+    ds = flags.get("datasource") or (pos[0] if pos else None)
+    if not _require_indexing_token(s):
+        return
+    try:
+        resp = s.client.process_all_memberships(ds)
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    ui.print_ok("processallmemberships started.")
+    _print_kv_response(resp)
+
+
+@register("people.process-all-employees-teams")
+def cmd_process_all_employees_teams(s: Session, pos, flags):
+    if not _require_indexing_token(s):
+        return
+    try:
+        resp = s.client.process_all_employees_teams()
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    ui.print_ok("processallemployeesandteams started.")
+    _print_kv_response(resp)
+
+
 @register("autocomplete")
 def cmd_autocomplete(s: Session, pos, flags):
     if not pos:
