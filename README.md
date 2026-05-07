@@ -15,6 +15,7 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 - MCP server (`glean_mcp.py`) for Claude Code, Claude Desktop, and Cursor
 - Config stored at `~/.gleancode/config.json` — supports both Client and Indexing API tokens
 - Mock mode by default so you can try every command offline; switches to live the moment you add credentials
+- `/insights --export <file>` dumps all returned metrics (overview, assistant, agents, datasource clicks) to a flat CSV — pipe it straight into Slack, Sheets, or any BI tool
 - Test suite in `tests/` covering the client, config, and UI layers — run with `python3 -m pytest tests/`
 
 ## Install and run
