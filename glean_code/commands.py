@@ -158,7 +158,11 @@ def cmd_help(s: Session, pos, flags):
 @register("exit")
 def cmd_exit(s: Session, pos, flags):
     s.running = False
-    print(ui.style("Goodbye.", ui.C.CYAN))
+    email = ui.hyperlink("mailto:barkz@glean.com", "barkz@glean.com")
+    print(ui.style(
+        f"Thank you for using Glean Code. If you have any issues or questions send me a message, {email}.",
+        ui.C.CYAN,
+    ))
 
 
 @register("quit")
@@ -451,6 +455,7 @@ def cmd_search(s: Session, pos, flags):
 def cmd_datasources_list(s: Session, pos, flags):
     sample = int(flags.get("sample") or 100)
     with_counts = bool(flags.get("with-counts") or flags.get("with_counts"))
+    with_status = bool(flags.get("with-status") or flags.get("with_status"))
     try:
         resp = s.client.list_datasources(sample_size=sample)
     except GleanError as e:
@@ -460,13 +465,121 @@ def cmd_datasources_list(s: Session, pos, flags):
     if not sources:
         print(ui.style("(no datasources visible to this token)", ui.C.GREY))
         return
+
     print(ui.rule("datasources"))
-    if with_counts:
+    if with_status:
+        if not s.config.indexing_token:
+            ui.print_err("--with-status requires an indexing token. Set one with: /config set indexing_token <token>")
+            return
+        for d in sources:
+            name = d["name"]
+            count = d.get("count", 0)
+            print(ui.style(f"  {name}", ui.C.CYAN, ui.C.BOLD) +
+                  ui.style(f"  ({count} docs visible)", ui.C.GREY))
+            try:
+                st = s.client.datasource_status(name)
+                _print_datasource_status(st, indent="    ")
+            except GleanError as e:
+                print(ui.style(f"    status unavailable: {e}", ui.C.GREY))
+            print()
+    elif with_counts:
         rows = [(d["name"], str(d.get("count", 0))) for d in sources]
         print(ui.kv_table(rows))
     else:
         print(ui.bullet_list([d["name"] for d in sources]))
     print(ui.rule())
+
+
+def _print_datasource_status(st: dict, indent: str = "  ") -> None:
+    visibility = st.get("datasourceVisibility", "")
+    if visibility:
+        colour = ui.C.GREEN if visibility == "ENABLED_FOR_ALL" else ui.C.YELLOW
+        print(f"{indent}{ui.style('visibility', ui.C.CYAN)}  {ui.style(visibility, colour)}")
+
+    docs = st.get("documents") or {}
+    counts = docs.get("counts") or {}
+
+    def _sum_counts(entries) -> int:
+        return sum(e.get("count", 0) for e in (entries or []))
+
+    uploaded = _sum_counts(counts.get("uploaded"))
+    indexed  = _sum_counts(counts.get("indexed"))
+    if uploaded or indexed:
+        print(f"{indent}{ui.style('uploaded', ui.C.CYAN)}  {uploaded:,}")
+        print(f"{indent}{ui.style('indexed ', ui.C.CYAN)}  {indexed:,}")
+        if uploaded:
+            pct = indexed / uploaded * 100
+            bar_colour = ui.C.GREEN if pct >= 95 else ui.C.YELLOW if pct >= 80 else ui.C.RED
+            print(f"{indent}{ui.style('coverage', ui.C.CYAN)}  {ui.style(f'{pct:.1f}%', bar_colour)}")
+
+    history = docs.get("processing_history") or []
+    if history:
+        last = history[-1]
+        event = last.get("eventType") or last.get("status") or ""
+        ts    = last.get("timestamp") or last.get("time") or ""
+        if event or ts:
+            print(f"{indent}{ui.style('last event', ui.C.CYAN)}  {event}  {ui.style(str(ts), ui.C.GREY)}")
+
+
+@register("datasources.status")
+def cmd_datasources_status(s: Session, pos, flags):
+    if not pos:
+        ui.print_err("Usage: /datasources.status <datasource>")
+        return
+    if not s.config.indexing_token:
+        ui.print_err("Requires an indexing token. Set one with: /config set indexing_token <token>")
+        return
+    datasource = pos[0]
+    try:
+        st = s.client.datasource_status(datasource)
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+
+    print(ui.rule(f"datasource: {datasource}"))
+    _print_datasource_status(st, indent="  ")
+
+    # Full processing history
+    docs = st.get("documents") or {}
+    history = docs.get("processing_history") or []
+    if len(history) > 1:
+        print()
+        print(f"  {ui.style('Processing history', ui.C.CYAN, ui.C.BOLD)}")
+        for ev in history[-5:]:
+            event = ev.get("eventType") or ev.get("status") or "?"
+            ts    = ev.get("timestamp") or ev.get("time") or ""
+            print(f"    {ui.style(str(ts), ui.C.GREY)}  {event}")
+
+    # Identity counts
+    identity = st.get("identity") or {}
+    for kind in ("users", "groups", "memberships"):
+        section = identity.get(kind) or {}
+        if section:
+            print(f"  {ui.style(kind, ui.C.CYAN)}  {section}")
+
+    print(ui.rule())
+
+
+@register("indexing.rotate-token")
+def cmd_indexing_rotate_token(s: Session, pos, flags):
+    if not s.config.indexing_token:
+        ui.print_err("No indexing token configured. Set one with: /config set indexing_token <token>")
+        return
+    try:
+        resp = s.client.rotate_indexing_token()
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    new_secret = resp.get("rawSecret", "")
+    created_at = resp.get("createdAt", "")
+    rotation_period = resp.get("rotationPeriodMinutes", "")
+    ui.print_ok("Indexing token rotated.")
+    print(ui.kv_table([
+        ("new secret",       new_secret),
+        ("created_at",       str(created_at)),
+        ("rotation_period",  f"{rotation_period} min" if rotation_period else ""),
+    ]))
+    ui.print_info("Update your stored token with: /config set indexing_token <new_secret>")
 
 
 @register("autocomplete")
@@ -705,6 +818,88 @@ def cmd_pins_create(s: Session, pos, flags):
         print(_render_json(s.client.pin_create(str(url), str(query))))
     except GleanError as e:
         ui.print_err(str(e))
+
+
+# -------------------- insights --------------------
+
+def _fmt_ts(ts: Optional[int]) -> str:
+    if not ts:
+        return "—"
+    import datetime
+    return datetime.datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
+
+
+def _render_insights(resp: Dict[str, Any]) -> None:
+    overview = resp.get("overviewResponse")
+    assistant = resp.get("assistantResponse")
+    agents = resp.get("agentsResponse")
+
+    if overview:
+        print(ui.rule("Overview"))
+        mau = overview.get("monthlyActiveUsers", "—")
+        wau = overview.get("weeklyActiveUsers", "—")
+        emp = overview.get("employeeCount", "—")
+        sigs = overview.get("totalSignups", "—")
+        sat  = overview.get("searchSessionSatisfaction")
+        sat_s = f"{sat*100:.1f}%" if sat is not None else "—"
+        rows = [
+            ("Monthly active users", str(mau)),
+            ("Weekly active users",  str(wau)),
+            ("Employee count",       str(emp)),
+            ("Total sign-ups",       str(sigs)),
+            ("Search satisfaction",  sat_s),
+            ("Last updated",         _fmt_ts(overview.get("lastUpdatedTs"))),
+        ]
+        print(ui.kv_table(rows))
+        ds_counts = overview.get("searchDatasourceCounts") or {}
+        if ds_counts:
+            print()
+            print("  " + ui.style("Search clicks by datasource", ui.C.CYAN, ui.C.BOLD))
+            ds_rows = sorted(ds_counts.items(), key=lambda x: -x[1])
+            print(ui.kv_table([(k, f"{v:,}") for k, v in ds_rows]))
+
+    if assistant:
+        print(ui.rule("Assistant"))
+        rows = [
+            ("Monthly active users", str(assistant.get("monthlyActiveUsers", "—"))),
+            ("Weekly active users",  str(assistant.get("weeklyActiveUsers", "—"))),
+            ("Last updated",         _fmt_ts(assistant.get("lastUpdatedTs"))),
+        ]
+        print(ui.kv_table(rows))
+
+    if agents:
+        print(ui.rule("Agents"))
+        rows = [
+            ("Monthly active users", str(agents.get("monthlyActiveUsers", "—"))),
+            ("Weekly active users",  str(agents.get("weeklyActiveUsers", "—"))),
+            ("Last updated",         _fmt_ts(agents.get("lastUpdatedTs"))),
+        ]
+        print(ui.kv_table(rows))
+
+    if not overview and not assistant and not agents:
+        print(ui.style("(no insights data returned)", ui.C.GREY))
+
+    print(ui.rule())
+
+
+@register("insights")
+def cmd_insights(s: Session, pos, flags):
+    show_assistant = bool(flags.get("assistant"))
+    show_agents    = bool(flags.get("agents"))
+    show_all       = bool(flags.get("all"))
+    no_per_user    = bool(flags.get("no-per-user") or flags.get("no_per_user"))
+    # default: overview always on; --all enables assistant + agents too
+    try:
+        resp = s.client.insights(
+            overview=True,
+            assistant=show_assistant or show_all,
+            agents=show_agents or show_all,
+            disable_per_user=no_per_user,
+        )
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    _render_insights(resp)
 
 
 

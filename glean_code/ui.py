@@ -73,6 +73,13 @@ def style(text: str, *codes: str) -> str:
     return "".join(codes) + text + C.RESET
 
 
+def hyperlink(url: str, text: str) -> str:
+    """OSC 8 terminal hyperlink. Falls back to plain text in non-TTY."""
+    if not supports_colour():
+        return text
+    return f"\033]8;;{url}\033\\{text}\033]8;;\033\\"
+
+
 def term_width(default: int = 80) -> int:
     try:
         return shutil.get_terminal_size().columns

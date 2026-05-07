@@ -16,8 +16,9 @@ CONFIG_PATH = CONFIG_DIR / "config.json"
 
 @dataclass
 class Config:
-    instance: Optional[str] = None            # e.g. "acme" from acme-be.glean.com
-    api_token: Optional[str] = None           # Glean API token
+    instance: Optional[str] = None            # e.g. "acme-be.glean.com"
+    api_token: Optional[str] = None           # Glean Client API token
+    indexing_token: Optional[str] = None      # Glean Indexing API token
     act_as: Optional[str] = None              # Optional email to impersonate
     base_url: Optional[str] = None            # Overrides the computed base URL
     mode: str = "auto"                        # auto | live | mock
@@ -57,6 +58,16 @@ class Config:
                 host = host.split("://", 1)[1]
             host = host.split("/", 1)[0]
             return f"https://{host}/rest/api/v1"
+        return None
+
+    @property
+    def effective_indexing_base_url(self) -> Optional[str]:
+        if self.instance:
+            host = self.instance.strip().rstrip("/")
+            if "://" in host:
+                host = host.split("://", 1)[1]
+            host = host.split("/", 1)[0]
+            return f"https://{host}/api/index/v1"
         return None
 
     @property

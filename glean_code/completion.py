@@ -24,7 +24,7 @@ _FLAG_VALUES: Dict[str, List[str]] = {
 }
 
 _CONFIG_KEYS = [
-    "instance", "api_token", "act_as", "base_url",
+    "instance", "api_token", "indexing_token", "act_as", "base_url",
     "mode", "theme", "default_page_size",
 ]
 
@@ -131,8 +131,10 @@ def setup_readline() -> None:
         return
     readline.set_completer(_Completer())
     readline.set_completer_delims(" \t")
-    # libedit (macOS default) uses a different binding syntax
     if "libedit" in getattr(readline, "__doc__", ""):
+        # libedit (macOS stock Python) — no menu-complete; Tab shows completions
         readline.parse_and_bind("bind ^I rl_complete")
     else:
-        readline.parse_and_bind("tab: complete")
+        # GNU readline — Tab cycles forward, Shift-Tab cycles backward
+        readline.parse_and_bind("tab: menu-complete")
+        readline.parse_and_bind("\"\\e[Z\": menu-complete-backward")

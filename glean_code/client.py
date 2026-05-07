@@ -87,6 +87,47 @@ class GleanClient:
         except urllib.error.URLError as e:
             raise GleanError(f"Network error calling {path}: {e.reason}") from None
 
+    # ---------------- indexing API (low level) ----------------
+
+    def _indexing_headers(self) -> Dict[str, str]:
+        return {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "glean-code/0.1",
+            "Authorization": f"Bearer {self.config.indexing_token}",
+        }
+
+    def _indexing_post(self, path: str, body: Dict[str, Any]) -> Dict[str, Any]:
+        if not self.config.indexing_token:
+            raise GleanError(
+                "No indexing token set. Add one with: /config set indexing_token <token>"
+            )
+        base = self.config.effective_indexing_base_url
+        if not base:
+            raise GleanError("No instance configured for indexing API calls.")
+        url = f"{base}{path}"
+        data = json.dumps(body).encode("utf-8")
+        req = urllib.request.Request(
+            url, data=data, headers=self._indexing_headers(), method="POST"
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                raw = resp.read().decode("utf-8")
+                return json.loads(raw) if raw else {}
+        except urllib.error.HTTPError as e:
+            body_text = e.read().decode("utf-8", "replace")
+            raise GleanError(f"HTTP {e.code} from indexing{path}: {body_text}") from None
+        except urllib.error.URLError as e:
+            raise GleanError(f"Network error calling indexing{path}: {e.reason}") from None
+
+    def datasource_status(self, datasource: str) -> Dict[str, Any]:
+        """POST /api/index/v1/debug/{datasource}/status — beta endpoint."""
+        return self._indexing_post(f"/debug/{datasource}/status", {})
+
+    def rotate_indexing_token(self) -> Dict[str, Any]:
+        """POST /api/index/v1/rotatetoken — rotates the indexing token secret."""
+        return self._indexing_post("/rotatetoken", {})
+
     # ---------------- chat ----------------
 
     def chat(self, message: str, chat_id: Optional[str] = None,
@@ -235,6 +276,24 @@ class GleanClient:
     def pin_create(self, url: str, query: str) -> Dict[str, Any]:
         return self._post("/createpin", {"url": url, "query": query})
 
+    # ---------------- insights ----------------
+
+    def insights(self, overview: bool = True, assistant: bool = False,
+                 agents: bool = False, disable_per_user: bool = False,
+                 locale: Optional[str] = None) -> Dict[str, Any]:
+        body: Dict[str, Any] = {}
+        if overview:
+            body["overviewRequest"] = {}
+        if assistant:
+            body["assistantRequest"] = {}
+        if agents:
+            body["agentsRequest"] = {}
+        if disable_per_user:
+            body["disablePerUserInsights"] = True
+        if locale:
+            body["locale"] = locale
+        return self._post("/insights", body)
+
 
 # -------------------- mocks --------------------
 
@@ -343,4 +402,32 @@ def _mock_response(path: str, body: Dict[str, Any]) -> Dict[str, Any]:
         return {"pins": [{"id": "pin_1", "query": "pto", "url": "https://example.com/pto"}]}
     if path == "/createpin":
         return {"id": f"pin_{uuid.uuid4().hex[:6]}", "status": "created"}
+    if path == "/insights":
+        resp: Dict[str, Any] = {}
+        if "overviewRequest" in body:
+            resp["overviewResponse"] = {
+                "monthlyActiveUsers": 312,
+                "weeklyActiveUsers": 148,
+                "employeeCount": 520,
+                "totalSignups": 401,
+                "searchSessionSatisfaction": 0.87,
+                "lastUpdatedTs": int(time.time()) - 3600,
+                "searchDatasourceCounts": {
+                    "gdrive": 1840, "confluence": 920,
+                    "slack": 610, "jira": 430,
+                },
+            }
+        if "assistantRequest" in body:
+            resp["assistantResponse"] = {
+                "monthlyActiveUsers": 198,
+                "weeklyActiveUsers": 94,
+                "lastUpdatedTs": int(time.time()) - 3600,
+            }
+        if "agentsRequest" in body:
+            resp["agentsResponse"] = {
+                "monthlyActiveUsers": 67,
+                "weeklyActiveUsers": 31,
+                "lastUpdatedTs": int(time.time()) - 3600,
+            }
+        return resp
     return {"mock": True, "path": path, "body": body}

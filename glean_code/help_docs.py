@@ -143,17 +143,38 @@ DOCS: Dict[str, CommandDoc] = {
     "datasources.list": {
         "summary": "List datasources visible to the current token. "
                    "Derived from a search facet call.",
-        "usage": "/datasources.list [--with-counts] [--sample <n>]",
+        "usage": "/datasources.list [--with-counts] [--with-status] [--sample <n>]",
         "params": [
             ("--with-counts", "Show document counts per datasource."),
+            ("--with-status", "Fetch full indexing status per datasource (requires indexing_token)."),
             ("--sample", "Sample size for the underlying search. Default 100."),
         ],
         "examples": [
             "/datasources.list",
             "/datasources.list --with-counts",
+            "/datasources.list --with-status",
             "/datasources.list --with-counts --sample 200",
         ],
-        "endpoint": "POST /rest/api/v1/search (facets=[datasource])",
+        "endpoint": "POST /rest/api/v1/search (facets=[datasource]) + POST /api/index/v1/debug/{ds}/status",
+    },
+    "datasources.status": {
+        "summary": "Show full indexing status for a single datasource. Requires an indexing token.",
+        "usage": "/datasources.status <datasource>",
+        "params": [
+            ("datasource", "Datasource name, e.g. slack, gdrive, confluence."),
+        ],
+        "examples": [
+            "/datasources.status slack",
+            "/datasources.status gdrive",
+        ],
+        "endpoint": "POST /api/index/v1/debug/{datasource}/status (beta)",
+    },
+    "indexing.rotate-token": {
+        "summary": "Rotate the indexing API token secret and return the new raw secret.",
+        "usage": "/indexing.rotate-token",
+        "params": [],
+        "examples": ["/indexing.rotate-token"],
+        "endpoint": "POST /api/index/v1/rotatetoken",
     },
     "autocomplete": {
         "summary": "Get query suggestions for a partial string.",
@@ -323,6 +344,26 @@ DOCS: Dict[str, CommandDoc] = {
         "endpoint": "POST /rest/api/v1/createpin",
     },
 
+    # ---------------- insights ----------------
+    "insights": {
+        "summary": "Retrieve aggregate usage insights from the Glean Insights Dashboard.",
+        "usage": "/insights [--assistant] [--agents] [--all] [--no-per-user]",
+        "params": [
+            ("--assistant", "Include Assistant usage metrics "
+                            "(MAU, WAU, chat messages, AI answers)."),
+            ("--agents",    "Include Agents usage metrics."),
+            ("--all",       "Include Overview, Assistant and Agents in one call."),
+            ("--no-per-user", "Suppress per-user breakdown in the response."),
+        ],
+        "examples": [
+            "/insights",
+            "/insights --all",
+            "/insights --assistant",
+            "/insights --agents --no-per-user",
+        ],
+        "endpoint": "POST /rest/api/v1/insights",
+    },
+
     # ---------------- scaffold ----------------
     "scaffold": {
         "summary": "Generate a standalone Python starter project for a Glean API surface.",
@@ -343,11 +384,13 @@ DOCS: Dict[str, CommandDoc] = {
 
 COMMAND_GROUPS: List[Tuple[str, List[str]]] = [
     ("Shell",          ["help", "status", "doctor", "login", "logout", "config", "mode", "history", "clear", "exit"]),
-    ("Chat & Search",  ["chat", "search", "datasources.list", "autocomplete", "recommendations", "feedback"]),
+    ("Chat & Search",  ["chat", "search", "datasources.list", "datasources.status", "autocomplete", "recommendations", "feedback"]),
     ("Agents & Tools", ["agents.list", "agents.run", "tools.list", "tools.call"]),
     ("Docs & People",  ["docs.get", "docs.permissions", "entities.list", "people.get"]),
     ("Announcements",  ["announcements.list", "announcements.create", "announcements.delete"]),
     ("Collections",    ["collections.list", "collections.create"]),
     ("Pins",           ["pins.list", "pins.create"]),
+    ("Indexing",       ["datasources.status", "indexing.rotate-token"]),
+    ("Insights",       ["insights"]),
     ("Scaffold",       ["scaffold"]),
 ]
