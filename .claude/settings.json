@@ -10,7 +10,12 @@
       "Bash(awk '/^  \\\\/api\\\\/index\\\\/v1\\\\/[^ ]+:/ {gsub\\(\":\",\"\"\\); path=$1; getline; method=\"\"} /^    \\(post|get|put|delete|patch\\):/ {gsub\\(\":\",\"\"\\); print toupper\\($1\\)\" \"path}' /tmp/glean_indexing.yaml)",
       "Bash(awk '/^  \\\\/api\\\\/index\\\\/v1\\\\/\\(getdatasourceconfig|getdocumentstatus|getdocumentcount|getusercount|checkdocumentaccess|debug\\\\/{datasource}\\\\/document|debug\\\\/{datasource}\\\\/documents|debug\\\\/{datasource}\\\\/user\\):/,/^  \\\\/api/ {print}' /tmp/glean_indexing.yaml)",
       "Bash(python3 -c ' *)",
-      "Bash(python3 -c \"import glean_code.commands; print\\('imports OK'\\)\")"
+      "Bash(python3 -c \"import glean_code.commands; print\\('imports OK'\\)\")",
+      "Bash(git -C /Users/robbarker/Downloads/barkz/glean-code-cli remote -v)",
+      "Bash(git -C /Users/robbarker/Downloads/barkz/glean-code-cli config user.name)",
+      "Bash(git -C /Users/robbarker/Downloads/barkz/glean-code-cli config user.email)",
+      "Bash(sed -n '216,1952p' /Users/robbarker/Downloads/barkz/glean-code-cli/README.md)",
+      "Bash(sed -n '2433,2455p' /Users/robbarker/Downloads/barkz/glean-code-cli/README.md)"
     ]
   }
 }

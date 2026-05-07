@@ -45,6 +45,22 @@ DOCS: Dict[str, CommandDoc] = {
         "examples": ["/status"],
         "endpoint": "(local)",
     },
+    "open": {
+        "summary": "Open the configured Glean instance in the default web browser.",
+        "usage": "/open [path] [--path <path>] [--print]",
+        "params": [
+            ("path",     "Optional path to append (positional). e.g. 'search' or '/docs/123'."),
+            ("--path",   "Same as the positional path. Either form works."),
+            ("--print",  "Print the URL instead of launching a browser. Useful over SSH."),
+        ],
+        "examples": [
+            "/open",
+            "/open search",
+            "/open /docs/123",
+            "/open --print",
+        ],
+        "endpoint": "(local — strips '-be' from instance host and opens https://<host>{path})",
+    },
     "login": {
         "summary": "Store a Glean host and API token for live calls.",
         "usage": "/login --instance <host-or-url> --token <token> [--act-as <email>]",
@@ -858,7 +874,7 @@ DOCS: Dict[str, CommandDoc] = {
 
 
 COMMAND_GROUPS: List[Tuple[str, List[str]]] = [
-    ("Shell",          ["help", "status", "doctor", "login", "logout", "config", "mode", "history", "clear", "exit"]),
+    ("Shell",          ["help", "status", "doctor", "login", "logout", "open", "config", "mode", "history", "clear", "exit"]),
     ("Chat & Search",  ["chat", "search", "datasources.list", "datasources.status", "autocomplete", "recommendations", "feedback"]),
     ("Agents & Tools", ["agents.list", "agents.run", "tools.list", "tools.call"]),
     ("Docs & People",  ["docs.get", "docs.permissions", "entities.list", "people.get"]),

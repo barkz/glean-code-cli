@@ -13,6 +13,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import webbrowser
 from typing import Any, Callable, Dict, List, Optional, Tuple  # noqa: F401
 
 from . import ui
@@ -218,10 +219,13 @@ def cmd_help(s: Session, pos, flags):
 @register("exit")
 def cmd_exit(s: Session, pos, flags):
     s.running = False
+    discussions_url = "https://github.com/barkz/glean-code-cli/discussions"
+    discussions_link = ui.hyperlink(discussions_url, ui.style("Discussions", ui.C.CYAN, ui.C.UNDER))
+    print()
     print(ui.style(
-        "Thank you for using Glean Code. If you have any issues or questions DM me, @barkz.",
+        "Thank you for using Glean Code. Ideas, questions, comments join ",
         ui.C.CYAN,
-    ))
+    ) + discussions_link + ui.style(".", ui.C.CYAN))
 
 
 @register("quit")
@@ -252,6 +256,49 @@ def cmd_status(s: Session, pos, flags):
     print(ui.rule("status"))
     print(ui.kv_table(rows))
     print(ui.rule())
+
+
+def _frontend_host(instance: str) -> str:
+    """Map a Glean backend host to its user-facing frontend host.
+
+    `acme-be.glean.com` -> `acme.glean.com`. If the host has no `-be` suffix
+    on its first label, it's returned unchanged. Strips any scheme/path the
+    user may have stored.
+    """
+    host = instance.strip().rstrip("/")
+    if "://" in host:
+        host = host.split("://", 1)[1]
+    host = host.split("/", 1)[0]
+    parts = host.split(".", 1)
+    if len(parts) == 2 and parts[0].endswith("-be"):
+        parts[0] = parts[0][:-3]
+        host = ".".join(parts)
+    return host
+
+
+@register("open")
+def cmd_open(s: Session, pos, flags):
+    """Open the configured instance in the default web browser.
+
+    Optional positional or --path argument appends a path. Use --print to
+    print the URL without launching the browser (handy for SSH sessions).
+    """
+    if not s.config.instance:
+        ui.print_err("No instance set. Run /login --instance <host> first.")
+        return
+    path = flags.get("path") or (pos[0] if pos else "")
+    if path and not path.startswith("/"):
+        path = "/" + path
+    url = f"https://{_frontend_host(s.config.instance)}{path}"
+    if flags.get("print") or flags.get("dry-run"):
+        print(url)
+        return
+    ui.print_info(f"Opening {url}")
+    try:
+        webbrowser.open(url, new=2)
+    except Exception as e:
+        ui.print_err(f"Could not open browser: {e}")
+        ui.print_info(f"URL: {url}")
 
 
 @register("login")
