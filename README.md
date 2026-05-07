@@ -27,6 +27,10 @@ A native VS Code extension that brings the full Glean Code REPL — slash comman
 
 ![Glean Code VS Code extension preview](assets/vscode_extension_glean-code-cli.png)
 
+<br>
+
+## Getting Started with Glean Code
+
 ## Install and run
 
 ```bash
