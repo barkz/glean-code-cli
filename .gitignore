@@ -1,4 +1,5 @@
 .DS_Store
 todo.md
 __pycache__/
-.claude/settings.json
+.claude/
+glean_code/__pycache__/
