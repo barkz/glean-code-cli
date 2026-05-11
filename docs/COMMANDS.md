@@ -562,20 +562,39 @@ Get debug info for a user in a datasource — upload status + uploaded group mem
 
 #### /index.document
 
-Index a single document.
+Index a single document. Supports two input modes — pass a fully-formed JSON body, or point at a local file and let the CLI synthesize the body for you.
 
 ```text
-/index.document --from-file <doc.json> [--version <n>]
+/index.document (--from-file <doc.json> | --path <file>) \
+                [--datasource <ds>] [--object-type <type>] \
+                [--public | --acl-from-file <perms.json>] \
+                [--id-prefix <s>] [--view-url-prefix <url>] \
+                [--version <n>] [--dry-run]
 ```
 
-The JSON file should contain a `DocumentDefinition` body.
+| Flag | Description |
+| --- | --- |
+| `--from-file` | JSON file containing a full `DocumentDefinition` body |
+| `--path` | Local file path. Synthesizes a `DocumentDefinition` from the file. Errors if a directory is passed — use `/index.bulk-documents --path` for folders |
+| `--datasource` | _(with `--path`)_ Datasource name |
+| `--object-type` | _(with `--path`)_ Object type (e.g. `Article`) |
+| `--public` | _(with `--path`)_ Make the doc world-readable. Mutually exclusive with `--acl-from-file` |
+| `--acl-from-file` | _(with `--path`)_ JSON file containing a `DocumentPermissionsDefinition` applied to the doc |
+| `--id-prefix` | _(with `--path`)_ String prepended to the path-derived id slug |
+| `--view-url-prefix` | _(with `--path`)_ Base URL prepended to the relative path. Defaults to `file://<absolute>` |
+| `--version` | Optional version int for optimistic concurrency |
+| `--dry-run` | Print the assembled request body and exit without calling the API |
+
+**Supported file types when using `--path`:** `.txt`, `.md`, `.markdown`, `.html`, `.htm`, `.json`. Binary formats (PDF, `.docx`) are out of scope.
 
 ```text
 /index.document --from-file ./doc.json
-/index.document --from-file ./doc.json --version 3
+/index.document --path ./README.md --datasource custom1 --object-type Article --public
+/index.document --path ./team/onboarding.md --datasource custom1 --object-type Article \
+                --acl-from-file ./perms.json --dry-run
 ```
 
-**Output** — Acceptance status.
+**Output** — Acceptance status from the API. With `--dry-run`, the assembled JSON body.
 
 **Endpoint** — `POST /api/index/v1/indexdocument`
 
@@ -743,13 +762,43 @@ The JSON file should contain the full `IndexDocumentsRequest` body (`uploadId`, 
 
 #### /index.bulk-documents
 
-Bulk index documents in pages — supports `uploadId`, `isFirstPage`, `isLastPage`, `forceRestartUpload`, `disableStaleDocumentDeletionCheck`.
+Bulk index documents — pass a hand-built JSON body (with `uploadId`, `isFirstPage`, `isLastPage`, etc.) or point at a local file/folder and let the CLI walk and assemble the request for you.
 
 ```text
-/index.bulk-documents --from-file <body.json>
+/index.bulk-documents (--from-file <body.json> | --path <file-or-dir>) \
+                      [--datasource <ds>] [--object-type <type>] \
+                      [--public | --acl-from-file <perms.json>] \
+                      [--include <globs>] [--exclude <globs>] [--max-bytes <n>] \
+                      [--id-prefix <s>] [--view-url-prefix <url>] \
+                      [--upload-id <id>] [--dry-run]
 ```
 
-**Output** — Upload acknowledgement.
+| Flag | Description |
+| --- | --- |
+| `--from-file` | JSON file containing a `BulkIndexDocumentsRequest` body |
+| `--path` | Local file or directory. Recursively walks directories |
+| `--datasource` | _(with `--path`)_ Datasource name |
+| `--object-type` | _(with `--path`)_ Object type applied to every walked file |
+| `--public` | _(with `--path`)_ Make all docs world-readable. Mutually exclusive with `--acl-from-file` |
+| `--acl-from-file` | _(with `--path`)_ JSON file with a `DocumentPermissionsDefinition` applied to every doc |
+| `--include` | _(with `--path`)_ Comma-separated globs to include. Default: `*.txt,*.md,*.markdown,*.html,*.htm,*.json` |
+| `--exclude` | _(with `--path`)_ Comma-separated globs to exclude. Default skips `.git`, `node_modules`, `__pycache__`, `.DS_Store` |
+| `--max-bytes` | _(with `--path`)_ Skip files larger than this many bytes. Default `5242880` (5 MB) |
+| `--id-prefix` | _(with `--path`)_ Prefix added to each path-derived id slug |
+| `--view-url-prefix` | _(with `--path`)_ Base URL prepended to each relative path. Defaults to `file://` per file |
+| `--upload-id` | _(with `--path`)_ Override the auto-generated upload id |
+| `--dry-run` | Print the assembled request body and exit without calling the API |
+
+> **Heads-up:** large directories produce large payloads. The CLI warns when more than 500 documents are matched. v1 sends them in one POST; auto-paging across `isFirstPage`/`isLastPage` is planned for v2.
+
+```text
+/index.bulk-documents --from-file ./bulk.json
+/index.bulk-documents --path ./docs/ --datasource custom1 --object-type Article --public
+/index.bulk-documents --path ./content/ --datasource custom1 --object-type Article \
+                      --public --include "*.md,*.txt" --exclude "**/draft/**" --dry-run
+```
+
+**Output** — Upload acknowledgement (or, with `--dry-run`, the assembled body).
 
 **Endpoint** — `POST /api/index/v1/bulkindexdocuments`
 

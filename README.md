@@ -35,13 +35,14 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 - Indexing **observability counters** — `/datasources.config`, `/documents.count`, `/documents.status`, and `/users.count` for quick health checks of any custom datasource
 - Indexing **write surface** — single-record `/index.document`, `/index.user`, `/index.group`, `/index.membership` (plus their `/index.delete-*` partners) and `/index.permissions`, all driven by `--from-file <json>` so request bodies stay auditable
 - Indexing **bulk + paged uploads** — `/index.bulk-documents|users|groups|memberships`, `/people.bulk-employees|teams`, `/shortcuts.bulk-index`, `/shortcuts.upload`, plus `/index.process-all-*` and `/people.process-all-employees-teams` to kick off long-running rebuilds
+- **`--path` mode for indexing** — `/index.document --path file.md` and `/index.bulk-documents --path ./docs/` walk a local file or folder and synthesize the request body for you (`.txt`, `.md`, `.html`, `.json`). Includes `--include`/`--exclude` globs, `--public`/`--acl-from-file` permissions, and `--dry-run` to inspect the assembled payload without calling the API
 - `/scaffold` to generate a self-contained Python starter project for chat, search, or agent use cases
 - MCP server (`glean_mcp.py`) for Claude Code, Claude Desktop, and Cursor
 - Config stored at `~/.gleancode/config.json` — supports both Client and Indexing API tokens
 - Mock mode by default so you can try every command offline (now including the 30 new indexing commands); switches to live the moment you add credentials
 - `/insights --export <file>` dumps all returned metrics (overview, assistant, agents, datasource clicks) to a flat CSV — pipe it straight into Slack, Sheets, or any BI tool
 - Secure-ref token storage — store `token.secure.client` / `token.secure.indexing` in config and have the actual secret resolved from `$GLEAN_CLIENT_TOKEN` / `$GLEAN_INDEXING_TOKEN` at request time, with masking everywhere tokens are displayed
-- Test suite in `tests/` covering the client, config, and UI layers — run with `python3 -m pytest tests/` (579 tests)
+- Test suite in `tests/` covering the client, config, UI, and indexing-walk layers — run with `python3 -m pytest tests/` (604 tests)
 
 ## Coming soon
 
@@ -89,70 +90,70 @@ Without a token the CLI runs in mock mode and returns realistic fake data. Set a
 
 ### Shell
 
-- [`/help`](#help)
-- [`/status`](#status)
-- [`/doctor`](#doctor)
-- [`/login`](#login)
-- [`/logout`](#logout)
-- [`/config`](#config)
-- [`/mode`](#mode)
-- [`/history`](#history)
-- [`/clear`](#clear)
-- [`/exit`](#exit)
+- [`/help`](docs/COMMANDS.md#help)
+- [`/status`](docs/COMMANDS.md#status)
+- [`/doctor`](docs/COMMANDS.md#doctor)
+- [`/login`](docs/COMMANDS.md#login)
+- [`/logout`](docs/COMMANDS.md#logout)
+- [`/config`](docs/COMMANDS.md#config)
+- [`/mode`](docs/COMMANDS.md#mode)
+- [`/history`](docs/COMMANDS.md#history)
+- [`/clear`](docs/COMMANDS.md#clear)
+- [`/exit`](docs/COMMANDS.md#exit)
 
 ### Chat and Search
 
-- [`/chat`](#chat)
-- [`/search`](#search)
-- [`/datasources.list`](#datasourceslist)
-- [`/datasources.list --with-status`](#datasourceslist)
-- [`/autocomplete`](#autocomplete)
-- [`/recommendations`](#recommendations)
-- [`/feedback`](#feedback)
+- [`/chat`](docs/COMMANDS.md#chat)
+- [`/search`](docs/COMMANDS.md#search)
+- [`/datasources.list`](docs/COMMANDS.md#datasourceslist)
+- [`/datasources.list --with-status`](docs/COMMANDS.md#datasourceslist)
+- [`/autocomplete`](docs/COMMANDS.md#autocomplete)
+- [`/recommendations`](docs/COMMANDS.md#recommendations)
+- [`/feedback`](docs/COMMANDS.md#feedback)
 
 ### Indexing — read & debug
 
-- [`/datasources.status <name>`](#datasourcesstatus)
-- [`/datasources.config <name>`](#datasourcesconfig)
-- [`/documents.status`](#documentsstatus)
-- [`/documents.count`](#documentscount)
-- [`/users.count`](#userscount)
-- [`/documents.access`](#documentsaccess)
-- [`/debug.document`](#debugdocument)
-- [`/debug.documents`](#debugdocuments)
-- [`/debug.user`](#debuguser)
-- [`/indexing.rotate-token`](#indexingrotate-token)
+- [`/datasources.status <name>`](docs/COMMANDS.md#datasourcesstatus)
+- [`/datasources.config <name>`](docs/COMMANDS.md#datasourcesconfig)
+- [`/documents.status`](docs/COMMANDS.md#documentsstatus)
+- [`/documents.count`](docs/COMMANDS.md#documentscount)
+- [`/users.count`](docs/COMMANDS.md#userscount)
+- [`/documents.access`](docs/COMMANDS.md#documentsaccess)
+- [`/debug.document`](docs/COMMANDS.md#debugdocument)
+- [`/debug.documents`](docs/COMMANDS.md#debugdocuments)
+- [`/debug.user`](docs/COMMANDS.md#debuguser)
+- [`/indexing.rotate-token`](docs/COMMANDS.md#indexingrotate-token)
 
 ### Indexing — single-record write
 
-- [`/index.document`](#indexdocument)
-- [`/index.delete-document`](#indexdelete-document)
-- [`/index.permissions`](#indexpermissions)
-- [`/index.user`](#indexuser)
-- [`/index.delete-user`](#indexdelete-user)
-- [`/index.group`](#indexgroup)
-- [`/index.delete-group`](#indexdelete-group)
-- [`/index.membership`](#indexmembership)
-- [`/index.delete-membership`](#indexdelete-membership)
+- [`/index.document`](docs/COMMANDS.md#indexdocument)
+- [`/index.delete-document`](docs/COMMANDS.md#indexdelete-document)
+- [`/index.permissions`](docs/COMMANDS.md#indexpermissions)
+- [`/index.user`](docs/COMMANDS.md#indexuser)
+- [`/index.delete-user`](docs/COMMANDS.md#indexdelete-user)
+- [`/index.group`](docs/COMMANDS.md#indexgroup)
+- [`/index.delete-group`](docs/COMMANDS.md#indexdelete-group)
+- [`/index.membership`](docs/COMMANDS.md#indexmembership)
+- [`/index.delete-membership`](docs/COMMANDS.md#indexdelete-membership)
 
 ### Indexing — bulk & process-all
 
-- [`/index.documents`](#indexdocuments)
-- [`/index.bulk-documents`](#indexbulk-documents)
-- [`/index.bulk-users`](#indexbulk-users)
-- [`/index.bulk-groups`](#indexbulk-groups)
-- [`/index.bulk-memberships`](#indexbulk-memberships)
-- [`/shortcuts.bulk-index`](#shortcutsbulk-index)
-- [`/shortcuts.upload`](#shortcutsupload)
-- [`/index.process-all-documents`](#indexprocess-all-documents)
-- [`/index.process-all-memberships`](#indexprocess-all-memberships)
+- [`/index.documents`](docs/COMMANDS.md#indexdocuments)
+- [`/index.bulk-documents`](docs/COMMANDS.md#indexbulk-documents)
+- [`/index.bulk-users`](docs/COMMANDS.md#indexbulk-users)
+- [`/index.bulk-groups`](docs/COMMANDS.md#indexbulk-groups)
+- [`/index.bulk-memberships`](docs/COMMANDS.md#indexbulk-memberships)
+- [`/shortcuts.bulk-index`](docs/COMMANDS.md#shortcutsbulk-index)
+- [`/shortcuts.upload`](docs/COMMANDS.md#shortcutsupload)
+- [`/index.process-all-documents`](docs/COMMANDS.md#indexprocess-all-documents)
+- [`/index.process-all-memberships`](docs/COMMANDS.md#indexprocess-all-memberships)
 
 ### Indexing — people (org chart)
 
-- [`/people.bulk-employees`](#peoplebulk-employees)
-- [`/people.bulk-teams`](#peoplebulk-teams)
-- [`/people.index-employee-list`](#peopleindex-employee-list)
-- [`/people.process-all-employees-teams`](#peopleprocess-all-employees-teams)
+- [`/people.bulk-employees`](docs/COMMANDS.md#peoplebulk-employees)
+- [`/people.bulk-teams`](docs/COMMANDS.md#peoplebulk-teams)
+- [`/people.index-employee-list`](docs/COMMANDS.md#peopleindex-employee-list)
+- [`/people.process-all-employees-teams`](docs/COMMANDS.md#peopleprocess-all-employees-teams)
 
 ### Insights & Activity
 
@@ -164,45 +165,45 @@ Without a token the CLI runs in mock mode and returns realistic fake data. Set a
 
 ### Agents and Tools
 
-- [`/agents.list`](#agentslist)
-- [`/agents.run`](#agentsrun)
-- [`/tools.list`](#toolslist)
-- [`/tools.call`](#toolscall)
+- [`/agents.list`](docs/COMMANDS.md#agentslist)
+- [`/agents.run`](docs/COMMANDS.md#agentsrun)
+- [`/tools.list`](docs/COMMANDS.md#toolslist)
+- [`/tools.call`](docs/COMMANDS.md#toolscall)
 
 ### Docs and People
 
-- [`/docs.get`](#docsget)
-- [`/docs.permissions`](#docspermissions)
-- [`/entities.list`](#entitieslist)
-- [`/people.get`](#peopleget)
+- [`/docs.get`](docs/COMMANDS.md#docsget)
+- [`/docs.permissions`](docs/COMMANDS.md#docspermissions)
+- [`/entities.list`](docs/COMMANDS.md#entitieslist)
+- [`/people.get`](docs/COMMANDS.md#peopleget)
 
 ### Announcements, Collections, Pins
 
-- [`/announcements.list`](#announcementslist)
-- [`/announcements.create`](#announcementscreate)
-- [`/announcements.delete`](#announcementsdelete)
-- [`/collections.list`](#collectionslist)
-- [`/collections.create`](#collectionscreate)
-- [`/collections.delete`](#collectionsdelete)
-- [`/pins.list`](#pinslist)
-- [`/pins.create`](#pinscreate)
-- [`/pins.delete`](#pinsdelete)
+- [`/announcements.list`](docs/COMMANDS.md#announcementslist)
+- [`/announcements.create`](docs/COMMANDS.md#announcementscreate)
+- [`/announcements.delete`](docs/COMMANDS.md#announcementsdelete)
+- [`/collections.list`](docs/COMMANDS.md#collectionslist)
+- [`/collections.create`](docs/COMMANDS.md#collectionscreate)
+- [`/collections.delete`](docs/COMMANDS.md#collectionsdelete)
+- [`/pins.list`](docs/COMMANDS.md#pinslist)
+- [`/pins.create`](docs/COMMANDS.md#pinscreate)
+- [`/pins.delete`](docs/COMMANDS.md#pinsdelete)
 
 ### Shortcuts
 
-- [`/shortcuts.list`](#shortcutslist)
-- [`/shortcuts.get`](#shortcutsget)
-- [`/shortcuts.create`](#shortcutscreate)
-- [`/shortcuts.update`](#shortcutsupdate)
-- [`/shortcuts.delete`](#shortcutsdelete)
+- [`/shortcuts.list`](docs/COMMANDS.md#shortcutslist)
+- [`/shortcuts.get`](docs/COMMANDS.md#shortcutsget)
+- [`/shortcuts.create`](docs/COMMANDS.md#shortcutscreate)
+- [`/shortcuts.update`](docs/COMMANDS.md#shortcutsupdate)
+- [`/shortcuts.delete`](docs/COMMANDS.md#shortcutsdelete)
 
 ### Answers
 
-- [`/answers.list`](#answerslist)
-- [`/answers.get`](#answersget)
-- [`/answers.create`](#answerscreate)
-- [`/answers.update`](#answersupdate)
-- [`/answers.delete`](#answersdelete)
+- [`/answers.list`](docs/COMMANDS.md#answerslist)
+- [`/answers.get`](docs/COMMANDS.md#answersget)
+- [`/answers.create`](docs/COMMANDS.md#answerscreate)
+- [`/answers.update`](docs/COMMANDS.md#answersupdate)
+- [`/answers.delete`](docs/COMMANDS.md#answersdelete)
 
 ### Summarize
 
@@ -210,17 +211,17 @@ Without a token the CLI runs in mock mode and returns realistic fake data. Set a
 
 ### Verification
 
-- [`/verification.list`](#verificationlist)
-- [`/verification.verify`](#verificationverify)
-- [`/verification.remind`](#verificationremind)
+- [`/verification.list`](docs/COMMANDS.md#verificationlist)
+- [`/verification.verify`](docs/COMMANDS.md#verificationverify)
+- [`/verification.remind`](docs/COMMANDS.md#verificationremind)
 
 ### Messages
 
-- [`/messages.get`](#messagesget)
+- [`/messages.get`](docs/COMMANDS.md#messagesget)
 
 ### Activity
 
-- [`/activity.report`](#activityreport)
+- [`/activity.report`](docs/COMMANDS.md#activityreport)
 
 ### Scaffold templates
 
@@ -310,16 +311,16 @@ These are non-destructive lookups — start here when answering questions like "
 
 | Command | Purpose |
 | --- | --- |
-| [`/datasources.status <name>`](#datasourcesstatus) | Full status for one datasource: visibility, counts, last 5 processing events |
-| [`/datasources.config <name>`](#datasourcesconfig) | Live config: object types, ACL settings, trusted domains, icon URL |
-| [`/datasources.list --with-status`](#datasourceslist) | All datasources with uploaded/indexed counts and coverage |
-| [`/documents.status`](#documentsstatus) | Upload + indexing status for one document |
-| [`/documents.count`](#documentscount) | Document count for a custom datasource |
-| [`/users.count`](#userscount) | User count for a custom datasource |
-| [`/documents.access`](#documentsaccess) | Whether a specific user has access to a specific document |
-| [`/debug.document`](#debugdocument) | Per-doc debug payload (status + uploaded permissions) |
-| [`/debug.documents`](#debugdocuments) | Bulk debug for many documents (`--from-file`) |
-| [`/debug.user`](#debuguser) | Per-user debug payload (status + uploaded groups) |
+| [`/datasources.status <name>`](docs/COMMANDS.md#datasourcesstatus) | Full status for one datasource: visibility, counts, last 5 processing events |
+| [`/datasources.config <name>`](docs/COMMANDS.md#datasourcesconfig) | Live config: object types, ACL settings, trusted domains, icon URL |
+| [`/datasources.list --with-status`](docs/COMMANDS.md#datasourceslist) | All datasources with uploaded/indexed counts and coverage |
+| [`/documents.status`](docs/COMMANDS.md#documentsstatus) | Upload + indexing status for one document |
+| [`/documents.count`](docs/COMMANDS.md#documentscount) | Document count for a custom datasource |
+| [`/users.count`](docs/COMMANDS.md#userscount) | User count for a custom datasource |
+| [`/documents.access`](docs/COMMANDS.md#documentsaccess) | Whether a specific user has access to a specific document |
+| [`/debug.document`](docs/COMMANDS.md#debugdocument) | Per-doc debug payload (status + uploaded permissions) |
+| [`/debug.documents`](docs/COMMANDS.md#debugdocuments) | Bulk debug for many documents (`--from-file`) |
+| [`/debug.user`](docs/COMMANDS.md#debuguser) | Per-user debug payload (status + uploaded groups) |
 
 ```text
 /datasources.config gdrive
@@ -333,38 +334,80 @@ Each write command takes a JSON request body via `--from-file`. Deletes use conv
 
 | Command | Purpose |
 | --- | --- |
-| [`/index.document`](#indexdocument) | Index one document |
-| [`/index.delete-document`](#indexdelete-document) | Delete one document by id |
-| [`/index.permissions`](#indexpermissions) | Update document ACL |
-| [`/index.user`](#indexuser) | Index one user |
-| [`/index.delete-user`](#indexdelete-user) | Delete one user |
-| [`/index.group`](#indexgroup) | Index one group |
-| [`/index.delete-group`](#indexdelete-group) | Delete one group |
-| [`/index.membership`](#indexmembership) | Index one group membership |
-| [`/index.delete-membership`](#indexdelete-membership) | Delete one group membership |
+| [`/index.document`](docs/COMMANDS.md#indexdocument) | Index one document — supports `--path <file>` mode, see below |
+| [`/index.delete-document`](docs/COMMANDS.md#indexdelete-document) | Delete one document by id |
+| [`/index.permissions`](docs/COMMANDS.md#indexpermissions) | Update document ACL |
+| [`/index.user`](docs/COMMANDS.md#indexuser) | Index one user |
+| [`/index.delete-user`](docs/COMMANDS.md#indexdelete-user) | Delete one user |
+| [`/index.group`](docs/COMMANDS.md#indexgroup) | Index one group |
+| [`/index.delete-group`](docs/COMMANDS.md#indexdelete-group) | Delete one group |
+| [`/index.membership`](docs/COMMANDS.md#indexmembership) | Index one group membership |
+| [`/index.delete-membership`](docs/COMMANDS.md#indexdelete-membership) | Delete one group membership |
 
 ```text
 /index.document --from-file ./doc.json
+/index.document --path ./README.md --datasource custom1 --object-type Article --public
 /index.delete-document --datasource gdrive --object-type Article --id doc-1
 /index.permissions --from-file ./perms.json
 ```
 
+### Indexing from local files (`--path`)
+
+`/index.document` and `/index.bulk-documents` both accept `--path <file-or-dir>` as an alternative to `--from-file`. The CLI walks the path, builds DocumentDefinitions for you, and POSTs them. Pair with `--dry-run` to see exactly what would be sent.
+
+| Flag | Purpose |
+| --- | --- |
+| `--path` | A file (single mode) or directory (bulk mode) |
+| `--datasource` | Required. Datasource name applied to every walked file |
+| `--object-type` | Required. e.g. `Article`, `Wiki` |
+| `--public` | Make all docs world-readable. Mutually exclusive with `--acl-from-file` |
+| `--acl-from-file` | JSON file with a `DocumentPermissionsDefinition` applied to every doc |
+| `--include` | Comma-separated globs. Default: `*.txt,*.md,*.markdown,*.html,*.htm,*.json` |
+| `--exclude` | Comma-separated globs. Default skips `.git`, `node_modules`, `__pycache__`, `.DS_Store` |
+| `--max-bytes` | Skip files larger than this. Default 5 MB |
+| `--id-prefix` | Prepended to the path-derived id slug (e.g. `--id-prefix proj` → `proj-team-onboarding`) |
+| `--view-url-prefix` | Base URL prepended to relative paths. Defaults to `file://` per file |
+| `--dry-run` | Print the assembled request body and exit without calling the API |
+
+**Supported file types:** `.txt`, `.md`, `.markdown`, `.html`, `.htm`, `.json`. Binary formats (PDF, `.docx`, etc.) are out of scope for v1.
+
+**Behaviour:**
+
+- Path-derived ids: `team/onboarding.md` → `team-onboarding`. Stable across re-runs, debuggable, datasource-safe
+- HTML files are sent as `htmlContent`; everything else as `textContent`
+- Mock mode works for `--path` exactly like every other indexing command (token still required)
+- `/index.document --path <dir>` errors and points you at `/index.bulk-documents` — single mode is single-file only
+- The bulk command warns when more than 500 files are matched. v1 sends them in one POST; auto-paging across `isFirstPage`/`isLastPage` is planned for v2
+
+```text
+# Single Markdown file, public ACL, dry-run first
+/index.document --path ./README.md \
+                --datasource custom1 --object-type Article \
+                --public --dry-run
+
+# Walk a folder, only .md and .txt, with a fixed ACL from disk
+/index.bulk-documents --path ./content/ \
+                      --datasource custom1 --object-type Article \
+                      --acl-from-file ./perms.json \
+                      --include "*.md,*.txt" --exclude "**/draft/**"
+```
+
 ### Bulk + paged uploads
 
-Bulk endpoints use the standard upload-paging contract (`uploadId`, `isFirstPage`, `isLastPage`, optional `forceRestartUpload`). Wrap your full request body in a JSON file and pass it via `--from-file`.
+Bulk endpoints use the standard upload-paging contract (`uploadId`, `isFirstPage`, `isLastPage`, optional `forceRestartUpload`). Wrap your full request body in a JSON file and pass it via `--from-file`. The documents-side commands also accept `--path` (see above).
 
 | Command | Endpoint family |
 | --- | --- |
-| [`/index.documents`](#indexdocuments) | Paged document index |
-| [`/index.bulk-documents`](#indexbulk-documents) | Bulk document index |
-| [`/index.bulk-users`](#indexbulk-users) | Bulk user index |
-| [`/index.bulk-groups`](#indexbulk-groups) | Bulk group index |
-| [`/index.bulk-memberships`](#indexbulk-memberships) | Bulk group memberships |
-| [`/people.bulk-employees`](#peoplebulk-employees) | Bulk employee records (org chart) |
-| [`/people.bulk-teams`](#peoplebulk-teams) | Bulk team records (org chart) |
-| [`/people.index-employee-list`](#peopleindex-employee-list) | Versioned employee list |
-| [`/shortcuts.bulk-index`](#shortcutsbulk-index) | Bulk shortcuts via Indexing API ⚠ distinct from Client API `/shortcuts.*` |
-| [`/shortcuts.upload`](#shortcutsupload) | Upload shortcuts via Indexing API |
+| [`/index.documents`](docs/COMMANDS.md#indexdocuments) | Paged document index |
+| [`/index.bulk-documents`](docs/COMMANDS.md#indexbulk-documents) | Bulk document index |
+| [`/index.bulk-users`](docs/COMMANDS.md#indexbulk-users) | Bulk user index |
+| [`/index.bulk-groups`](docs/COMMANDS.md#indexbulk-groups) | Bulk group index |
+| [`/index.bulk-memberships`](docs/COMMANDS.md#indexbulk-memberships) | Bulk group memberships |
+| [`/people.bulk-employees`](docs/COMMANDS.md#peoplebulk-employees) | Bulk employee records (org chart) |
+| [`/people.bulk-teams`](docs/COMMANDS.md#peoplebulk-teams) | Bulk team records (org chart) |
+| [`/people.index-employee-list`](docs/COMMANDS.md#peopleindex-employee-list) | Versioned employee list |
+| [`/shortcuts.bulk-index`](docs/COMMANDS.md#shortcutsbulk-index) | Bulk shortcuts via Indexing API ⚠ distinct from Client API `/shortcuts.*` |
+| [`/shortcuts.upload`](docs/COMMANDS.md#shortcutsupload) | Upload shortcuts via Indexing API |
 
 ### Process-all (long-running)
 
@@ -372,9 +415,9 @@ Trigger a tenant-wide reprocess after a bulk upload completes. These commands ac
 
 | Command | Purpose |
 | --- | --- |
-| [`/index.process-all-documents`](#indexprocess-all-documents) | Reprocess all uploaded documents |
-| [`/index.process-all-memberships`](#indexprocess-all-memberships) | Reprocess all uploaded memberships |
-| [`/people.process-all-employees-teams`](#peopleprocess-all-employees-teams) | Reprocess all uploaded employees + teams |
+| [`/index.process-all-documents`](docs/COMMANDS.md#indexprocess-all-documents) | Reprocess all uploaded documents |
+| [`/index.process-all-memberships`](docs/COMMANDS.md#indexprocess-all-memberships) | Reprocess all uploaded memberships |
+| [`/people.process-all-employees-teams`](docs/COMMANDS.md#peopleprocess-all-employees-teams) | Reprocess all uploaded employees + teams |
 
 ### Token rotation
 

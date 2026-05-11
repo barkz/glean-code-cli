@@ -15,7 +15,9 @@
       "Bash(git -C /Users/robbarker/Downloads/barkz/glean-code-cli config user.name)",
       "Bash(git -C /Users/robbarker/Downloads/barkz/glean-code-cli config user.email)",
       "Bash(sed -n '216,1952p' /Users/robbarker/Downloads/barkz/glean-code-cli/README.md)",
-      "Bash(sed -n '2433,2455p' /Users/robbarker/Downloads/barkz/glean-code-cli/README.md)"
+      "Bash(sed -n '2433,2455p' /Users/robbarker/Downloads/barkz/glean-code-cli/README.md)",
+      "Bash(python3 -m unittest tests.test_indexing_walk.TestWalkFiles.test_default_walk_picks_supported_skips_excluded)",
+      "Bash(python3)"
     ]
   }
 }

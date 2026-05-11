@@ -14,9 +14,11 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import webbrowser
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple  # noqa: F401
 
 from . import ui
+from . import _indexing_walk as _walk
 from .client import GleanClient, GleanError
 from .config import Config, SECURE_REFS, is_secure_ref, resolve_secure
 from .help_docs import DOCS, COMMAND_GROUPS
@@ -912,10 +914,159 @@ def _opt_version(flags) -> Optional[int]:
         return None
 
 
+def _split_csv(value) -> Optional[List[str]]:
+    if not value or value is True:
+        return None
+    return [s.strip() for s in str(value).split(",") if s.strip()]
+
+
+def _opt_int(value) -> Optional[int]:
+    if value in (None, True):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _resolve_permissions(flags) -> Optional[Dict[str, Any]]:
+    """Build a DocumentPermissionsDefinition from --public or --acl-from-file.
+
+    Required when using --path. Returns None and prints an error if not specified
+    or if both are given.
+    """
+    public = bool(flags.get("public"))
+    acl_path = flags.get("acl-from-file") or flags.get("acl_from_file")
+    if acl_path and public:
+        ui.print_err("--public and --acl-from-file are mutually exclusive")
+        return None
+    if acl_path:
+        acl = _load_json_file(acl_path)
+        return acl  # _load_json_file already prints on failure
+    if public:
+        return _walk.public_permissions()
+    ui.print_err("Provide either --public or --acl-from-file <perms.json>")
+    return None
+
+
+def _build_document_from_path(path_arg: str, flags) -> Optional[Dict[str, Any]]:
+    """Read a single file at path_arg and return a DocumentDefinition body."""
+    p = Path(path_arg).expanduser().resolve()
+    if not p.exists():
+        ui.print_err(f"path not found: {p}")
+        return None
+    if p.is_dir():
+        ui.print_err("path is a directory; use /index.bulk-documents --path for folder uploads")
+        return None
+    ds = flags.get("datasource")
+    obj = flags.get("object-type") or flags.get("object_type")
+    if not (ds and obj):
+        ui.print_err("--datasource and --object-type are required when using --path")
+        return None
+    perms = _resolve_permissions(flags)
+    if perms is None:
+        return None
+    try:
+        return _walk.file_to_document(
+            abs_path=p, rel_path=Path(p.name),
+            datasource=ds, object_type=obj,
+            permissions=perms,
+            view_url_prefix=flags.get("view-url-prefix") or flags.get("view_url_prefix") or "",
+            id_prefix=flags.get("id-prefix") or flags.get("id_prefix") or "",
+        )
+    except (ValueError, OSError) as e:
+        ui.print_err(str(e))
+        return None
+
+
+def _build_bulk_documents_from_path(path_arg: str, flags) -> Optional[Dict[str, Any]]:
+    """Walk a path (file or dir) and return a BulkIndexDocumentsRequest body."""
+    root = Path(path_arg).expanduser().resolve()
+    if not root.exists():
+        ui.print_err(f"path not found: {root}")
+        return None
+    ds = flags.get("datasource")
+    obj = flags.get("object-type") or flags.get("object_type")
+    if not (ds and obj):
+        ui.print_err("--datasource and --object-type are required when using --path")
+        return None
+    perms = _resolve_permissions(flags)
+    if perms is None:
+        return None
+
+    walk_kwargs: Dict[str, Any] = {}
+    inc = _split_csv(flags.get("include"))
+    exc = _split_csv(flags.get("exclude"))
+    mb  = _opt_int(flags.get("max-bytes") or flags.get("max_bytes"))
+    if inc is not None: walk_kwargs["include"] = inc
+    if exc is not None: walk_kwargs["exclude"] = exc
+    if mb  is not None: walk_kwargs["max_bytes"] = mb
+
+    try:
+        matched, skipped = _walk.walk_files(root, **walk_kwargs)
+    except FileNotFoundError as e:
+        ui.print_err(str(e))
+        return None
+    if not matched:
+        ui.print_err("no matching files under the given path")
+        return None
+    if len(matched) > 500:
+        ui.print_info(
+            f"Building bulk request with {len(matched)} documents — large payloads may exceed "
+            "request limits. Consider chunking via your own --from-file body for now (auto-paging is v2)."
+        )
+
+    documents: List[Dict[str, Any]] = []
+    build_errors = 0
+    for rel, abs_path in matched:
+        try:
+            documents.append(_walk.file_to_document(
+                abs_path=abs_path, rel_path=rel,
+                datasource=ds, object_type=obj,
+                permissions=perms,
+                view_url_prefix=flags.get("view-url-prefix") or flags.get("view_url_prefix") or "",
+                id_prefix=flags.get("id-prefix") or flags.get("id_prefix") or "",
+            ))
+        except (ValueError, OSError) as e:
+            ui.print_info(f"skipped {rel}: {e}")
+            build_errors += 1
+
+    if not documents:
+        ui.print_err("no documents could be built from the matched files")
+        return None
+    if skipped:
+        ui.print_info(f"{len(skipped)} file(s) skipped by size filter")
+    if build_errors:
+        ui.print_info(f"{build_errors} file(s) skipped due to read/build errors")
+
+    return {
+        "uploadId":    flags.get("upload-id") or flags.get("upload_id") or f"upload_{int(time.time())}",
+        "isFirstPage": True,
+        "isLastPage":  True,
+        "datasource":  ds,
+        "documents":   documents,
+    }
+
+
 @register("index.document")
 def cmd_index_document(s: Session, pos, flags):
-    body = _read_body_from_flag(flags)
+    path_arg  = flags.get("path")
+    body_path = flags.get("from-file") or flags.get("from_file")
+    if path_arg and body_path:
+        ui.print_err("--path and --from-file are mutually exclusive")
+        return
+    if path_arg:
+        body = _build_document_from_path(path_arg, flags)
+    elif body_path:
+        body = _load_json_file(body_path)
+    else:
+        ui.print_err("Provide --path <file> or --from-file <doc.json>")
+        return
     if body is None:
+        return
+
+    if flags.get("dry-run") or flags.get("dry_run"):
+        print(json.dumps({"document": body}, indent=2))
         return
     if not _require_indexing_token(s):
         return
@@ -1104,7 +1255,6 @@ def _bulk_handler(method_name: str, label: str):
 
 
 HANDLERS["index.documents"]            = _bulk_handler("index_documents",        "indexdocuments")
-HANDLERS["index.bulk-documents"]       = _bulk_handler("bulk_index_documents",   "bulkindexdocuments")
 HANDLERS["index.bulk-users"]           = _bulk_handler("bulk_index_users",       "bulkindexusers")
 HANDLERS["index.bulk-groups"]          = _bulk_handler("bulk_index_groups",      "bulkindexgroups")
 HANDLERS["index.bulk-memberships"]     = _bulk_handler("bulk_index_memberships", "bulkindexmemberships")
@@ -1112,6 +1262,42 @@ HANDLERS["people.bulk-employees"]      = _bulk_handler("bulk_index_employees",  
 HANDLERS["people.bulk-teams"]          = _bulk_handler("bulk_index_teams",       "bulkindexteams")
 HANDLERS["shortcuts.bulk-index"]       = _bulk_handler("bulk_index_shortcuts",   "bulkindexshortcuts")
 HANDLERS["shortcuts.upload"]           = _bulk_handler("upload_shortcuts",       "uploadshortcuts")
+
+
+@register("index.bulk-documents")
+def cmd_index_bulk_documents(s: Session, pos, flags):
+    """Bulk-index documents from a JSON body OR by walking a local path."""
+    path_arg  = flags.get("path")
+    body_path = flags.get("from-file") or flags.get("from_file")
+    if path_arg and body_path:
+        ui.print_err("--path and --from-file are mutually exclusive")
+        return
+
+    if path_arg:
+        body = _build_bulk_documents_from_path(path_arg, flags)
+    elif body_path:
+        body = _load_json_file(body_path)
+        if body is not None and not isinstance(body, dict):
+            ui.print_err("--from-file must contain a JSON object (the full request body)")
+            return
+    else:
+        ui.print_err("Provide --path <file-or-dir> or --from-file <body.json>")
+        return
+    if body is None:
+        return
+
+    if flags.get("dry-run") or flags.get("dry_run"):
+        print(json.dumps(body, indent=2))
+        return
+    if not _require_indexing_token(s):
+        return
+    try:
+        resp = s.client.bulk_index_documents(body)
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    ui.print_ok("bulkindexdocuments accepted.")
+    _print_kv_response(resp)
 
 
 @register("people.index-employee-list")

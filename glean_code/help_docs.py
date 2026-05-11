@@ -683,13 +683,28 @@ DOCS: Dict[str, CommandDoc] = {
 
     # ---------------- Indexing API: Tier 3 (single-record CRUD) ----------------
     "index.document": {
-        "summary": "Index a single document.",
-        "usage": "/index.document --from-file <doc.json> [--version <n>]",
+        "summary": "Index a single document — from a JSON body or a local file path.",
+        "usage": "/index.document (--from-file <doc.json> | --path <file>) [--datasource <ds>] "
+                 "[--object-type <type>] [--public | --acl-from-file <perms.json>] "
+                 "[--id-prefix <s>] [--view-url-prefix <url>] [--version <n>] [--dry-run]",
         "params": [
-            ("--from-file", "JSON file containing the DocumentDefinition body."),
-            ("--version",   "Optional version int for optimistic concurrency."),
+            ("--from-file",       "JSON file containing a full DocumentDefinition request body."),
+            ("--path",            "Local file path. Synthesizes a DocumentDefinition from the file."),
+            ("--datasource",      "(with --path) Datasource name."),
+            ("--object-type",     "(with --path) Object type (e.g. Article)."),
+            ("--public",          "(with --path) Make the doc world-readable. Mutually exclusive with --acl-from-file."),
+            ("--acl-from-file",   "(with --path) JSON file with a DocumentPermissionsDefinition applied to the doc."),
+            ("--id-prefix",       "(with --path) String prepended to the path-derived id slug."),
+            ("--view-url-prefix", "(with --path) Base URL prepended to the relative path. Defaults to file://<absolute>."),
+            ("--version",         "Optional version int for optimistic concurrency."),
+            ("--dry-run",         "Print the assembled request body and exit without calling the API."),
         ],
-        "examples": ["/index.document --from-file ./doc.json"],
+        "examples": [
+            "/index.document --from-file ./doc.json",
+            "/index.document --path ./README.md --datasource custom1 --object-type Article --public",
+            "/index.document --path ./team/onboarding.md --datasource custom1 --object-type Article "
+                "--acl-from-file ./perms.json --dry-run",
+        ],
         "endpoint": "POST /api/index/v1/indexdocument",
     },
     "index.delete-document": {
@@ -787,10 +802,33 @@ DOCS: Dict[str, CommandDoc] = {
         "endpoint": "POST /api/index/v1/indexdocuments",
     },
     "index.bulk-documents": {
-        "summary": "Bulk index documents in pages (uploadId + isFirstPage/isLastPage).",
-        "usage": "/index.bulk-documents --from-file <body.json>",
-        "params": [("--from-file", "JSON file containing BulkIndexDocumentsRequest.")],
-        "examples": ["/index.bulk-documents --from-file ./bulk.json"],
+        "summary": "Bulk index documents — from a JSON body or by walking a local file/folder.",
+        "usage": "/index.bulk-documents (--from-file <body.json> | --path <file-or-dir>) "
+                 "[--datasource <ds>] [--object-type <type>] "
+                 "[--public | --acl-from-file <perms.json>] "
+                 "[--include <globs>] [--exclude <globs>] [--max-bytes <n>] "
+                 "[--id-prefix <s>] [--view-url-prefix <url>] [--upload-id <id>] [--dry-run]",
+        "params": [
+            ("--from-file",       "JSON file containing the BulkIndexDocumentsRequest body."),
+            ("--path",            "Local file or directory. Walks recursively for directories."),
+            ("--datasource",      "(with --path) Datasource name."),
+            ("--object-type",     "(with --path) Object type applied to every walked file."),
+            ("--public",          "(with --path) Make all docs world-readable."),
+            ("--acl-from-file",   "(with --path) JSON file with a DocumentPermissionsDefinition applied to every doc."),
+            ("--include",         "(with --path) Comma-separated globs to include. Default: *.txt,*.md,*.markdown,*.html,*.htm,*.json"),
+            ("--exclude",         "(with --path) Comma-separated globs to exclude. Default skips .git, node_modules, __pycache__, .DS_Store"),
+            ("--max-bytes",       "(with --path) Skip files larger than this many bytes. Default 5242880 (5MB)."),
+            ("--id-prefix",       "(with --path) Prefix added to each path-derived id slug."),
+            ("--view-url-prefix", "(with --path) Base URL prepended to each relative path. Defaults to file:// per file."),
+            ("--upload-id",       "(with --path) Override the auto-generated upload id."),
+            ("--dry-run",         "Print the assembled request body and exit without calling the API."),
+        ],
+        "examples": [
+            "/index.bulk-documents --from-file ./bulk.json",
+            "/index.bulk-documents --path ./docs/ --datasource custom1 --object-type Article --public",
+            "/index.bulk-documents --path ./docs/ --datasource custom1 --object-type Article "
+                "--public --include '*.md,*.txt' --exclude '**/draft/**' --dry-run",
+        ],
         "endpoint": "POST /api/index/v1/bulkindexdocuments",
     },
     "index.bulk-users": {
