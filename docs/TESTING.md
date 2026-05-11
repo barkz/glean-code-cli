@@ -2,7 +2,7 @@
 
 Notes on the test suite added during development of glean-code-cli. See [Running tests](../README.md#running-tests) for the user-facing instructions on how to run the tests.
 
-All 449 tests pass. Here's what was added:
+All 604 tests pass. Here's what was added across the development passes:
 
 `tests/test_commands_extended.py` (155 new tests) — covers all previously untested commands:
 
@@ -23,3 +23,10 @@ All 449 tests pass. Here's what was added:
 - Mock responses for all 19 new endpoints (`/unpin`, `/listshortcuts`, `/listanswers`, `/summarize`, `/insights`, etc.)
 - `GleanClient` method bodies: correct paths, partial updates, optional fields, body construction
 
+`tests/test_indexing_walk.py` (25 new tests) — covers the `--path` indexing helpers and command flow:
+
+- `path_to_id`, `filename_to_title`, `mime_for_path` — slug, title, and extension detection
+- `walk_files` — default include/exclude behaviour, `node_modules`/`.git`/`.DS_Store` filtering, `--max-bytes` skip, single-file root, missing-path errors, custom `--include` overrides
+- `file_to_document` — Markdown/HTML body shape, view-URL prefix override, unsupported-extension rejection
+- `/index.document --path` — synthesizes a `DocumentDefinition`, dry-run skips the API, directory-passed errors, missing-permissions errors, mutex with `--from-file`, mutex of `--public` and `--acl-from-file`
+- `/index.bulk-documents --path` — folder walk produces a paged `BulkIndexDocumentsRequest`, `--include` filtering, dry-run, backward compat with `--from-file`
