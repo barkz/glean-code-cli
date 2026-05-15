@@ -3,3 +3,4 @@ todo.md
 __pycache__/
 .claude/
 glean_code/__pycache__/
+.claude/settings.json

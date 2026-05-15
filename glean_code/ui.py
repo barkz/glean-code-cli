@@ -108,6 +108,62 @@ def render_banner(version: str, mode: str) -> str:
     return f"{mark}\n{tag}\n{meta}\n{hint}\n"
 
 
+def render_getting_started(version: str, mode: str,
+                           has_token: bool, instance: Optional[str] = None) -> str:
+    """Welcome panel inspired by Notion's `ntn` CLI splash.
+
+    Logo, version line, two-column 'Get started' command table, and a footer
+    pointing at the MCP server install. Shown on every REPL launch.
+    """
+    mark = style(GLEAN_WORDMARK, C.CYAN, C.BOLD)
+
+    if has_token and instance:
+        meta_text = f"  Glean Code v{version}  ·  mode: {mode}  ·  {instance}"
+    elif has_token:
+        meta_text = f"  Glean Code v{version}  ·  mode: {mode}  ·  token set"
+    else:
+        meta_text = f"  Glean Code v{version}  ·  mode: {mode}  ·  no token (mock data)"
+    meta = style(meta_text, C.GREY)
+
+    rows = [
+        ("/login --instance <host> --token <bearer>", "Connect to your Glean instance"),
+        ("/search \"...\"",                            "Run a Glean search"),
+        ("/chat \"...\"",                              "Ask Glean a question"),
+        ("/datasources.list --with-status",            "List datasources with indexing health"),
+        ("/index.document --path README.md ...",       "Index a local file or folder"),
+        ("/help",                                      "See all available commands"),
+    ]
+    key_w = max(len(k) for k, _ in rows)
+
+    header = "  " + style("Get started:", C.WHITE, C.BOLD)
+    cmd_lines = "\n".join(
+        "    " + style(k.ljust(key_w), C.CYAN, C.BOLD)
+        + "   " + style(v, C.GREY)
+        for k, v in rows
+    )
+
+    agents_header = "  " + style("Add Glean to your AI agents:", C.WHITE, C.BOLD)
+    agents_body = (
+        "    " + style(
+            "Wire up the MCP server (glean_mcp.py) for Claude Code, Claude Desktop, or Cursor.",
+            C.GREY,
+        )
+        + "\n    " + style("See docs/COMMANDS.md or run /help mcp.", C.GREY)
+    )
+
+    quit_hint = "  " + style("Type /exit to quit.", C.TEAL)
+
+    return (
+        f"{mark}\n"
+        f"{meta}\n\n"
+        f"{header}\n\n"
+        f"{cmd_lines}\n\n"
+        f"{agents_header}\n\n"
+        f"{agents_body}\n\n"
+        f"{quit_hint}\n"
+    )
+
+
 # -------------------- boxes and tables --------------------
 
 def box(title: str, body: str, colour: str = C.BLUE) -> str:

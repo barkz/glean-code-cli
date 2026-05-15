@@ -13,7 +13,12 @@ def main() -> None:
     config = Config.load()
     session = Session(config)
 
-    print(ui.render_banner(__version__, config.effective_mode))
+    print(ui.render_getting_started(
+        __version__,
+        config.effective_mode,
+        has_token=bool(config.api_token),
+        instance=config.instance,
+    ))
 
     # Non-interactive mode: pipe a command in and it runs once
     if not sys.stdin.isatty():

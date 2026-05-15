@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 import shlex
 import socket
 import time
@@ -2123,6 +2124,227 @@ def cmd_scaffold(s: Session, pos, flags):
     ui.print_info(f"Run with:  python3 {out_path}")
 
 
+# -------------------- natural-language planner --------------------
+
+_PLANNER_SYSTEM_PROMPT = (
+    "You are Glean Code's command planner. Translate the user's "
+    "natural-language request into a sequence of Glean Code slash commands.\n\n"
+    "OUTPUT FORMAT: a JSON array. Each element must be "
+    '{"cmd": "<command-name-without-leading-slash>", '
+    '"args": "<rest-of-the-line-as-a-single-string>"}. '
+    "NO prose. NO markdown code fences. NO explanations.\n\n"
+    "If the user references \"stored token\", \"saved token\", or similar, "
+    "use the literal placeholder \"<stored>\" in args — the local CLI "
+    "substitutes the real value at execute time.\n\n"
+    "If the request is ambiguous, choose the most likely sensible "
+    "interpretation and emit a plan rather than asking back.\n\n"
+    "Available commands:\n{catalogue}\n"
+)
+
+_NL_DESTRUCTIVE = {
+    # auth / config
+    "login", "logout", "indexing.rotate-token",
+    # local-side writes
+    "feedback", "scaffold",
+    # client API writes
+    "announcements.create", "announcements.delete",
+    "collections.create", "collections.delete",
+    "pins.create", "pins.delete",
+    "shortcuts.create", "shortcuts.update", "shortcuts.delete",
+    "answers.create", "answers.update", "answers.delete",
+    "verification.verify", "verification.remind",
+    # indexing single-record writes
+    "index.document", "index.delete-document", "index.permissions",
+    "index.user", "index.delete-user",
+    "index.group", "index.delete-group",
+    "index.membership", "index.delete-membership",
+    # indexing bulk + process
+    "index.documents", "index.bulk-documents", "index.bulk-users",
+    "index.bulk-groups", "index.bulk-memberships",
+    "shortcuts.bulk-index", "shortcuts.upload",
+    "index.process-all-documents", "index.process-all-memberships",
+    "people.bulk-employees", "people.bulk-teams",
+    "people.index-employee-list", "people.process-all-employees-teams",
+}
+
+
+def _nl_is_destructive(cmd: str, args: str) -> bool:
+    if cmd in _NL_DESTRUCTIVE:
+        return True
+    # /config set ... mutates; /config (list/get) does not
+    if cmd == "config" and args.strip().lower().startswith("set"):
+        return True
+    return False
+
+
+def _nl_build_catalogue() -> str:
+    """Compact list of commands for the planner system prompt — auto-derived
+    from HANDLERS + DOCS so it stays in sync as commands are added.
+    """
+    lines: List[str] = []
+    for name in sorted(HANDLERS.keys()):
+        doc = DOCS.get(name)
+        if not doc:
+            continue
+        summary = str(doc.get("summary", "")).split("\n")[0]
+        lines.append(f"  /{name}: {summary}")
+    return "\n".join(lines)
+
+
+_PLAN_FENCE_RE = re.compile(r"```(?:json)?\s*(\[.*?\])\s*```", re.DOTALL)
+_PLAN_BARE_RE  = re.compile(r"(\[.*\])", re.DOTALL)
+
+
+def _nl_parse_plan(response_text: str) -> Optional[List[Dict[str, str]]]:
+    """Extract the first JSON array from a (possibly fenced/prose-padded) reply."""
+    candidate = None
+    m = _PLAN_FENCE_RE.search(response_text)
+    if m:
+        candidate = m.group(1)
+    if not candidate:
+        m = _PLAN_BARE_RE.search(response_text)
+        if m:
+            candidate = m.group(1)
+    if not candidate:
+        return None
+    try:
+        parsed = json.loads(candidate)
+    except ValueError:
+        return None
+    if not isinstance(parsed, list):
+        return None
+    out = []
+    for item in parsed:
+        if isinstance(item, dict) and "cmd" in item:
+            out.append({
+                "cmd": str(item["cmd"]).lstrip("/").strip(),
+                "args": str(item.get("args", "")).strip(),
+            })
+    return out
+
+
+def _nl_substitute_placeholders(args: str, session: "Session") -> str:
+    """Replace planner placeholders like <stored> with session config values."""
+    if "<stored>" in args:
+        token = session.config.api_token or ""
+        args = args.replace("<stored>", token)
+    return args
+
+
+def _nl_mock_plan(prompt: str) -> List[Dict[str, str]]:
+    """Hardcoded mock plan so /ask works offline. Pattern-matches a few common
+    intents — login, search, chat, datasources — and falls back to /help.
+    """
+    p = prompt.lower()
+    plan: List[Dict[str, str]] = []
+    m = re.search(r"([\w-]+\.glean\.com)", prompt)
+    instance = m.group(1) if m else None
+    if any(w in p for w in ("login", "log in", "sign in", "connect")):
+        if instance:
+            plan.append({"cmd": "login",
+                         "args": f"--instance {instance} --token <stored>"})
+    if "search" in p or "find " in p or "look up" in p:
+        m = re.search(r'"([^"]+)"|\'([^\']+)\'', prompt)
+        query = (m.group(1) or m.group(2)) if m else "quarterly planning"
+        plan.append({"cmd": "search", "args": f'"{query}"'})
+    if any(w in p for w in ("chat", "ask glean", "talk to")):
+        # Extract a topic if the user said "chat about <X>" or similar
+        m = re.search(r"chat (?:about|on|regarding) ([^,.]+)", prompt, re.IGNORECASE)
+        topic = m.group(1).strip() if m else "the previous results"
+        plan.append({"cmd": "chat", "args": f'"{topic}"'})
+    if "datasource" in p:
+        plan.append({"cmd": "datasources.list", "args": "--with-status"})
+    if "status" in p and not plan:
+        plan.append({"cmd": "status", "args": ""})
+    if not plan:
+        plan = [{"cmd": "help", "args": ""}]
+    return plan
+
+
+@register("ask")
+def cmd_ask(s: Session, pos, flags):
+    """Translate a natural-language request into Glean Code slash commands."""
+    nl = " ".join(pos).strip()
+    if not nl:
+        ui.print_err('Usage: /ask "<natural-language-request>"  '
+                     '(or just type ?<request>)')
+        return
+
+    # ---- get a plan ----
+    if s.config.effective_mode == "mock":
+        plan = _nl_mock_plan(nl)
+        ui.print_info("[mock] using canned plan; switch to live mode for the real Glean planner")
+    else:
+        if not s.config.is_live_ready:
+            ui.print_err("Live mode requires an api_token and instance. Run /login first.")
+            return
+        catalogue = _nl_build_catalogue()
+        prompt = (
+            _PLANNER_SYSTEM_PROMPT.format(catalogue=catalogue)
+            + "\nUser request: " + nl
+        )
+        print(ui.style("Asking Glean...", ui.C.GREY, ui.C.DIM))
+        try:
+            resp = s.client.chat(prompt, chat_id=None)
+        except GleanError as e:
+            ui.print_err(str(e))
+            return
+        response_text = "".join(
+            f.get("text", "")
+            for m in resp.get("messages", [])
+            for f in m.get("fragments", [])
+        )
+        plan = _nl_parse_plan(response_text)
+        if not plan:
+            ui.print_err("Could not parse a command plan from Glean's reply.")
+            print(ui.style("--- raw reply ---", ui.C.GREY))
+            print(response_text)
+            print(ui.style("-----------------", ui.C.GREY))
+            return
+
+    # ---- validate + render ----
+    rendered = []
+    has_destructive = False
+    for i, step in enumerate(plan, 1):
+        cmd = step["cmd"]
+        args = _nl_substitute_placeholders(step["args"], s)
+        valid = cmd in HANDLERS
+        marker = ""
+        if not valid:
+            marker = ui.style(" [unknown — will be skipped]", ui.C.RED)
+        elif _nl_is_destructive(cmd, args):
+            has_destructive = True
+            marker = ui.style(" [confirm]", ui.C.YELLOW)
+        line = f"  {i}. /{cmd}" + (f" {args}" if args else "") + marker
+        rendered.append((line, cmd, args, valid))
+
+    print()
+    print(ui.style("Plan:", ui.C.CYAN, ui.C.BOLD))
+    for line, *_ in rendered:
+        print(line)
+
+    # ---- confirm only if any destructive step ----
+    if has_destructive:
+        try:
+            confirm = input(ui.style("Run all? [y/N]: ", ui.C.YELLOW)).strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            ui.print_info("Cancelled.")
+            return
+        if confirm not in ("y", "yes"):
+            ui.print_info("Cancelled.")
+            return
+
+    # ---- execute ----
+    for _, cmd, args, valid in rendered:
+        if not valid:
+            continue
+        full = f"/{cmd}" + (f" {args}" if args else "")
+        print()
+        print(ui.style(f"› {full}", ui.C.GREY))
+        dispatch(s, full)
+
+
 # -------------------- dispatcher --------------------
 
 def dispatch(session: Session, line: str) -> None:
@@ -2130,6 +2352,15 @@ def dispatch(session: Session, line: str) -> None:
     if not line:
         return
     session.command_history.append(_sanitize_for_history(line))
+
+    # ?<text> = /ask shortcut
+    if line.startswith("?"):
+        rest = line[1:].strip()
+        if not rest:
+            ui.print_err('Usage: ?<natural-language-request>')
+            return
+        HANDLERS["ask"](session, [rest], {})
+        return
 
     # bare text = /chat shortcut
     if not line.startswith("/"):

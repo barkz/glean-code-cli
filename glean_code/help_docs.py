@@ -61,6 +61,19 @@ DOCS: Dict[str, CommandDoc] = {
         ],
         "endpoint": "(local — strips '-be' from instance host and opens https://<host>{path})",
     },
+    "ask": {
+        "summary": "Translate a natural-language request into a sequence of Glean Code slash commands using Glean's chat as the planner.",
+        "usage": '/ask "<natural-language-request>"   (or shorthand: ?<request>)',
+        "params": [
+            ("<request>", "Plain English describing what you want to do. Multi-step requests work."),
+        ],
+        "examples": [
+            '/ask "login into acme-be.glean.com with the stored token"',
+            '?login into acme-be.glean.com, then search for "Q2 plan"',
+            '?show me datasource health and start a chat',
+        ],
+        "endpoint": "POST /chat (Glean Assistant is used as the planner; output is parsed locally)",
+    },
     "login": {
         "summary": "Store a Glean host and API token for live calls.",
         "usage": "/login --instance <host-or-url> --token <token> [--act-as <email>]",
@@ -912,7 +925,7 @@ DOCS: Dict[str, CommandDoc] = {
 
 
 COMMAND_GROUPS: List[Tuple[str, List[str]]] = [
-    ("Shell",          ["help", "status", "doctor", "login", "logout", "open", "config", "mode", "history", "clear", "exit"]),
+    ("Shell",          ["help", "status", "doctor", "login", "logout", "open", "ask", "config", "mode", "history", "clear", "exit"]),
     ("Chat & Search",  ["chat", "search", "datasources.list", "datasources.status", "autocomplete", "recommendations", "feedback"]),
     ("Agents & Tools", ["agents.list", "agents.run", "tools.list", "tools.call"]),
     ("Docs & People",  ["docs.get", "docs.permissions", "entities.list", "people.get"]),

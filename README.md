@@ -11,6 +11,7 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 - [Getting Started](#getting-started-with-glean-code) — install, alias, first run
 - [Commands at a glance](#commands-at-a-glance)
 - [Command Reference](docs/COMMANDS.md) ← full per-command docs
+- [Natural-language planner](#natural-language-planner) · [full design notes](docs/NATURAL_LANGUAGE.md)
 - [Insights](#insights)
 - [Indexing API](#indexing-api)
 - [Scaffold](#scaffold)
@@ -35,6 +36,7 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 - Indexing **observability counters** — `/datasources.config`, `/documents.count`, `/documents.status`, and `/users.count` for quick health checks of any custom datasource
 - Indexing **write surface** — single-record `/index.document`, `/index.user`, `/index.group`, `/index.membership` (plus their `/index.delete-*` partners) and `/index.permissions`, all driven by `--from-file <json>` so request bodies stay auditable
 - Indexing **bulk + paged uploads** — `/index.bulk-documents|users|groups|memberships`, `/people.bulk-employees|teams`, `/shortcuts.bulk-index`, `/shortcuts.upload`, plus `/index.process-all-*` and `/people.process-all-employees-teams` to kick off long-running rebuilds
+- **Natural-language planner** — type `?login into acme-be.glean.com and search for "Q2 plan"` (or `/ask "..."`) and Glean Assistant translates it into a sequence of slash commands, validated locally and gated behind a single confirm for any destructive step. Full design in [docs/NATURAL_LANGUAGE.md](docs/NATURAL_LANGUAGE.md)
 - **`--path` mode for indexing** — `/index.document --path file.md` and `/index.bulk-documents --path ./docs/` walk a local file or folder and synthesize the request body for you (`.txt`, `.md`, `.html`, `.json`). Includes `--include`/`--exclude` globs, `--public`/`--acl-from-file` permissions, and `--dry-run` to inspect the assembled payload without calling the API
 - `/scaffold` to generate a self-contained Python starter project for chat, search, or agent use cases
 - MCP server (`glean_mcp.py`) for Claude Code, Claude Desktop, and Cursor
@@ -95,6 +97,8 @@ Without a token the CLI runs in mock mode and returns realistic fake data. Set a
 - [`/doctor`](docs/COMMANDS.md#doctor)
 - [`/login`](docs/COMMANDS.md#login)
 - [`/logout`](docs/COMMANDS.md#logout)
+- [`/open`](docs/COMMANDS.md#open)
+- [`/ask`](docs/COMMANDS.md#ask) · also `?<request>`
 - [`/config`](docs/COMMANDS.md#config)
 - [`/mode`](docs/COMMANDS.md#mode)
 - [`/history`](docs/COMMANDS.md#history)
@@ -238,6 +242,42 @@ Type `/help <command>` for parameters, examples and the underlying REST endpoint
 The full per-command reference (every slash command, with usage, parameters, examples, and the underlying REST endpoint) lives in [docs/COMMANDS.md](docs/COMMANDS.md). It is generated to match what `/help <command>` shows in the REPL.
 
 For a quick scan, see [Commands at a glance](#commands-at-a-glance) above.
+
+---
+
+## Natural-language planner
+
+Don't remember the exact slash-command incantation? Describe what you want and Glean Assistant translates it into the commands for you.
+
+```text
+?login into acme-be.glean.com with my stored token, then search for "Q2 plan"
+/ask "show me datasource health and start a chat"
+```
+
+Both forms invoke the same handler — `?` is the REPL shorthand, `/ask "..."` is the explicit form (handy for scripts and pipes).
+
+### How it works
+
+1. Build a compact catalogue of every registered command from `HANDLERS` + `DOCS`
+2. Send the catalogue + your request to your Glean instance via `POST /chat` (a dim `Asking Glean...` shows while the request is in flight)
+3. Parse the JSON array out of Glean's reply (tolerates code fences and prose)
+4. Validate each step against the live command set — unknown commands are flagged `[unknown — will be skipped]`
+5. Show a numbered plan; if any step is destructive, prompt `Run all? [y/N]` once
+6. Dispatch each valid step through the normal command handler
+
+### Confirm policy
+
+Pure reads (`/search`, `/status`, `/datasources.list`, `/insights`, `/help`, ...) run automatically. The confirm gate kicks in only for writes, deletes, and auth-changing commands (`/login`, `/logout`, `/indexing.rotate-token`, all `*.create`/`*.update`/`*.delete`, every `index.*` write, all bulk and process-all jobs).
+
+### Mock mode
+
+`/ask` works offline — in mock mode the CLI pattern-matches your prompt locally and emits a canned plan instead of calling Glean. Useful for demos and tests.
+
+### Tokens never leave the local process
+
+The system prompt instructs Glean to emit the literal placeholder `<stored>` whenever the user references a saved token. Substitution happens locally, after parsing. Real secrets are also scrubbed from the in-memory history buffer by the existing `_sanitize_for_history` pass.
+
+For the full design — architecture, prompt template, destructive set, troubleshooting, extension points — see **[docs/NATURAL_LANGUAGE.md](docs/NATURAL_LANGUAGE.md)**. The `/ask` Command Reference entry is at [docs/COMMANDS.md#ask](docs/COMMANDS.md#ask).
 
 ---
 

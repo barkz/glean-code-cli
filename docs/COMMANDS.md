@@ -160,6 +160,36 @@ Quickly switch the API mode without editing config.
 
 ---
 
+#### /ask
+
+Translate a natural-language request into a sequence of Glean Code slash commands using Glean Assistant as the planner. Read [docs/NATURAL_LANGUAGE.md](NATURAL_LANGUAGE.md) for the full design.
+
+```text
+/ask "<natural-language-request>"
+?<natural-language-request>
+```
+
+The `?` prefix is shorthand. Both forms are identical — `?login into acme-be.glean.com` is the same as `/ask "login into acme-be.glean.com"`.
+
+| Parameter | Description |
+| --- | --- |
+| `<request>` | Plain English describing what you want to do. Multi-step requests work — "do X, then Y, and finish with Z". |
+
+```text
+/ask "login into acme-be.glean.com with the stored token"
+?login into acme-be.glean.com, then search for "Q2 plan"
+?show me datasource health and start a chat
+?rotate my indexing token and show its status
+```
+
+**How it works** — The CLI sends your request to `/chat` with a system prompt asking Glean to emit a JSON array of `{cmd, args}` steps. The reply is parsed locally, validated against the registered command set, rendered as a numbered plan, and (if any step is destructive) gated behind a single `Run all? [y/N]` confirm. Reads run automatically. Mock mode emits a canned plan without calling Glean.
+
+**Output** — A numbered plan with `[confirm]` or `[unknown — will be skipped]` markers, then the output of each executed step.
+
+**Endpoint** — `POST /chat` against your Glean instance. Full architecture in [docs/NATURAL_LANGUAGE.md](NATURAL_LANGUAGE.md).
+
+---
+
 #### /history
 
 Show commands entered during the current session.
