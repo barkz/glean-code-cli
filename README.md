@@ -1,5 +1,9 @@
 # Glean Code
 
+![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white) 
+![Claude](https://img.shields.io/badge/Claude-D97757?style=for-the-badge&logo=claude&logoColor=white)
+![Glean](https://img.shields.io/badge/Glean-343CED?style=for-the-badge&logoColor=white)
+
 A local, terminal-first client for the Glean Client REST API. Inspired by Claude Code. Built in Python with zero runtime dependencies.
 
 ![Glean Code terminal screenshot](assets/glean_code_cli_example.png)
