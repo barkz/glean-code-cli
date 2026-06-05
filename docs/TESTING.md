@@ -2,7 +2,7 @@
 
 Notes on the test suite added during development of glean-code-cli. See [Running tests](../README.md#running-tests) for the user-facing instructions on how to run the tests.
 
-All 604 tests pass. Here's what was added across the development passes:
+All 637 tests pass. Here's what was added across the development passes:
 
 `tests/test_commands_extended.py` (155 new tests) — covers all previously untested commands:
 
@@ -30,3 +30,12 @@ All 604 tests pass. Here's what was added across the development passes:
 - `file_to_document` — Markdown/HTML body shape, view-URL prefix override, unsupported-extension rejection
 - `/index.document --path` — synthesizes a `DocumentDefinition`, dry-run skips the API, directory-passed errors, missing-permissions errors, mutex with `--from-file`, mutex of `--public` and `--acl-from-file`
 - `/index.bulk-documents --path` — folder walk produces a paged `BulkIndexDocumentsRequest`, `--include` filtering, dry-run, backward compat with `--from-file`
+
+`tests/test_commands_extended.py` and `tests/test_client_extended.py` (33 new tests) — covers the Custom Metadata API surface:
+
+- `GleanClient` methods `set_metadata_schema`, `get_metadata_schema`, `delete_metadata_schema`, `attach_metadata`, `detach_metadata` — correct HTTP methods (PUT/GET/DELETE), correct paths under `/rest/api/index`, body shape, indexing-token requirement
+- `_mock_indexing_response` for `/custom-metadata/schema/{group}` (schema-shaped GET, ack-style PUT/DELETE) and `/document/{docId}/custom-metadata/{group}` (ack-style PUT/DELETE)
+- `/metadata.set-schema` — required `--group`, mutual exclusion of `--from-file` and `--keys`, inline-key parsing (`name:TYPE[:skip]`), invalid-type rejection, `--dry-run` skip, no-token error, file-list-form parsing
+- `/metadata.get-schema`, `/metadata.delete-schema` — required `--group`, no-token error, correct client-method invocation
+- `/metadata.attach` — required `--doc-id` and `--group`, mutual exclusion of `--from-file` and `--values`, inline-value parsing, malformed-value rejection, `--dry-run` skip, no-token error
+- `/metadata.detach` — required flags, no-token error, correct client-method invocation

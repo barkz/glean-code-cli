@@ -98,19 +98,27 @@ class GleanClient:
         }
 
     def _indexing_post(self, path: str, body: Dict[str, Any]) -> Dict[str, Any]:
+        return self._indexing_request("POST", self.config.effective_indexing_base_url, path, body)
+
+    def _indexing_request(
+        self,
+        method: str,
+        base: Optional[str],
+        path: str,
+        body: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         if not self.config.effective_indexing_token:
             raise GleanError(
                 "No indexing token set. Add one with: /config set indexing_token <token-or-secure-ref>"
             )
         if self.config.effective_mode == "mock":
-            return _mock_indexing_response(path, body)
-        base = self.config.effective_indexing_base_url
+            return _mock_indexing_response(path, body or {}, method=method)
         if not base:
             raise GleanError("No instance configured for indexing API calls.")
         url = f"{base}{path}"
-        data = json.dumps(body).encode("utf-8")
+        data = json.dumps(body).encode("utf-8") if body is not None else None
         req = urllib.request.Request(
-            url, data=data, headers=self._indexing_headers(), method="POST"
+            url, data=data, headers=self._indexing_headers(), method=method
         )
         try:
             with urllib.request.urlopen(req, timeout=60) as resp:
@@ -276,6 +284,42 @@ class GleanClient:
 
     def process_all_employees_teams(self) -> Dict[str, Any]:
         return self._indexing_post("/processallemployeesandteams", {})
+
+    # ---------------- custom metadata API ----------------
+
+    def set_metadata_schema(self, group: str,
+                            metadata_keys: List[Dict[str, Any]]) -> Dict[str, Any]:
+        return self._indexing_request(
+            "PUT", self.config.effective_metadata_base_url,
+            f"/custom-metadata/schema/{group}",
+            {"metadataKeys": metadata_keys},
+        )
+
+    def get_metadata_schema(self, group: str) -> Dict[str, Any]:
+        return self._indexing_request(
+            "GET", self.config.effective_metadata_base_url,
+            f"/custom-metadata/schema/{group}",
+        )
+
+    def delete_metadata_schema(self, group: str) -> Dict[str, Any]:
+        return self._indexing_request(
+            "DELETE", self.config.effective_metadata_base_url,
+            f"/custom-metadata/schema/{group}",
+        )
+
+    def attach_metadata(self, doc_id: str, group: str,
+                        custom_metadata: List[Dict[str, Any]]) -> Dict[str, Any]:
+        return self._indexing_request(
+            "PUT", self.config.effective_metadata_base_url,
+            f"/document/{doc_id}/custom-metadata/{group}",
+            {"customMetadata": custom_metadata},
+        )
+
+    def detach_metadata(self, doc_id: str, group: str) -> Dict[str, Any]:
+        return self._indexing_request(
+            "DELETE", self.config.effective_metadata_base_url,
+            f"/document/{doc_id}/custom-metadata/{group}",
+        )
 
     # ---------------- chat ----------------
 
@@ -792,7 +836,8 @@ def _mock_response(path: str, body: Dict[str, Any]) -> Dict[str, Any]:
     return {"mock": True, "path": path, "body": body}
 
 
-def _mock_indexing_response(path: str, body: Dict[str, Any]) -> Dict[str, Any]:
+def _mock_indexing_response(path: str, body: Dict[str, Any],
+                            method: str = "POST") -> Dict[str, Any]:
     time.sleep(0.15)
     now = int(time.time())
 
@@ -855,6 +900,23 @@ def _mock_indexing_response(path: str, body: Dict[str, Any]) -> Dict[str, Any]:
         return {"userCount": 980}
     if path == "/checkdocumentaccess":
         return {"hasAccess": True}
+
+    # ---- custom metadata API ----
+    if path.startswith("/custom-metadata/schema/"):
+        group = path.rsplit("/", 1)[-1]
+        if method == "GET":
+            return {"group": group,
+                    "metadataKeys": [
+                        {"name": "department", "propertyType": "PICKLIST"},
+                        {"name": "region",     "propertyType": "TEXT"},
+                    ]}
+        keys = body.get("metadataKeys") or []
+        return {"status": "ACCEPTED", "group": group,
+                "metadataKeysAccepted": len(keys)}
+    if path.startswith("/document/") and "/custom-metadata/" in path:
+        items = body.get("customMetadata") or []
+        return {"status": "ACCEPTED",
+                "metadataAccepted": len(items)}
 
     # ---- write / bulk / process — ack-style ----
     if path.startswith("/bulkindex") or path == "/uploadshortcuts":

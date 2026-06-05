@@ -1780,6 +1780,97 @@ Report a document view or edit event. Helps Glean improve search ranking and rec
 
 ---
 
+### Custom Metadata
+
+The Custom Metadata API lets you attach independent structured metadata to any document already indexed in Glean — across native connectors, custom datasources, anything — without re-uploading the document. These commands hit `https://<host>/rest/api/index` and reuse the `indexing_token` configured via `/config set indexing_token`. The token must be scoped with `custommetadata:<group_name>` or `custommetadata:global_scope`.
+
+---
+
+#### /metadata.set-schema
+
+Create or update the schema for a metadata group. The schema declares which keys are allowed and what type each one holds (`TEXT`, `PICKLIST`, `TEXTLIST`, or `MULTIPICKLIST`).
+
+```text
+/metadata.set-schema --group <name> (--from-file <schema.json> | --keys name:TYPE[,name2:TYPE2]) [--dry-run]
+```
+
+| Parameter | Description |
+| --- | --- |
+| `--group` | Metadata group name (alphanumeric). |
+| `--from-file` | JSON file: a list of metadata-key dicts or `{"metadataKeys": [...]}`. |
+| `--keys` | Inline keys: comma-separated `name:TYPE[:skip]` entries. |
+| `--dry-run` | Print the assembled body and exit. |
+
+```text
+/metadata.set-schema --group hr --keys department:PICKLIST,region:TEXT
+/metadata.set-schema --group hr --from-file ./hr-schema.json
+```
+
+**Endpoint** — `PUT /rest/api/index/custom-metadata/schema/{groupName}`
+
+---
+
+#### /metadata.get-schema
+
+Fetch the current schema for a metadata group.
+
+```text
+/metadata.get-schema --group <name>
+```
+
+**Endpoint** — `GET /rest/api/index/custom-metadata/schema/{groupName}`
+
+---
+
+#### /metadata.delete-schema
+
+Delete a group's schema.
+
+```text
+/metadata.delete-schema --group <name>
+```
+
+**Endpoint** — `DELETE /rest/api/index/custom-metadata/schema/{groupName}`
+
+---
+
+#### /metadata.attach
+
+Attach (or replace) custom metadata on an indexed document. **Note:** this is a PUT — it replaces the full set of metadata for the `(docId, group)` pair, so include every key you want preserved.
+
+```text
+/metadata.attach --doc-id <id> --group <name> (--from-file <pairs.json> | --values name=value[,name=value]) [--dry-run]
+```
+
+| Parameter | Description |
+| --- | --- |
+| `--doc-id` | Glean document id (from `/docs.get` or search). |
+| `--group` | Metadata group name. |
+| `--from-file` | JSON file: a list of `{name, value}` entries or `{"customMetadata": [...]}`. Required for `TEXTLIST`/`MULTIPICKLIST` array values. |
+| `--values` | Inline string values: `name=value,name2=value2`. `TEXT`/`PICKLIST` only. |
+| `--dry-run` | Print the assembled body and exit. |
+
+```text
+/metadata.attach --doc-id ABC --group hr --values department=Engineering,region=US
+/metadata.attach --doc-id ABC --group hr --from-file ./pairs.json
+```
+
+**Endpoint** — `PUT /rest/api/index/document/{docId}/custom-metadata/{groupName}`
+
+---
+
+#### /metadata.detach
+
+Remove all custom metadata for a `(document, group)` pair.
+
+```text
+/metadata.detach --doc-id <id> --group <name>
+```
+
+**Endpoint** — `DELETE /rest/api/index/document/{docId}/custom-metadata/{groupName}`
+
+---
+
 ### Scaffold
 
 ---

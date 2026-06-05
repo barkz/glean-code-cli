@@ -1017,5 +1017,185 @@ class TestSessionRefreshClient(unittest.TestCase):
         self.assertIs(s.client.config, s.config)
 
 
+# ---- /metadata.* (custom metadata API) ----
+
+class TestCmdMetadataSetSchema(unittest.TestCase):
+    def test_requires_group(self):
+        s = _sess()
+        out = _output(HANDLERS["metadata.set-schema"], s, [],
+                      {"keys": "name:TEXT"})
+        self.assertIn("Usage", out)
+
+    def test_requires_keys_or_from_file(self):
+        s = _sess(indexing_token="t")
+        out = _output(HANDLERS["metadata.set-schema"], s, [], {"group": "hr"})
+        self.assertIn("--from-file", out)
+
+    def test_from_file_and_keys_mutually_exclusive(self):
+        s = _sess(indexing_token="t")
+        out = _output(HANDLERS["metadata.set-schema"], s, [],
+                      {"group": "hr", "keys": "name:TEXT", "from-file": "x.json"})
+        self.assertIn("mutually exclusive", out)
+
+    def test_inline_keys_invalid_type(self):
+        s = _sess(indexing_token="t")
+        out = _output(HANDLERS["metadata.set-schema"], s, [],
+                      {"group": "hr", "keys": "name:NUMERIC"})
+        self.assertIn("propertyType", out)
+
+    def test_inline_keys_happy(self):
+        s = _sess(indexing_token="t")
+        s.client.set_metadata_schema.return_value = {"status": "ACCEPTED"}
+        out = _output(HANDLERS["metadata.set-schema"], s, [],
+                      {"group": "hr", "keys": "department:PICKLIST,region:TEXT"})
+        s.client.set_metadata_schema.assert_called_once()
+        args, _ = s.client.set_metadata_schema.call_args
+        self.assertEqual(args[0], "hr")
+        self.assertEqual(args[1][0]["name"], "department")
+        self.assertEqual(args[1][0]["propertyType"], "PICKLIST")
+        self.assertEqual(args[1][1]["propertyType"], "TEXT")
+        self.assertIn("accepted", out)
+
+    def test_skip_indexing_flag_parsed(self):
+        s = _sess(indexing_token="t")
+        s.client.set_metadata_schema.return_value = {}
+        _output(HANDLERS["metadata.set-schema"], s, [],
+                {"group": "hr", "keys": "x:TEXT:skip"})
+        args, _ = s.client.set_metadata_schema.call_args
+        self.assertTrue(args[1][0]["skipIndexing"])
+
+    def test_dry_run_does_not_call_client(self):
+        s = _sess(indexing_token="t")
+        out = _output(HANDLERS["metadata.set-schema"], s, [],
+                      {"group": "hr", "keys": "x:TEXT", "dry-run": True})
+        s.client.set_metadata_schema.assert_not_called()
+        self.assertIn("metadataKeys", out)
+
+    def test_no_token(self):
+        s = _sess()
+        out = _output(HANDLERS["metadata.set-schema"], s, [],
+                      {"group": "hr", "keys": "x:TEXT"})
+        self.assertIn("No indexing token", out)
+
+    def test_from_file_list_form(self):
+        s = _sess(indexing_token="t")
+        s.client.set_metadata_schema.return_value = {}
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            f.write('[{"name":"k","propertyType":"TEXT"}]')
+            path = f.name
+        try:
+            _output(HANDLERS["metadata.set-schema"], s, [],
+                    {"group": "hr", "from-file": path})
+        finally:
+            Path(path).unlink()
+        args, _ = s.client.set_metadata_schema.call_args
+        self.assertEqual(args[1][0]["name"], "k")
+
+
+class TestCmdMetadataGetSchema(unittest.TestCase):
+    def test_requires_group(self):
+        s = _sess(indexing_token="t")
+        out = _output(HANDLERS["metadata.get-schema"], s, [], {})
+        self.assertIn("Usage", out)
+
+    def test_no_token(self):
+        s = _sess()
+        out = _output(HANDLERS["metadata.get-schema"], s, [], {"group": "hr"})
+        self.assertIn("No indexing token", out)
+
+    def test_calls_client_and_prints_json(self):
+        s = _sess(indexing_token="t")
+        s.client.get_metadata_schema.return_value = {"group": "hr", "metadataKeys": []}
+        out = _output(HANDLERS["metadata.get-schema"], s, [], {"group": "hr"})
+        s.client.get_metadata_schema.assert_called_once_with("hr")
+        self.assertIn("metadataKeys", out)
+
+
+class TestCmdMetadataDeleteSchema(unittest.TestCase):
+    def test_requires_group(self):
+        s = _sess(indexing_token="t")
+        out = _output(HANDLERS["metadata.delete-schema"], s, [], {})
+        self.assertIn("Usage", out)
+
+    def test_no_token(self):
+        s = _sess()
+        out = _output(HANDLERS["metadata.delete-schema"], s, [], {"group": "hr"})
+        self.assertIn("No indexing token", out)
+
+    def test_calls_client(self):
+        s = _sess(indexing_token="t")
+        s.client.delete_metadata_schema.return_value = {"status": "ACCEPTED"}
+        out = _output(HANDLERS["metadata.delete-schema"], s, [], {"group": "hr"})
+        s.client.delete_metadata_schema.assert_called_once_with("hr")
+        self.assertIn("deleted", out)
+
+
+class TestCmdMetadataAttach(unittest.TestCase):
+    def test_requires_doc_id_and_group(self):
+        s = _sess(indexing_token="t")
+        out = _output(HANDLERS["metadata.attach"], s, [], {"group": "hr"})
+        self.assertIn("Usage", out)
+
+    def test_requires_values_or_from_file(self):
+        s = _sess(indexing_token="t")
+        out = _output(HANDLERS["metadata.attach"], s, [],
+                      {"doc-id": "ABC", "group": "hr"})
+        self.assertIn("--from-file", out)
+
+    def test_inline_values_happy(self):
+        s = _sess(indexing_token="t")
+        s.client.attach_metadata.return_value = {"status": "ACCEPTED"}
+        out = _output(HANDLERS["metadata.attach"], s, [],
+                      {"doc-id": "ABC", "group": "hr",
+                       "values": "department=Engineering,region=US"})
+        args, _ = s.client.attach_metadata.call_args
+        self.assertEqual(args[0], "ABC")
+        self.assertEqual(args[1], "hr")
+        self.assertEqual(args[2][0]["name"], "department")
+        self.assertEqual(args[2][0]["value"], "Engineering")
+        self.assertIn("attached", out)
+
+    def test_inline_values_malformed(self):
+        s = _sess(indexing_token="t")
+        out = _output(HANDLERS["metadata.attach"], s, [],
+                      {"doc-id": "ABC", "group": "hr", "values": "noequals"})
+        self.assertIn("--values", out)
+
+    def test_dry_run_does_not_call_client(self):
+        s = _sess(indexing_token="t")
+        out = _output(HANDLERS["metadata.attach"], s, [],
+                      {"doc-id": "ABC", "group": "hr",
+                       "values": "k=v", "dry-run": True})
+        s.client.attach_metadata.assert_not_called()
+        self.assertIn("customMetadata", out)
+
+    def test_no_token(self):
+        s = _sess()
+        out = _output(HANDLERS["metadata.attach"], s, [],
+                      {"doc-id": "ABC", "group": "hr", "values": "k=v"})
+        self.assertIn("No indexing token", out)
+
+
+class TestCmdMetadataDetach(unittest.TestCase):
+    def test_requires_doc_id_and_group(self):
+        s = _sess(indexing_token="t")
+        out = _output(HANDLERS["metadata.detach"], s, [], {"doc-id": "ABC"})
+        self.assertIn("Usage", out)
+
+    def test_no_token(self):
+        s = _sess()
+        out = _output(HANDLERS["metadata.detach"], s, [],
+                      {"doc-id": "ABC", "group": "hr"})
+        self.assertIn("No indexing token", out)
+
+    def test_calls_client(self):
+        s = _sess(indexing_token="t")
+        s.client.detach_metadata.return_value = {"status": "ACCEPTED"}
+        out = _output(HANDLERS["metadata.detach"], s, [],
+                      {"doc-id": "ABC", "group": "hr"})
+        s.client.detach_metadata.assert_called_once_with("ABC", "hr")
+        self.assertIn("detached", out)
+
+
 if __name__ == "__main__":
     unittest.main()

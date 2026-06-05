@@ -14,6 +14,7 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 - [Natural-language planner](#natural-language-planner) · [full design notes](docs/NATURAL_LANGUAGE.md)
 - [Insights](#insights)
 - [Indexing API](#indexing-api)
+- [Custom Metadata API](#custom-metadata-api)
 - [Scaffold](#scaffold)
 - [Secure tokens](#secure-tokens)
 - [Config keys](#config-keys)
@@ -28,6 +29,7 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 
 - Slash commands covering every major Glean Client API surface: chat, search, agents, tools, docs, people, shortcuts (Go Links), answers, summarize, verification, messages, activity, announcements, collections, pins, and insights
 - **Near-complete Indexing API coverage** — 32 of 37 endpoints exposed as commands across read/debug, single-record write, bulk, and process-all tiers
+- **Custom Metadata API** — schema-management and document-attachment endpoints (`/metadata.set-schema`, `/metadata.get-schema`, `/metadata.delete-schema`, `/metadata.attach`, `/metadata.detach`) for enriching already-indexed documents without re-uploading them
 - Full in-terminal documentation for every command via `/help <command>`
 - Tab completion that cycles through matches as you type — press Tab to step forward, Shift+Tab to step back
 - Powerline-style status bar showing mode, connected instance, auth state, and active chat thread
@@ -44,7 +46,7 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 - Mock mode by default so you can try every command offline (now including the 30 new indexing commands); switches to live the moment you add credentials
 - `/insights --export <file>` dumps all returned metrics (overview, assistant, agents, datasource clicks) to a flat CSV — pipe it straight into Slack, Sheets, or any BI tool
 - Secure-ref token storage — store `token.secure.client` / `token.secure.indexing` in config and have the actual secret resolved from `$GLEAN_CLIENT_TOKEN` / `$GLEAN_INDEXING_TOKEN` at request time, with masking everywhere tokens are displayed
-- Test suite in `tests/` covering the client, config, UI, and indexing-walk layers — run with `python3 -m pytest tests/` (604 tests)
+- Test suite in `tests/` covering the client, config, UI, and indexing-walk layers — run with `python3 -m pytest tests/` (637 tests)
 
 ## Coming soon
 
@@ -158,6 +160,14 @@ Without a token the CLI runs in mock mode and returns realistic fake data. Set a
 - [`/people.bulk-teams`](docs/COMMANDS.md#peoplebulk-teams)
 - [`/people.index-employee-list`](docs/COMMANDS.md#peopleindex-employee-list)
 - [`/people.process-all-employees-teams`](docs/COMMANDS.md#peopleprocess-all-employees-teams)
+
+### Custom Metadata
+
+- [`/metadata.set-schema`](docs/COMMANDS.md#metadataset-schema)
+- [`/metadata.get-schema`](docs/COMMANDS.md#metadataget-schema)
+- [`/metadata.delete-schema`](docs/COMMANDS.md#metadatadelete-schema)
+- [`/metadata.attach`](docs/COMMANDS.md#metadataattach)
+- [`/metadata.detach`](docs/COMMANDS.md#metadatadetach)
 
 ### Insights & Activity
 
@@ -471,6 +481,61 @@ Trigger a tenant-wide reprocess after a bulk upload completes. These commands ac
 ### Mock mode for indexing
 
 All 32 indexing commands work in mock mode as long as an indexing token is set in config — it can be any non-empty string (e.g. `mock_idx_token`). The CLI returns realistic shapes (datasource configs, doc/user counts, debug payloads, accept-style write responses) so you can rehearse a workflow before pointing at a live tenant.
+
+---
+
+## Custom Metadata API
+
+Glean's Custom Metadata API lets you attach independent structured metadata to any document already indexed in Glean — across native connectors, custom datasources, anything — without re-uploading the document. These commands hit `https://<instance>-be.glean.com/rest/api/index` (note: a different base path than the rest of the Indexing API).
+
+The same `indexing_token` is reused; the token must carry one of:
+
+- `custommetadata:<group_name>` — limits access to a single named group
+- `custommetadata:global_scope` — manage schemas and metadata across any group
+
+Generate the token through your standard indexing-token workflow with the appropriate scope, then point Glean Code at it via `/config set indexing_token <token-or-secure-ref>`.
+
+### Schema management
+
+Define which keys a metadata group accepts and what type each one holds (`TEXT`, `PICKLIST`, `TEXTLIST`, or `MULTIPICKLIST`). Schemas are versioned per group and replace the previous schema on each set.
+
+| Command | Purpose |
+| --- | --- |
+| [`/metadata.set-schema`](docs/COMMANDS.md#metadataset-schema) | Create or update a group's schema (inline `--keys` or `--from-file`) |
+| [`/metadata.get-schema`](docs/COMMANDS.md#metadataget-schema) | Fetch the current schema for a group |
+| [`/metadata.delete-schema`](docs/COMMANDS.md#metadatadelete-schema) | Delete a group's schema |
+
+```text
+/metadata.set-schema --group hr --keys department:PICKLIST,region:TEXT
+/metadata.set-schema --group hr --from-file ./hr-schema.json --dry-run
+/metadata.get-schema --group hr
+/metadata.delete-schema --group hr
+```
+
+### Attaching metadata to documents
+
+Attach (or replace) a set of `(key, value)` pairs on an indexed document for a given group. The PUT semantic replaces the **full** set for the `(docId, group)` pair — include every key you want preserved.
+
+| Command | Purpose |
+| --- | --- |
+| [`/metadata.attach`](docs/COMMANDS.md#metadataattach) | Attach or replace custom metadata on a document (inline `--values` or `--from-file`) |
+| [`/metadata.detach`](docs/COMMANDS.md#metadatadetach) | Remove all custom metadata for a `(document, group)` pair |
+
+```text
+/metadata.attach --doc-id ABC --group hr --values department=Engineering,region=US
+/metadata.attach --doc-id ABC --group hr --from-file ./pairs.json
+/metadata.detach --doc-id ABC --group hr
+```
+
+Use `--from-file` whenever any value is a `TEXTLIST` or `MULTIPICKLIST` array — `--values` is for simple `TEXT`/`PICKLIST` strings only.
+
+### Querying
+
+Custom metadata becomes searchable as soon as it's indexed. Use the standard search facet syntax `<groupName><keyName>:<value>` and include `CUSTOM_METADATA` in `includeFields` on `/search` to surface it in results. See the [Glean docs](https://developers.glean.com/api-info/indexing/custom-metadata/overview) for full querying details.
+
+### Mock mode for custom metadata
+
+All five `/metadata.*` commands work in mock mode (with any non-empty `indexing_token` configured): set/get schema, attach, and detach return realistic ack-style or schema-shaped responses so you can rehearse the flow before pointing at a live tenant.
 
 ---
 
@@ -791,6 +856,19 @@ POST /api/index/v1/indexemployeelist
 POST /api/index/v1/processalldocuments
 POST /api/index/v1/processallmemberships
 POST /api/index/v1/processallemployeesandteams
+```
+
+Custom Metadata API paths (require an indexing token scoped with `custommetadata:<group>` or `custommetadata:global_scope`, base `https://<instance>-be.glean.com/rest/api/index`):
+
+```text
+# Schema management
+PUT    /rest/api/index/custom-metadata/schema/{groupName}
+GET    /rest/api/index/custom-metadata/schema/{groupName}
+DELETE /rest/api/index/custom-metadata/schema/{groupName}
+
+# Document metadata
+PUT    /rest/api/index/document/{docId}/custom-metadata/{groupName}
+DELETE /rest/api/index/document/{docId}/custom-metadata/{groupName}
 ```
 
 If your tenant uses a slightly different path for a given surface, change it in `glean_code/client.py`. Every method is a small wrapper around `self._post(path, body)` so the swap is a one-liner.

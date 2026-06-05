@@ -921,6 +921,70 @@ DOCS: Dict[str, CommandDoc] = {
         "examples": ["/people.process-all-employees-teams"],
         "endpoint": "POST /api/index/v1/processallemployeesandteams",
     },
+
+    # ---------------- Custom Metadata API ----------------
+    "metadata.set-schema": {
+        "summary": "Create or update a custom metadata schema for a group.",
+        "usage": "/metadata.set-schema --group <name> "
+                 "(--from-file <schema.json> | --keys name:TYPE[,name2:TYPE2]) [--dry-run]",
+        "params": [
+            ("--group",     "Metadata group name (alphanumeric)."),
+            ("--from-file", "JSON file: a list of metadata-key dicts or "
+                            "{\"metadataKeys\": [...]}."),
+            ("--keys",      "Inline keys: comma-separated 'name:TYPE[:skip]' entries. "
+                            "TYPE is TEXT | PICKLIST | TEXTLIST | MULTIPICKLIST."),
+            ("--dry-run",   "Print the assembled request body and exit without calling the API."),
+        ],
+        "examples": [
+            "/metadata.set-schema --group hr --keys department:PICKLIST,region:TEXT",
+            "/metadata.set-schema --group hr --from-file ./hr-schema.json",
+        ],
+        "endpoint": "PUT /rest/api/index/custom-metadata/schema/{groupName}",
+    },
+    "metadata.get-schema": {
+        "summary": "Fetch the current custom metadata schema for a group.",
+        "usage": "/metadata.get-schema --group <name>",
+        "params": [("--group", "Metadata group name.")],
+        "examples": ["/metadata.get-schema --group hr"],
+        "endpoint": "GET /rest/api/index/custom-metadata/schema/{groupName}",
+    },
+    "metadata.delete-schema": {
+        "summary": "Delete the custom metadata schema for a group.",
+        "usage": "/metadata.delete-schema --group <name>",
+        "params": [("--group", "Metadata group name.")],
+        "examples": ["/metadata.delete-schema --group hr"],
+        "endpoint": "DELETE /rest/api/index/custom-metadata/schema/{groupName}",
+    },
+    "metadata.attach": {
+        "summary": "Attach (or replace) custom metadata on an indexed document. "
+                   "PUT replaces the full set for the (docId, group) pair — include all keys.",
+        "usage": "/metadata.attach --doc-id <id> --group <name> "
+                 "(--from-file <pairs.json> | --values name=value[,name=value]) [--dry-run]",
+        "params": [
+            ("--doc-id",    "Glean document id (from /docs.get or search)."),
+            ("--group",     "Metadata group name."),
+            ("--from-file", "JSON file: a list of {name, value} entries or "
+                            "{\"customMetadata\": [...]}. Required for TEXTLIST/MULTIPICKLIST values."),
+            ("--values",    "Inline string values: 'name=value,name2=value2'. "
+                            "TEXT/PICKLIST only."),
+            ("--dry-run",   "Print the assembled request body and exit without calling the API."),
+        ],
+        "examples": [
+            "/metadata.attach --doc-id ABC --group hr --values department=Engineering,region=US",
+            "/metadata.attach --doc-id ABC --group hr --from-file ./pairs.json",
+        ],
+        "endpoint": "PUT /rest/api/index/document/{docId}/custom-metadata/{groupName}",
+    },
+    "metadata.detach": {
+        "summary": "Remove all custom metadata for a (document, group) pair.",
+        "usage": "/metadata.detach --doc-id <id> --group <name>",
+        "params": [
+            ("--doc-id", "Glean document id."),
+            ("--group",  "Metadata group name."),
+        ],
+        "examples": ["/metadata.detach --doc-id ABC --group hr"],
+        "endpoint": "DELETE /rest/api/index/document/{docId}/custom-metadata/{groupName}",
+    },
 }
 
 
@@ -953,6 +1017,8 @@ COMMAND_GROUPS: List[Tuple[str, List[str]]] = [
     ("Indexing — people", ["people.bulk-employees", "people.bulk-teams",
                             "people.index-employee-list",
                             "people.process-all-employees-teams"]),
+    ("Custom Metadata", ["metadata.set-schema", "metadata.get-schema", "metadata.delete-schema",
+                         "metadata.attach", "metadata.detach"]),
     ("Insights",       ["insights"]),
     ("Scaffold",       ["scaffold"]),
 ]

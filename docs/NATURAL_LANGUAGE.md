@@ -63,8 +63,9 @@ Only writes, deletes, and auth-changing commands trigger the `Run all? [y/N]` ga
 | Writes / deletes | ✅ Confirm | `/announcements.create`, `/answers.update`, `/pins.delete`, `/shortcuts.create`, `/verification.verify`, etc. |
 | Indexing single-record | ✅ Confirm | `/index.document`, `/index.delete-user`, `/index.permissions`, `/index.membership`, ... |
 | Indexing bulk + process-all | ✅ Confirm | `/index.bulk-documents`, `/people.bulk-employees`, `/index.process-all-documents`, `/people.process-all-employees-teams`, ... |
+| Custom metadata writes | ✅ Confirm | `/metadata.set-schema`, `/metadata.delete-schema`, `/metadata.attach`, `/metadata.detach` |
 | Local writes | ✅ Confirm | `/scaffold`, `/feedback` |
-| Pure reads | ❌ Auto | `/search`, `/chat`, `/status`, `/help`, `/datasources.list`, `/insights`, `/documents.status`, `/debug.*`, ... |
+| Pure reads | ❌ Auto | `/search`, `/chat`, `/status`, `/help`, `/datasources.list`, `/insights`, `/documents.status`, `/debug.*`, `/metadata.get-schema`, ... |
 | Config inspection | ❌ Auto | `/config list`, `/config get <key>` |
 
 The full destructive set lives in `_NL_DESTRUCTIVE` in [glean_code/commands.py](../glean_code/commands.py). Add to it whenever new mutating commands ship.

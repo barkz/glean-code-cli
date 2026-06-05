@@ -1362,6 +1362,195 @@ def cmd_process_all_employees_teams(s: Session, pos, flags):
     _print_kv_response(resp)
 
 
+# -------------------- custom metadata helpers --------------------
+
+_METADATA_PROPERTY_TYPES = {"TEXT", "PICKLIST", "TEXTLIST", "MULTIPICKLIST"}
+
+
+def _parse_inline_keys(spec: str) -> Optional[List[Dict[str, Any]]]:
+    """Parse `name:TYPE[:skip],name2:TYPE` into a list of metadata-key dicts."""
+    out: List[Dict[str, Any]] = []
+    for raw in spec.split(","):
+        item = raw.strip()
+        if not item:
+            continue
+        parts = item.split(":")
+        if len(parts) < 2 or len(parts) > 3:
+            ui.print_err(f"--keys entry not understood: {item!r} (want name:TYPE[:skip])")
+            return None
+        name, prop_type = parts[0].strip(), parts[1].strip().upper()
+        if prop_type not in _METADATA_PROPERTY_TYPES:
+            ui.print_err(
+                f"--keys: propertyType must be one of "
+                f"{sorted(_METADATA_PROPERTY_TYPES)}, got {parts[1]!r}"
+            )
+            return None
+        entry: Dict[str, Any] = {"name": name, "propertyType": prop_type}
+        if len(parts) == 3 and parts[2].strip().lower() in ("skip", "true", "1"):
+            entry["skipIndexing"] = True
+        out.append(entry)
+    return out
+
+
+def _parse_inline_values(spec: str) -> Optional[List[Dict[str, Any]]]:
+    """Parse `name=value,name2=value2` into a list of customMetadata entries (TEXT-style)."""
+    out: List[Dict[str, Any]] = []
+    for raw in spec.split(","):
+        item = raw.strip()
+        if not item:
+            continue
+        if "=" not in item:
+            ui.print_err(f"--values entry not understood: {item!r} (want name=value)")
+            return None
+        name, value = item.split("=", 1)
+        out.append({"name": name.strip(), "value": value.strip()})
+    return out
+
+
+@register("metadata.set-schema")
+def cmd_metadata_set_schema(s: Session, pos, flags):
+    group = flags.get("group")
+    if not group:
+        ui.print_err("Usage: /metadata.set-schema --group <name> "
+                     "(--from-file <schema.json> | --keys name:TYPE[,name2:TYPE2])")
+        return
+    body_path = flags.get("from-file") or flags.get("from_file")
+    keys_inline = flags.get("keys")
+    if body_path and keys_inline:
+        ui.print_err("--from-file and --keys are mutually exclusive")
+        return
+    if body_path:
+        loaded = _load_json_file(body_path)
+        if loaded is None:
+            return
+        if isinstance(loaded, dict) and "metadataKeys" in loaded:
+            metadata_keys = loaded["metadataKeys"]
+        elif isinstance(loaded, list):
+            metadata_keys = loaded
+        else:
+            ui.print_err("schema file must be a list or {\"metadataKeys\": [...]} object")
+            return
+    elif isinstance(keys_inline, str):
+        metadata_keys = _parse_inline_keys(keys_inline)
+        if metadata_keys is None:
+            return
+    else:
+        ui.print_err("Provide --from-file <schema.json> or --keys name:TYPE[,name2:TYPE2]")
+        return
+
+    if flags.get("dry-run") or flags.get("dry_run"):
+        print(json.dumps({"group": group, "metadataKeys": metadata_keys}, indent=2))
+        return
+    if not _require_indexing_token(s):
+        return
+    try:
+        resp = s.client.set_metadata_schema(group, metadata_keys)
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    ui.print_ok(f"schema accepted for group {group}")
+    _print_kv_response(resp)
+
+
+@register("metadata.get-schema")
+def cmd_metadata_get_schema(s: Session, pos, flags):
+    group = flags.get("group") or (pos[0] if pos else None)
+    if not group:
+        ui.print_err("Usage: /metadata.get-schema --group <name>")
+        return
+    if not _require_indexing_token(s):
+        return
+    try:
+        resp = s.client.get_metadata_schema(group)
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    print(json.dumps(resp, indent=2, ensure_ascii=False))
+
+
+@register("metadata.delete-schema")
+def cmd_metadata_delete_schema(s: Session, pos, flags):
+    group = flags.get("group") or (pos[0] if pos else None)
+    if not group:
+        ui.print_err("Usage: /metadata.delete-schema --group <name>")
+        return
+    if not _require_indexing_token(s):
+        return
+    try:
+        resp = s.client.delete_metadata_schema(group)
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    ui.print_ok(f"schema deleted for group {group}")
+    _print_kv_response(resp)
+
+
+@register("metadata.attach")
+def cmd_metadata_attach(s: Session, pos, flags):
+    doc_id = flags.get("doc-id") or flags.get("doc_id")
+    group  = flags.get("group")
+    if not (doc_id and group):
+        ui.print_err("Usage: /metadata.attach --doc-id <id> --group <name> "
+                     "(--from-file <pairs.json> | --values name=value[,name=value])")
+        return
+    body_path = flags.get("from-file") or flags.get("from_file")
+    values_inline = flags.get("values")
+    if body_path and values_inline:
+        ui.print_err("--from-file and --values are mutually exclusive")
+        return
+    if body_path:
+        loaded = _load_json_file(body_path)
+        if loaded is None:
+            return
+        if isinstance(loaded, dict) and "customMetadata" in loaded:
+            custom_metadata = loaded["customMetadata"]
+        elif isinstance(loaded, list):
+            custom_metadata = loaded
+        else:
+            ui.print_err("attach file must be a list or {\"customMetadata\": [...]} object")
+            return
+    elif isinstance(values_inline, str):
+        custom_metadata = _parse_inline_values(values_inline)
+        if custom_metadata is None:
+            return
+    else:
+        ui.print_err("Provide --from-file <pairs.json> or --values name=value[,name=value]")
+        return
+
+    if flags.get("dry-run") or flags.get("dry_run"):
+        print(json.dumps({"docId": doc_id, "group": group,
+                          "customMetadata": custom_metadata}, indent=2))
+        return
+    if not _require_indexing_token(s):
+        return
+    try:
+        resp = s.client.attach_metadata(doc_id, group, custom_metadata)
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    ui.print_ok(f"metadata attached to {doc_id} (group {group}) "
+                f"— note: PUT replaces the full set for this pair")
+    _print_kv_response(resp)
+
+
+@register("metadata.detach")
+def cmd_metadata_detach(s: Session, pos, flags):
+    doc_id = flags.get("doc-id") or flags.get("doc_id")
+    group  = flags.get("group")
+    if not (doc_id and group):
+        ui.print_err("Usage: /metadata.detach --doc-id <id> --group <name>")
+        return
+    if not _require_indexing_token(s):
+        return
+    try:
+        resp = s.client.detach_metadata(doc_id, group)
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+    ui.print_ok(f"metadata detached from {doc_id} (group {group})")
+    _print_kv_response(resp)
+
+
 @register("autocomplete")
 def cmd_autocomplete(s: Session, pos, flags):
     if not pos:
@@ -2165,6 +2354,9 @@ _NL_DESTRUCTIVE = {
     "index.process-all-documents", "index.process-all-memberships",
     "people.bulk-employees", "people.bulk-teams",
     "people.index-employee-list", "people.process-all-employees-teams",
+    # custom metadata API writes (get-schema is a pure read, not destructive)
+    "metadata.set-schema", "metadata.delete-schema",
+    "metadata.attach", "metadata.detach",
 }
 
 

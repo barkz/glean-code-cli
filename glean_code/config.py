@@ -92,6 +92,16 @@ class Config:
         return None
 
     @property
+    def effective_metadata_base_url(self) -> Optional[str]:
+        if self.instance:
+            host = self.instance.strip().rstrip("/")
+            if "://" in host:
+                host = host.split("://", 1)[1]
+            host = host.split("/", 1)[0]
+            return f"https://{host}/rest/api/index"
+        return None
+
+    @property
     def effective_api_token(self) -> Optional[str]:
         return resolve_secure(self.api_token)
 

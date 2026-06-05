@@ -502,5 +502,81 @@ class TestGleanClientNewMethods(unittest.TestCase):
         self.assertEqual(body["locale"], "en-US")
 
 
+class TestGleanClientCustomMetadata(unittest.TestCase):
+    def setUp(self):
+        self.client = GleanClient(Config(mode="mock", indexing_token="t"))
+
+    def test_set_metadata_schema_uses_put(self):
+        with patch("glean_code.client._mock_indexing_response") as mock_fn:
+            mock_fn.return_value = {"status": "ACCEPTED"}
+            self.client.set_metadata_schema(
+                "hr", [{"name": "department", "propertyType": "PICKLIST"}]
+            )
+        path = mock_fn.call_args[0][0]
+        body = mock_fn.call_args[0][1]
+        method = mock_fn.call_args.kwargs.get("method")
+        self.assertEqual(path, "/custom-metadata/schema/hr")
+        self.assertEqual(method, "PUT")
+        self.assertEqual(body["metadataKeys"][0]["name"], "department")
+
+    def test_get_metadata_schema_uses_get_no_body(self):
+        with patch("glean_code.client._mock_indexing_response") as mock_fn:
+            mock_fn.return_value = {"metadataKeys": []}
+            self.client.get_metadata_schema("hr")
+        self.assertEqual(mock_fn.call_args[0][0], "/custom-metadata/schema/hr")
+        self.assertEqual(mock_fn.call_args.kwargs.get("method"), "GET")
+        self.assertEqual(mock_fn.call_args[0][1], {})
+
+    def test_delete_metadata_schema_uses_delete(self):
+        with patch("glean_code.client._mock_indexing_response") as mock_fn:
+            mock_fn.return_value = {"status": "ACCEPTED"}
+            self.client.delete_metadata_schema("hr")
+        self.assertEqual(mock_fn.call_args[0][0], "/custom-metadata/schema/hr")
+        self.assertEqual(mock_fn.call_args.kwargs.get("method"), "DELETE")
+
+    def test_attach_metadata_uses_put_with_doc_path(self):
+        with patch("glean_code.client._mock_indexing_response") as mock_fn:
+            mock_fn.return_value = {"status": "ACCEPTED"}
+            self.client.attach_metadata(
+                "ABC", "hr", [{"name": "department", "value": "Eng"}]
+            )
+        self.assertEqual(mock_fn.call_args[0][0], "/document/ABC/custom-metadata/hr")
+        self.assertEqual(mock_fn.call_args.kwargs.get("method"), "PUT")
+        self.assertEqual(mock_fn.call_args[0][1]["customMetadata"][0]["value"], "Eng")
+
+    def test_detach_metadata_uses_delete(self):
+        with patch("glean_code.client._mock_indexing_response") as mock_fn:
+            mock_fn.return_value = {"status": "ACCEPTED"}
+            self.client.detach_metadata("ABC", "hr")
+        self.assertEqual(mock_fn.call_args[0][0], "/document/ABC/custom-metadata/hr")
+        self.assertEqual(mock_fn.call_args.kwargs.get("method"), "DELETE")
+
+    def test_metadata_methods_require_indexing_token(self):
+        from glean_code.client import GleanError as _GE
+        bare = GleanClient(Config(mode="mock"))
+        with self.assertRaises(_GE):
+            bare.set_metadata_schema("hr", [])
+
+    def test_mock_get_schema_returns_sample(self):
+        resp = self.client.get_metadata_schema("hr")
+        self.assertEqual(resp["group"], "hr")
+        self.assertTrue(any(k["name"] == "department" for k in resp["metadataKeys"]))
+
+    def test_mock_set_schema_acks(self):
+        resp = self.client.set_metadata_schema(
+            "hr", [{"name": "x", "propertyType": "TEXT"}]
+        )
+        self.assertEqual(resp["status"], "ACCEPTED")
+        self.assertEqual(resp["metadataKeysAccepted"], 1)
+
+    def test_mock_attach_acks_with_count(self):
+        resp = self.client.attach_metadata(
+            "ABC", "hr",
+            [{"name": "a", "value": "1"}, {"name": "b", "value": "2"}],
+        )
+        self.assertEqual(resp["status"], "ACCEPTED")
+        self.assertEqual(resp["metadataAccepted"], 2)
+
+
 if __name__ == "__main__":
     unittest.main()
