@@ -253,6 +253,17 @@ class TestMockResponse(unittest.TestCase):
 
 
 class TestGleanClientHeaders(unittest.TestCase):
+    def setUp(self):
+        # Do not pick up a real ~/.gleancode/auth.json when asserting api_token headers.
+        self._no_oauth = patch(
+            "glean_code.auth.token_store.load_tokens",
+            return_value=None,
+        )
+        self._no_oauth.start()
+
+    def tearDown(self):
+        self._no_oauth.stop()
+
     def test_content_type_always_set(self):
         h = GleanClient(Config())._headers()
         self.assertEqual(h["Content-Type"], "application/json")

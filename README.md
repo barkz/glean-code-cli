@@ -21,6 +21,7 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 - [Custom Metadata API](#custom-metadata-api)
 - [Scaffold](#scaffold)
 - [Secure tokens](#secure-tokens)
+- [Browser SSO (OAuth)](docs/SSO_OAUTH.md)
 - [Config keys](#config-keys)
 - [Project layout](#project-layout)
 - [MCP server](#mcp-server)
@@ -50,7 +51,8 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 - Mock mode by default so you can try every command offline (now including the 30 new indexing commands); switches to live the moment you add credentials
 - `/insights --export <file>` dumps all returned metrics (overview, assistant, agents, datasource clicks) to a flat CSV — pipe it straight into Slack, Sheets, or any BI tool
 - Secure-ref token storage — store `token.secure.client` / `token.secure.indexing` in config and have the actual secret resolved from `$GLEAN_CLIENT_TOKEN` / `$GLEAN_INDEXING_TOKEN` at request time, with masking everywhere tokens are displayed
-- Test suite in `tests/` covering the client, config, UI, and indexing-walk layers — run with `python3 -m pytest tests/` (637 tests)
+- **Browser SSO** — `/auth login` runs OAuth 2.1 authorization code + PKCE against your Glean instance (same SSO path as the web app). Access tokens live in `~/.gleancode/auth.json`; API calls use them automatically via `effective_api_token`. Indexing still uses a Glean-issued indexing token. See [docs/SSO_OAUTH.md](docs/SSO_OAUTH.md)
+- Test suite in `tests/` covering the client, config, UI, auth, and indexing-walk layers — run with `python3 -m pytest tests/` or `python3 -m unittest discover -s tests` (655 tests)
 
 ## Coming soon
 
