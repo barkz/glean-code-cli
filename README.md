@@ -87,6 +87,19 @@ alias glean="PYTHONPATH=<YOUR_PATH>/glean-code-cli python3 -m glean_code"
 
 ## First run
 
+**Browser SSO (no API token to paste)** — opens your browser for Glean → your company IdP, then stores OAuth tokens in `~/.gleancode/auth.json`:
+
+```text
+/auth login --instance acme-be.glean.com
+/status
+/search "quarterly planning"
+/chat "summarise the Q2 plan"
+```
+
+Details: [docs/SSO_OAUTH.md](docs/SSO_OAUTH.md).
+
+**API token** — paste a Glean-issued Client API token (same live API, different auth path):
+
 ```text
 /login --instance acme-be.glean.com --token <bearer_token>
 /status
@@ -94,7 +107,7 @@ alias glean="PYTHONPATH=<YOUR_PATH>/glean-code-cli python3 -m glean_code"
 /chat "summarise the Q2 plan"
 ```
 
-Without a token the CLI runs in mock mode and returns realistic fake data. Set a token with `/login` and it switches to live calls against `https://<instance>-be.glean.com/rest/api/v1`.
+Without Client API credentials (no `/auth` session and no `/login` token) the CLI runs in **mock** mode and returns realistic fake data. After `/auth login` or `/login`, it switches to live calls against `https://<instance>/rest/api/v1` (host is whatever you configure, e.g. `acme-be.glean.com`).
 
 ## Commands at a glance
 
@@ -103,6 +116,7 @@ Without a token the CLI runs in mock mode and returns realistic fake data. Set a
 - [`/help`](docs/COMMANDS.md#help)
 - [`/status`](docs/COMMANDS.md#status)
 - [`/doctor`](docs/COMMANDS.md#doctor)
+- [`/auth`](docs/SSO_OAUTH.md) — browser OAuth (PKCE) SSO
 - [`/login`](docs/COMMANDS.md#login)
 - [`/logout`](docs/COMMANDS.md#logout)
 - [`/open`](docs/COMMANDS.md#open)
