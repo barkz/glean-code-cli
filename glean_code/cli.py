@@ -7,6 +7,8 @@ from . import __version__, ui
 from .commands import Session, dispatch
 from .completion import setup_readline
 from .config import Config
+# Importing auth_commands registers the `/auth` command (browser/SSO login).
+from . import auth_commands  # noqa: F401
 
 
 def main() -> None:
@@ -16,7 +18,7 @@ def main() -> None:
     print(ui.render_getting_started(
         __version__,
         config.effective_mode,
-        has_token=bool(config.api_token),
+        has_token=config.is_live_ready,
         instance=config.instance,
     ))
 
@@ -33,7 +35,7 @@ def main() -> None:
             bar = ui.status_bar(
                 mode=config.effective_mode,
                 instance=config.instance,
-                has_token=bool(config.api_token),
+                has_token=config.is_live_ready,
                 act_as=config.act_as,
                 chat_id=session.current_chat_id,
             )

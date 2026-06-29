@@ -989,7 +989,7 @@ DOCS: Dict[str, CommandDoc] = {
 
 
 COMMAND_GROUPS: List[Tuple[str, List[str]]] = [
-    ("Shell",          ["help", "status", "doctor", "login", "logout", "open", "ask", "config", "mode", "history", "clear", "exit"]),
+    ("Shell",          ["help", "status", "doctor", "login", "auth", "logout", "open", "ask", "config", "mode", "history", "clear", "exit"]),
     ("Chat & Search",  ["chat", "search", "datasources.list", "datasources.status", "autocomplete", "recommendations", "feedback"]),
     ("Agents & Tools", ["agents.list", "agents.run", "tools.list", "tools.call"]),
     ("Docs & People",  ["docs.get", "docs.permissions", "entities.list", "people.get"]),

@@ -177,6 +177,16 @@ class TestConfigEffectiveIndexingBaseUrl(unittest.TestCase):
 
 
 class TestConfigIsLiveReady(unittest.TestCase):
+    def setUp(self):
+        self._no_oauth = patch(
+            "glean_code.auth.token_store.load_tokens",
+            return_value=None,
+        )
+        self._no_oauth.start()
+
+    def tearDown(self):
+        self._no_oauth.stop()
+
     def test_ready_with_token_and_instance(self):
         c = Config(instance="acme-be.glean.com", api_token="tok")
         self.assertTrue(c.is_live_ready)
@@ -196,6 +206,16 @@ class TestConfigIsLiveReady(unittest.TestCase):
 
 
 class TestConfigEffectiveMode(unittest.TestCase):
+    def setUp(self):
+        self._no_oauth = patch(
+            "glean_code.auth.token_store.load_tokens",
+            return_value=None,
+        )
+        self._no_oauth.start()
+
+    def tearDown(self):
+        self._no_oauth.stop()
+
     def test_explicit_live_stays_live(self):
         self.assertEqual(Config(mode="live").effective_mode, "live")
 

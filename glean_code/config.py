@@ -47,6 +47,17 @@ class Config:
     default_page_size: int = 10
     history: list = field(default_factory=list)
 
+    # ---- Interactive OAuth (SSO) settings ----
+    # client_id is optional: if the tenant supports Dynamic Client Registration
+    # it is filled in automatically on first `/auth login`. The tokens
+    # themselves are NEVER stored here; they live in ~/.gleancode/auth.json.
+    oauth_client_id: Optional[str] = None
+    oauth_scopes: Optional[str] = None            # space-separated; falls back to a default set
+    redirect_port: Optional[int] = None           # fixed localhost callback port (optional)
+    oauth_authorize_url: Optional[str] = None      # override; else discovered from the tenant
+    oauth_token_url: Optional[str] = None          # override; else discovered from the tenant
+    oauth_registration_url: Optional[str] = None   # override; else discovered from the tenant
+
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
@@ -103,10 +114,23 @@ class Config:
 
     @property
     def effective_api_token(self) -> Optional[str]:
+        # Prefer interactive OAuth (SSO) tokens when the user has signed in via
+        # `/auth login`. These live in auth.json and are refreshed on demand.
+        # This single hook is why every existing command works against live
+        # Glean after OAuth login with no other code changes.
+        try:
+            from .auth.manager import AuthManager
+            token = AuthManager(self).current_access_token()
+            if token:
+                return token
+        except Exception:
+            # Never let an auth issue break basic config behaviour.
+            pass
         return resolve_secure(self.api_token)
 
     @property
     def effective_indexing_token(self) -> Optional[str]:
+        # Indexing API does not accept OAuth; it always uses a Glean-issued token.
         return resolve_secure(self.indexing_token)
 
     @property
