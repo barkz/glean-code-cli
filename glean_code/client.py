@@ -40,6 +40,7 @@ try:
 except Exception:  # pragma: no cover
     urllib = None  # type: ignore
 
+from . import mock_corpus
 from .config import Config
 
 
@@ -67,7 +68,11 @@ class GleanClient:
 
     def _post(self, path: str, body: Dict[str, Any]) -> Dict[str, Any]:
         if self.config.effective_mode == "mock":
-            return _mock_response(path, body)
+            mock_corpus.use_path(self.config.mock_corpus_path)
+            try:
+                return _mock_response(path, body)
+            except mock_corpus.CorpusError as e:
+                raise GleanError(str(e)) from None
 
         base = self.config.effective_base_url
         if not base:
@@ -624,60 +629,62 @@ class GleanClient:
 
 # -------------------- mocks --------------------
 
+def _mock_datasource_filter(body: Dict[str, Any]) -> Optional[str]:
+    """Read a datasource restriction off a search body, in either shape."""
+    opts = body.get("requestOptions") or {}
+    ds = opts.get("datasourceFilter")
+    if isinstance(ds, str) and ds:
+        return ds
+    for f in (opts.get("facetFilters") or []):
+        if f.get("fieldName") != "datasource":
+            continue
+        for v in (f.get("values") or []):
+            value = v.get("value") if isinstance(v, dict) else v
+            if value:
+                return str(value)
+    return None
+
+
 def _mock_response(path: str, body: Dict[str, Any]) -> Dict[str, Any]:
     time.sleep(0.25)  # feel of a network call
     if path == "/chat":
         q = body["messages"][-1]["fragments"][0]["text"]
+        cites = mock_corpus.citations(q, 3)
+        titles = ", ".join(c["sourceDocument"]["title"] for c in cites)
         return {
             "chatId": body.get("chatId") or f"chat_{uuid.uuid4().hex[:8]}",
             "messages": [{
                 "author": "GLEAN_AI",
                 "messageType": "CONTENT",
                 "fragments": [{"text":
-                    f"[mock] You asked: {q}\n\nHere is a simulated answer. Configure "
-                    f"a real token with /login to hit live Glean."}],
-                "citations": [
-                    {"sourceDocument": {"title": "Onboarding Guide",
-                                         "url": "https://example.com/onboarding"}},
-                    {"sourceDocument": {"title": "Q2 Planning Doc",
-                                         "url": "https://example.com/q2"}},
-                ],
+                    f"[mock] You asked: {q}\n\n"
+                    f"Drawing on {len(cites)} documents from the {mock_corpus.COMPANY} index "
+                    f"({titles}), here is a simulated answer. Configure a real token with "
+                    f"/login — or sign in with /auth login — to hit live Glean."}],
+                "citations": cites,
             }],
         }
     if path == "/search":
         q = body.get("query", "")
         n = body.get("pageSize", 10)
+        datasource = _mock_datasource_filter(body)
         wants_facets = "datasource" in (
             (body.get("requestOptions") or {}).get("facets") or []
         )
-        mock_sources = ["gdrive", "slack", "confluence", "jira", "github"]
-        results = [{
-            "title": f"Mock result {i+1} for '{q}'",
-            "url": f"https://example.com/doc/{i+1}",
-            "snippets": [{"text": f"...matching snippet about {q}..."}],
-            "datasource": mock_sources[i % len(mock_sources)],
-            "trackingToken": f"tok_{i}",
-        } for i in range(min(n, 10))]
-        resp = {"results": results}
+        resp: Dict[str, Any] = {
+            "results": mock_corpus.search(q, page_size=n, datasource=datasource)
+        }
         if wants_facets:
             resp["facetResults"] = [{
                 "sourceName": "datasource",
-                "buckets": [
-                    {"value": "gdrive",     "count": 842},
-                    {"value": "slack",      "count": 611},
-                    {"value": "confluence", "count": 304},
-                    {"value": "jira",       "count": 187},
-                    {"value": "github",     "count": 96},
-                ],
+                "buckets": mock_corpus.facet_buckets(datasource),
             }]
         return resp
     if path == "/autocomplete":
         q = body.get("query", "")
-        return {"results": [{"suggestion": f"{q} report"},
-                            {"suggestion": f"{q} metrics"},
-                            {"suggestion": f"{q} onboarding"}]}
+        return {"results": [{"suggestion": s} for s in mock_corpus.suggestions(q, 3)]}
     if path == "/recommendations":
-        return {"results": [{"title": "Weekly digest", "url": "https://example.com/digest"}]}
+        return {"results": mock_corpus.search("*", page_size=5)}
     if path == "/feedback":
         return {"status": "ok"}
     if path == "/agents/search":
@@ -701,20 +708,31 @@ def _mock_response(path: str, body: Dict[str, Any]) -> Dict[str, Any]:
                 "output": f"[mock tool {body.get('name')}] args={body.get('arguments')}"}
     if path == "/getdocuments":
         specs = body.get("documentSpecs", [])
-        return {"documents": [{"id": s.get("id") or s.get("url"),
-                                 "title": "Mock document",
-                                 "url": s.get("url", "https://example.com")}
-                                for s in specs]}
+        docs = []
+        for s in specs:
+            hit = mock_corpus.find(s)
+            if hit:
+                docs.append(mock_corpus.as_document(hit))
+                continue
+            # Unknown id/url: echo it back so callers still get what they asked for.
+            docs.append({"id": s.get("id") or s.get("url"),
+                          "title": "Untitled document (not in the mock corpus)",
+                          "url": s.get("url", "https://example.com")})
+        return {"documents": docs}
     if path == "/getdocumentpermissions":
-        return {"permissions": [{"email": "alice@example.com", "role": "owner"}]}
+        doc = mock_corpus.find(body.get("documentSpec") or {})
+        owner = (doc or {}).get("author")
+        roster = mock_corpus.people(4)
+        perms = []
+        if owner:
+            perms.append({"email": owner, "role": "owner"})
+        perms += [{"email": p["email"], "role": "viewer"}
+                  for p in roster if p["email"] != owner]
+        return {"permissions": perms}
     if path == "/listentities":
-        return {"results": [
-            {"name": "Alice Example", "email": "alice@example.com", "title": "Engineer"},
-            {"name": "Bev Example",   "email": "bev@example.com",   "title": "PM"},
-        ]}
+        return {"results": mock_corpus.people(int(body.get("pageSize") or 10))}
     if path == "/people":
-        return {"name": "Alice Example", "email": body.get("email"),
-                "title": "Engineer", "department": "Platform"}
+        return mock_corpus.person(body.get("email"))
     if path == "/announcements/list":
         return {"announcements": [{"id": "ann_1", "title": "Welcome to Glean"}]}
     if path == "/announcements/create":
@@ -722,7 +740,11 @@ def _mock_response(path: str, body: Dict[str, Any]) -> Dict[str, Any]:
     if path == "/announcements/delete":
         return {"id": body.get("id"), "status": "deleted"}
     if path == "/listcollections":
-        return {"collections": [{"id": "col_1", "name": "Onboarding"}]}
+        return {"collections": [
+            {"id": "col_1", "name": "Quarterly Planning", "itemCount": 6},
+            {"id": "col_2", "name": "On-Call and Incidents", "itemCount": 5},
+            {"id": "col_3", "name": "New Engineer Onboarding", "itemCount": 4},
+        ]}
     if path == "/createcollection":
         return {"id": f"col_{uuid.uuid4().hex[:6]}", "name": body.get("name")}
     if path == "/listpins":
@@ -782,26 +804,38 @@ def _mock_response(path: str, body: Dict[str, Any]) -> Dict[str, Any]:
     if path == "/summarize":
         spec = body.get("documentSpec", {})
         src = spec.get("url") or spec.get("id") or "the document"
+        doc = mock_corpus.find(spec)
+        if doc:
+            return {"summary": f"[mock] {mock_corpus.summarize(doc)}"}
         return {"summary": f"[mock] This is a summary of {src}. "
                            "Configure a real token with /login to get a live summary."}
     if path == "/listverifications":
-        return {"verifications": [
-            {"documentId": "doc_123", "title": "Q2 Planning Doc",
-             "url": "https://example.com/q2", "lastVerifiedTs": None,
-             "status": "UNVERIFIED"},
-            {"documentId": "doc_456", "title": "Onboarding Guide",
-             "url": "https://example.com/onboarding",
-             "lastVerifiedTs": int(time.time()) - 86400 * 30,
-             "status": "VERIFIED"},
-        ]}
+        # Alternate verified / unverified over the freshest corpus documents.
+        out = []
+        for i, r in enumerate(mock_corpus.search("*", page_size=6)):
+            verified = i % 2 == 1
+            out.append({
+                "documentId": r["id"],
+                "title": r["title"],
+                "url": r["url"],
+                "datasource": r["datasource"],
+                "lastVerifiedTs": (int(time.time()) - 86400 * 30) if verified else None,
+                "status": "VERIFIED" if verified else "UNVERIFIED",
+            })
+        return {"verifications": out}
     if path == "/verify":
         return {"documentId": body.get("documentId"), "status": "VERIFIED"}
     if path == "/addverificationreminder":
         return {"documentId": body.get("documentId"), "status": "reminder_set"}
     if path == "/messages":
+        thread = mock_corpus.rank("thread", datasource="slack")
         return {"messages": [
-            {"id": body.get("id"), "text": "[mock] Message content from thread.",
-             "author": "alice@example.com", "timestampMillis": int(time.time() * 1000)}
+            {"id": body.get("id") or d["id"],
+             "text": mock_corpus.expand(d["body"]),
+             "channel": d.get("container", ""),
+             "author": d.get("author", ""),
+             "timestampMillis": (int(time.time()) - 86400 * int(d.get("updated_days_ago", 0))) * 1000}
+            for d in thread[:3]
         ]}
     if path == "/activity":
         return {"status": "ok", "processed": len(body.get("events", []))}

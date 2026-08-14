@@ -25,7 +25,7 @@ _FLAG_VALUES: Dict[str, List[str]] = {
 
 _CONFIG_KEYS = [
     "instance", "api_token", "indexing_token", "act_as", "base_url",
-    "mode", "theme", "default_page_size",
+    "mode", "theme", "default_page_size", "mock_corpus_path",
 ]
 
 _CONFIG_SUBCMDS = ["get", "set", "list"]

@@ -80,6 +80,11 @@ The natural-language planner works without a live Glean token. In mock mode the 
 
 This is enough to demo the UX (the confirm flow, the plan rendering, dispatch wiring) without burning a Glean call. Switch to live mode (`/login`) to use Glean as the actual planner.
 
+The steps the canned plan dispatches are ordinary commands, so they hit the same mock
+endpoints everything else does. A `/search` or `/chat` step returns ranked documents from the
+[mock corpus](MOCK_CORPUS.md) — the plan demo ends on real-looking results rather than
+placeholder rows.
+
 ## Token-leak avoidance
 
 The planner never sends your real token to Glean. Two protections:

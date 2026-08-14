@@ -23,6 +23,7 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 - [Secure tokens](#secure-tokens)
 - [Browser SSO (OAuth)](docs/SSO_OAUTH.md)
 - [Config keys](#config-keys)
+- [Mock corpus](#mock-corpus) · [full corpus reference](docs/MOCK_CORPUS.md) — the faux datasources and documents behind offline mode
 - [Project layout](#project-layout)
 - [MCP server](#mcp-server)
 - [Running tests](#running-tests) · [Test Harness notes](docs/TESTING.md)
@@ -49,10 +50,11 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 - MCP server (`glean_mcp.py`) for Claude Code, Claude Desktop, and Cursor
 - Config stored at `~/.gleancode/config.json` — supports both Client and Indexing API tokens
 - Mock mode by default so you can try every command offline (now including the 30 new indexing commands); switches to live the moment you add credentials
+- **A real mock corpus** — offline mode serves ranked results from 70 interlinked documents spread evenly across five faux datasources (`gdrive`, `confluence`, `jira`, `github`, `slack` — 14 each), so a URL from `/search` resolves in `/docs.get`, `/summarize`, and `/chat` citations. Swap in your own JSON corpus for a tailored demo. See [docs/MOCK_CORPUS.md](docs/MOCK_CORPUS.md)
 - `/insights --export <file>` dumps all returned metrics (overview, assistant, agents, datasource clicks) to a flat CSV — pipe it straight into Slack, Sheets, or any BI tool
 - Secure-ref token storage — store `token.secure.client` / `token.secure.indexing` in config and have the actual secret resolved from `$GLEAN_CLIENT_TOKEN` / `$GLEAN_INDEXING_TOKEN` at request time, with masking everywhere tokens are displayed
 - **Browser SSO** — `/auth login` runs OAuth 2.1 authorization code + PKCE against your Glean instance (same SSO path as the web app). Access tokens live in `~/.gleancode/auth.json`; API calls use them automatically via `effective_api_token`. Indexing still uses a Glean-issued indexing token. See [docs/SSO_OAUTH.md](docs/SSO_OAUTH.md)
-- Test suite in `tests/` covering the client, config, UI, auth, and indexing-walk layers — run with `python3 -m pytest tests/` or `python3 -m unittest discover -s tests` (655 tests)
+- Test suite in `tests/` covering the client, config, UI, auth, mock-corpus, and indexing-walk layers — run with `python3 -m pytest tests/` or `python3 -m unittest discover -s tests` (690 tests)
 
 ## Coming soon
 
@@ -107,7 +109,7 @@ Details: [docs/SSO_OAUTH.md](docs/SSO_OAUTH.md).
 /chat "summarise the Q2 plan"
 ```
 
-Without Client API credentials (no `/auth` session and no `/login` token) the CLI runs in **mock** mode and returns realistic fake data. After `/auth login` or `/login`, it switches to live calls against `https://<instance>/rest/api/v1` (host is whatever you configure, e.g. `acme-be.glean.com`).
+Without Client API credentials (no `/auth` session and no `/login` token) the CLI runs in **mock** mode, serving ranked results from a built-in fake corpus (see [Mock corpus](#mock-corpus)). After `/auth login` or `/login`, it switches to live calls against `https://<instance>/rest/api/v1` (host is whatever you configure, e.g. `acme-be.glean.com`).
 
 ## Commands at a glance
 
@@ -301,7 +303,7 @@ Pure reads (`/search`, `/status`, `/datasources.list`, `/insights`, `/help`, ...
 
 ### Mock mode
 
-`/ask` works offline — in mock mode the CLI pattern-matches your prompt locally and emits a canned plan instead of calling Glean. Useful for demos and tests.
+`/ask` works offline — in mock mode the CLI pattern-matches your prompt locally and emits a canned plan instead of calling Glean. Useful for demos and tests. The commands the plan dispatches then run against the [mock corpus](#mock-corpus), so an offline `?search for the quarterly plan` returns real-looking documents.
 
 ### Tokens never leave the local process
 
@@ -636,7 +638,7 @@ You can use either form for either token. A literal is fine if you're testing lo
 
 ### Falling back to mock mode
 
-If a secure ref is configured but the env var is unset, Glean Code's `is_live_ready` check returns false and `/mode auto` resolves to `mock`. You'll see realistic fake data instead of an unauthenticated 401 — handy for demos.
+If a secure ref is configured but the env var is unset, Glean Code's `is_live_ready` check returns false and `/mode auto` resolves to `mock`. You'll see ranked results from the [mock corpus](#mock-corpus) instead of an unauthenticated 401 — handy for demos.
 
 ## Config keys
 
@@ -650,8 +652,84 @@ If a secure ref is configured but the env var is unset, Glean Code's `is_live_re
 | `mode` | API mode | `auto` (default), `live`, `mock` |
 | `theme` | Terminal colour theme | `glean` (default), `mono`, `neon` |
 | `default_page_size` | Default result count for search and entities | Integer, default `10` |
+| `mock_corpus_path` | JSON file backing mock mode | Path; unset uses the built-in corpus (see [Mock corpus](#mock-corpus)) |
 
 Change any key with `/config set <key> <value>`. Use `/mode live|mock|auto` to force a mode without editing config.
+
+## Mock corpus
+
+Mock mode is backed by a single fake corpus — seventy documents belonging to one
+fictional company (Acme), spread evenly across five faux datasources, fourteen each. Full
+reference, including the complete document inventory and the people roster:
+**[docs/MOCK_CORPUS.md](docs/MOCK_CORPUS.md)**.
+
+| Datasource | Docs | What lives there |
+| --- | --- | --- |
+| `gdrive` | 14 | Planning charters, trackers, policies, decks, budget models, research, meeting notes |
+| `confluence` | 14 | Handbook pages, runbooks, postmortems, onboarding, process docs, compliance matrices |
+| `jira` | 14 | Epics, stories, bugs, incidents, security and support tickets |
+| `github` | 14 | Pull requests and repository files across five repos |
+| `slack` | 14 | Channel threads — kickoffs, war rooms, rollouts, announcements |
+
+Because every mock endpoint reads from the same corpus, offline mode behaves like one
+coherent index rather than a pile of placeholders — a URL from `/search` resolves
+everywhere else:
+
+```text
+/search "quarterly planning"                 # ranked against the corpus
+/search "checkout incident" --datasource jira   # the datasource filter really filters
+/summarize --url <url from result 2>         # summarises that same document
+/docs.get --url <url from result 2>          # same title, author and datasource
+/docs.permissions doc_plan_process           # the author is the owner
+/chat "how do we run quarterly planning?"    # cites documents that exist
+/datasources.list --with-counts              # the five datasources above
+/entities.list --kind PEOPLE                 # the roster behind every byline
+```
+
+Search is ranked, not templated: query terms score against title, tags, body, and
+container; snippets are pulled from the sentence that best matches the query. Results
+carry an author, a document type, and an age rendered relative to now, and quarter
+labels in titles (`Q4 FY26`) are computed at request time so the corpus never reads as
+stale. When a query matches nothing the page is padded with the freshest documents
+rather than coming back empty.
+
+### Bring your own corpus
+
+Point `mock_corpus_path` at a JSON file to replace the built-in set — useful for a demo
+tailored to a specific audience. Only `title` and `body` are required per document;
+everything else gets a sensible default, and a bare JSON array works too.
+
+```bash
+/config set mock_corpus_path ~/demo-corpus.json
+```
+
+```json
+{
+  "people": {
+    "ada@northwind.com": {"name": "Ada Lovelace", "title": "Engineer", "department": "Platform"}
+  },
+  "datasourceCounts": {"gdrive": 1840, "confluence": 920},
+  "documents": [
+    {
+      "id": "doc_1",
+      "datasource": "gdrive",
+      "doc_type": "Document",
+      "container": "Platform / Planning",
+      "title": "{Q+1} Planning Charter",
+      "url": "https://docs.google.com/document/d/abc123/edit",
+      "author": "ada@northwind.com",
+      "updated_days_ago": 4,
+      "tags": ["planning", "quarterly"],
+      "body": "Full text. Used for ranking, snippets and summaries."
+    }
+  ]
+}
+```
+
+`GLEAN_MOCK_CORPUS` does the same job without touching config; the config key wins if
+both are set, and `/status` shows which is in effect. A malformed file surfaces as a
+normal command error, not a traceback. Full field reference:
+[docs/MOCK_CORPUS.md](docs/MOCK_CORPUS.md#bring-your-own-corpus).
 
 ## Project layout
 
@@ -666,6 +744,7 @@ glean-code/
     ui.py                 ASCII art, colours, boxes
     config.py             config file load and save
     client.py             Glean REST wrapper + mock responses
+    mock_corpus.py        the fake corpus every mock endpoint reads from
     commands.py           slash command parser and handlers
     help_docs.py          per-command documentation
     completion.py         readline tab completion
@@ -673,6 +752,7 @@ glean-code/
   tests/
     __init__.py
     test_client.py        GleanClient and mock response tests
+    test_mock_corpus.py   corpus ranking, placeholders and custom corpus files
     test_config.py        Config load, save and URL property tests
     test_ui.py            ANSI helpers, box renderer and status bar tests
 ```
@@ -681,6 +761,10 @@ glean-code/
 
 `glean_mcp.py` exposes Glean as an MCP server so Claude Code, Claude Desktop,
 and Cursor can call Glean search, chat, and agents as native tools.
+
+It reads the same `~/.gleancode/config.json` but forces `mode = "live"`, so MCP tools always
+call the real API — the [mock corpus](#mock-corpus) is a REPL-only convenience and won't
+answer for an agent. Configure a token before wiring the server up.
 
 **Install the MCP package (one-time):**
 
@@ -783,6 +867,7 @@ python3 -m unittest discover tests/
 | File | What it covers |
 | --- | --- |
 | `tests/test_client.py` | All mock responses, GleanClient methods, error handling |
+| `tests/test_mock_corpus.py` | Corpus ranking, snippets, placeholder expansion, custom corpus files |
 | `tests/test_config.py` | Config load/save, URL property computation, mode resolution |
 | `tests/test_ui.py` | ANSI width helpers, box renderer, status bar, hyperlink |
 
