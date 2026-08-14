@@ -352,8 +352,11 @@ shortcuts, answers, insights — returns its own realistic shapes and does not r
 corpus. Indexing mock mode is documented separately in
 [Mock mode for indexing](../README.md#mock-mode-for-indexing).
 
-The corpus is a REPL convenience only. The [MCP server](../README.md#mcp-server) forces
-`mode = "live"`, so agents calling Glean through `glean_mcp.py` never see it.
+The [MCP server](../README.md#mcp-server) forces `mode = "live"` and ignores the `mode` in
+config, so agents get real data unless you explicitly start the server with `GLEAN_MOCK=1`.
+When you do, every tool response is prefixed with a `[MOCK MODE]` banner naming the data as
+fictional — see
+[Running the MCP server on mock data](../README.md#running-the-mcp-server-on-mock-data).
 
 ## How ranking works
 
@@ -407,6 +410,11 @@ export GLEAN_MOCK_CORPUS=~/demo-corpus.json
 
 The config key wins when both are set. `/status` shows which is in effect — the path, or
 `(built-in Acme corpus)`.
+
+`GLEAN_MOCK_CORPUS` chooses *which* corpus mock mode serves; it does not turn mock mode on.
+Don't confuse it with `GLEAN_MOCK`, the separate switch that puts the
+[MCP server](../README.md#running-the-mcp-server-on-mock-data) into mock mode. Setting both
+makes an agent answer from your own JSON corpus, still banner-labelled as fictional.
 
 ### File format
 

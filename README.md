@@ -54,7 +54,7 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 - `/insights --export <file>` dumps all returned metrics (overview, assistant, agents, datasource clicks) to a flat CSV — pipe it straight into Slack, Sheets, or any BI tool
 - Secure-ref token storage — store `token.secure.client` / `token.secure.indexing` in config and have the actual secret resolved from `$GLEAN_CLIENT_TOKEN` / `$GLEAN_INDEXING_TOKEN` at request time, with masking everywhere tokens are displayed
 - **Browser SSO** — `/auth login` runs OAuth 2.1 authorization code + PKCE against your Glean instance (same SSO path as the web app). Access tokens live in `~/.gleancode/auth.json`; API calls use them automatically via `effective_api_token`. Indexing still uses a Glean-issued indexing token. See [docs/SSO_OAUTH.md](docs/SSO_OAUTH.md)
-- Test suite in `tests/` covering the client, config, UI, auth, mock-corpus, and indexing-walk layers — run with `python3 -m pytest tests/` or `python3 -m unittest discover -s tests` (690 tests)
+- Test suite in `tests/` covering the client, config, UI, auth, mock-corpus, and indexing-walk layers — run with `python3 -m pytest tests/` or `python3 -m unittest discover -s tests` (699 tests)
 
 ## Coming soon
 
@@ -726,7 +726,9 @@ everything else gets a sensible default, and a bare JSON array works too.
 }
 ```
 
-`GLEAN_MOCK_CORPUS` does the same job without touching config; the config key wins if
+`GLEAN_MOCK_CORPUS` does the same job without touching config (it picks _which_ corpus is
+served — `GLEAN_MOCK` is the separate switch that turns mock mode on for the
+[MCP server](#running-the-mcp-server-on-mock-data)); the config key wins if
 both are set, and `/status` shows which is in effect. A malformed file surfaces as a
 normal command error, not a traceback. Full field reference:
 [docs/MOCK_CORPUS.md](docs/MOCK_CORPUS.md#bring-your-own-corpus).
@@ -762,9 +764,9 @@ glean-code/
 `glean_mcp.py` exposes Glean as an MCP server so Claude Code, Claude Desktop,
 and Cursor can call Glean search, chat, and agents as native tools.
 
-It reads the same `~/.gleancode/config.json` but forces `mode = "live"`, so MCP tools always
-call the real API — the [mock corpus](#mock-corpus) is a REPL-only convenience and won't
-answer for an agent. Configure a token before wiring the server up.
+It reads the same `~/.gleancode/config.json` but forces `mode = "live"` regardless of what
+that file says, so MCP tools call the real API by default. Mock mode is available but must be
+asked for explicitly — see [Running the MCP server on mock data](#running-the-mcp-server-on-mock-data).
 
 **Install the MCP package (one-time):**
 
@@ -847,6 +849,38 @@ by `/login` in the REPL). You can also pass them as environment variables:
 | `chat` | Chat with the Glean Assistant; pass `chat_id` to continue a thread |
 | `list_agents` | List available agents; optional `query` filter |
 | `run_agent` | Run an agent by id and return its output |
+
+### Running the MCP server on mock data
+
+Set `GLEAN_MOCK` on the server entry to serve the [mock corpus](#mock-corpus) instead of
+your tenant — handy for wiring up an agent and testing the tool loop before you have a token:
+
+```json
+{
+  "mcpServers": {
+    "glean": {
+      "command": "python3",
+      "args": ["/absolute/path/to/glean-code-cli/glean_mcp.py"],
+      "env": {"GLEAN_MOCK": "1"}
+    }
+  }
+}
+```
+
+Accepted values are `1`, `true`, `yes`, and `on`. Every tool response is then prefixed with:
+
+```text
+[MOCK MODE] Fictional demo data, not your organisation's real content — do not cite or act on it as real.
+```
+
+The banner is deliberate. An agent cannot tell fabricated results from real ones, and the
+corpus returns confident-looking documents with plausible URLs — without a label, made-up
+content launders straight into whatever the agent writes or acts on. The same warning is in
+each tool's description, so it reaches the model before it calls anything.
+
+For the same reason mock mode is opt-in and never inherited: `mode` in
+`~/.gleancode/config.json` is ignored by the server, including `auto`, which would otherwise
+flip an agent onto fake data the day a token expires.
 
 Requires Python 3.10+. The REPL itself remains Python 3.9+ and stdlib-only.
 

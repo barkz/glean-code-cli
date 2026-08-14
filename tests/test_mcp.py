@@ -95,6 +95,30 @@ class TestBuildClient(unittest.TestCase):
                 cfg, _ = self._build(env={glean_mcp.MOCK_ENV_VAR: value})
                 self.assertEqual(cfg.mode, "live")
 
+    def test_env_var_overrides_instance(self):
+        cfg, _ = self._build(env={"GLEAN_INSTANCE": "env-be.glean.com"})
+        self.assertEqual(cfg.instance, "env-be.glean.com")
+
+    def test_env_var_overrides_token(self):
+        cfg, _ = self._build(env={"GLEAN_TOKEN": "env_tok_xyz"})
+        self.assertEqual(cfg.api_token, "env_tok_xyz")
+
+    def test_env_var_overrides_act_as(self):
+        cfg, _ = self._build(env={"GLEAN_ACT_AS": "alice@example.com"})
+        self.assertEqual(cfg.act_as, "alice@example.com")
+
+    def test_no_env_vars_leaves_config_values(self):
+        from glean_code.config import Config
+        base_cfg = Config(instance="base-be.glean.com", api_token="base_tok", mode="mock")
+        clean_env = {k: v for k, v in os.environ.items()
+                     if k not in ("GLEAN_INSTANCE", "GLEAN_TOKEN", "GLEAN_ACT_AS")}
+        with patch("glean_code.config.Config.load", return_value=base_cfg), \
+             patch.dict("os.environ", clean_env, clear=True):
+            from glean_mcp import _build_client
+            cfg, _ = _build_client()
+        self.assertEqual(cfg.instance, "base-be.glean.com")
+        self.assertEqual(cfg.api_token, "base_tok")
+
 
 # ---------------------------------------------------------------------------
 # mock-data labelling
@@ -159,30 +183,6 @@ class TestMockLabelling(unittest.TestCase):
                    glean_mcp.list_agents, glean_mcp.run_agent):
             with self.subTest(tool=fn.__name__):
                 self.assertIn(glean_mcp.MOCK_ENV_VAR, fn.__doc__)
-
-    def test_env_var_overrides_instance(self):
-        cfg, _ = self._build(env={"GLEAN_INSTANCE": "env-be.glean.com"})
-        self.assertEqual(cfg.instance, "env-be.glean.com")
-
-    def test_env_var_overrides_token(self):
-        cfg, _ = self._build(env={"GLEAN_TOKEN": "env_tok_xyz"})
-        self.assertEqual(cfg.api_token, "env_tok_xyz")
-
-    def test_env_var_overrides_act_as(self):
-        cfg, _ = self._build(env={"GLEAN_ACT_AS": "alice@example.com"})
-        self.assertEqual(cfg.act_as, "alice@example.com")
-
-    def test_no_env_vars_leaves_config_values(self):
-        from glean_code.config import Config
-        base_cfg = Config(instance="base-be.glean.com", api_token="base_tok", mode="mock")
-        clean_env = {k: v for k, v in os.environ.items()
-                     if k not in ("GLEAN_INSTANCE", "GLEAN_TOKEN", "GLEAN_ACT_AS")}
-        with patch("glean_code.config.Config.load", return_value=base_cfg), \
-             patch.dict("os.environ", clean_env, clear=True):
-            from glean_mcp import _build_client
-            cfg, _ = _build_client()
-        self.assertEqual(cfg.instance, "base-be.glean.com")
-        self.assertEqual(cfg.api_token, "base_tok")
 
 
 # ---------------------------------------------------------------------------

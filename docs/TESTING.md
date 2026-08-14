@@ -2,7 +2,7 @@
 
 Notes on the test suite added during development of glean-code-cli. See [Running tests](../README.md#running-tests) for the user-facing instructions on how to run the tests.
 
-All 690 tests pass. Here's what was added across the development passes:
+All 699 tests pass. Here's what was added across the development passes:
 
 `tests/test_commands_extended.py` (155 new tests) — covers all previously untested commands:
 
@@ -47,3 +47,9 @@ All 690 tests pass. Here's what was added across the development passes:
 - Placeholders — `{Q}` / `{Q+1}` / `{FY}` expansion, next quarter differs from current, no raw placeholders leak into results
 - Cross-endpoint coherence — a `/search` result URL resolves through `/getdocuments` and `/summarize` to the same document, `/chat` citations track the question, `/getdocumentpermissions` owner is the document author, `/people` reads the roster
 - Custom corpus files — `mock_corpus_path` and `GLEAN_MOCK_CORPUS` overrides (config wins), bare-array form, and `CorpusError` on a missing file, invalid JSON, a document with no title, or an empty document list
+
+`tests/test_mcp.py` (9 new tests) — covers mock mode on the MCP server:
+
+- `_build_client` — forces live mode whatever `mode` the config file carries (including `auto`), and switches to mock only when `GLEAN_MOCK` is set; truthy spellings (`1`, `true`, `yes`, `on`) accepted, everything else ignored
+- Labelling — all four tools (`search`, `chat`, `list_agents`, `run_agent`) prefix their response with the `[MOCK MODE]` banner when serving fake data, including empty-result responses, and never in live mode
+- Tool descriptions — every tool docstring names `GLEAN_MOCK`, so the warning reaches the agent before it calls anything
