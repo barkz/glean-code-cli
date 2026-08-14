@@ -104,20 +104,22 @@ DOCS: Dict[str, CommandDoc] = {
         "usage": "/config [get <key> | set <key> <value> | list]",
         "params": [
             ("get", "Print the value of a single key."),
-            ("set", "Set a key. Valid keys: instance, api_token, act_as, base_url, mode, theme, default_page_size."),
+            ("set", "Set a key. Valid keys: instance, api_token, act_as, base_url, mode, theme, default_page_size, mock_corpus_path."),
             ("list", "Print the full config."),
         ],
         "examples": [
             "/config list",
             "/config set mode live",
             "/config set default_page_size 20",
+            "/config set mock_corpus_path ~/demo-corpus.json",
         ],
         "endpoint": "(local, ~/.gleancode/config.json)",
     },
     "mode": {
         "summary": "Switch between live, mock and auto mode.",
         "usage": "/mode <live|mock|auto>",
-        "params": [("value", "live forces real API calls. mock forces fake data. auto picks based on credentials.")],
+        "params": [("value", "live forces real API calls. mock serves the built-in Acme corpus "
+                             "(gdrive, confluence, jira, github, slack) offline. auto picks based on credentials.")],
         "examples": ["/mode auto", "/mode mock", "/mode live"],
         "endpoint": "(local)",
     },
@@ -156,16 +158,18 @@ DOCS: Dict[str, CommandDoc] = {
         "endpoint": "POST /rest/api/v1/chat",
     },
     "search": {
-        "summary": "Search the Glean index.",
+        "summary": "Search the Glean index. In mock mode, ranked against the built-in Acme corpus.",
         "usage": "/search <query> [--page-size <n>] [--datasource <name>]",
         "params": [
             ("query", "Free text query."),
-            ("--page-size", "Number of results. Default from config."),
-            ("--datasource", "Restrict to a single datasource, e.g. gdrive, slack, jira."),
+            ("--page-size", "Number of results. Default from config. Capped at 10 in mock mode."),
+            ("--datasource", "Restrict to a single datasource. Mock corpus has gdrive, "
+                             "confluence, jira, github, slack."),
         ],
         "examples": [
             "/search \"quarterly planning\"",
             "/search \"oncall runbook\" --datasource confluence --page-size 5",
+            "/search \"checkout incident\" --datasource jira",
         ],
         "endpoint": "POST /rest/api/v1/search",
     },

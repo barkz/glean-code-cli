@@ -2,7 +2,7 @@
 
 Notes on the test suite added during development of glean-code-cli. See [Running tests](../README.md#running-tests) for the user-facing instructions on how to run the tests.
 
-All 637 tests pass. Here's what was added across the development passes:
+All 690 tests pass. Here's what was added across the development passes:
 
 `tests/test_commands_extended.py` (155 new tests) — covers all previously untested commands:
 
@@ -39,3 +39,11 @@ All 637 tests pass. Here's what was added across the development passes:
 - `/metadata.get-schema`, `/metadata.delete-schema` — required `--group`, no-token error, correct client-method invocation
 - `/metadata.attach` — required `--doc-id` and `--group`, mutual exclusion of `--from-file` and `--values`, inline-value parsing, malformed-value rejection, `--dry-run` skip, no-token error
 - `/metadata.detach` — required flags, no-token error, correct client-method invocation
+
+`tests/test_mock_corpus.py` (35 new tests) — covers the fake corpus behind mock mode:
+
+- Ranking — relevant document first, distinct top hits for distinct queries, match-all ordered by freshness, `--datasource` filtering, page padding when nothing matches, page-size cap
+- Snippets and metadata — snippet drawn from the sentence matching the query, author and relative freshness on every result
+- Placeholders — `{Q}` / `{Q+1}` / `{FY}` expansion, next quarter differs from current, no raw placeholders leak into results
+- Cross-endpoint coherence — a `/search` result URL resolves through `/getdocuments` and `/summarize` to the same document, `/chat` citations track the question, `/getdocumentpermissions` owner is the document author, `/people` reads the roster
+- Custom corpus files — `mock_corpus_path` and `GLEAN_MOCK_CORPUS` overrides (config wins), bare-array form, and `CorpusError` on a missing file, invalid JSON, a document with no title, or an empty document list

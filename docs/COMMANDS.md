@@ -2,6 +2,8 @@
 
 Detailed reference for every slash command in Glean Code. Looking for a quick overview? See the [README's Commands at a glance](../README.md#commands-at-a-glance).
 
+Commands marked **Mock mode** below read from the built-in fake corpus when no credentials are configured — seventy interlinked documents spread evenly across five faux datasources (`gdrive`, `confluence`, `jira`, `github`, `slack` — 14 each). Full inventory and the people roster: [Mock Corpus](MOCK_CORPUS.md).
+
 
 #### /help
 
@@ -102,6 +104,35 @@ Clear stored credentials and revert to mock mode.
 
 **Output** — Confirms credentials removed.
 
+**Mock mode** — This is what `/logout` reverts *to*: with no token, searches answer from the [mock corpus](MOCK_CORPUS.md). OAuth tokens from `/auth login` are cleared separately with `/auth logout`.
+
+**Endpoint** — `(local)`
+
+---
+
+#### /open
+
+Open the configured Glean instance in the default web browser. Strips the `-be` suffix from the instance host, so `acme-be.glean.com` opens `https://acme.glean.com`.
+
+```text
+/open [path] [--path <path>] [--print]
+```
+
+| Parameter | Description |
+| --- | --- |
+| `path` | Optional path to append, positionally. e.g. `search` or `/docs/123`. A leading `/` is added if missing. |
+| `--path` | Same as the positional path. Either form works. |
+| `--print` | Print the URL instead of launching a browser. Useful over SSH. `--dry-run` does the same. |
+
+```text
+/open
+/open search
+/open /docs/123
+/open --print
+```
+
+**Output** — The URL being opened, then the browser launch. With `--print`: just the URL. Errors if no `instance` is configured.
+
 **Endpoint** — `(local)`
 
 ---
@@ -126,9 +157,12 @@ View or update individual configuration keys. Changes are persisted to `~/.glean
 /config set mode live
 /config set default_page_size 20
 /config set indexing_token glean_idx_xxx
+/config set mock_corpus_path ~/demo-corpus.json
 ```
 
 **Output** — For `list` and `get`: the value(s). For `set`: a confirmation message.
+
+**Mock mode** — `mock_corpus_path` points offline mode at your own JSON corpus instead of the built-in Acme one; see [Bring your own corpus](MOCK_CORPUS.md#bring-your-own-corpus). Unset it with `/config set mock_corpus_path ""`.
 
 **Endpoint** — `(local, ~/.gleancode/config.json)`
 
@@ -271,6 +305,8 @@ Send a message to the Glean Assistant. Continues the current thread by default; 
 
 **Output** — The assistant's response in a styled box, with cited source documents listed below. The active chat thread id is saved for subsequent `/chat` calls.
 
+**Mock mode** — Citations are ranked against the [mock corpus](MOCK_CORPUS.md), so every cited document is one `/docs.get` and `/summarize` can fetch.
+
 **Endpoint** — `POST /rest/api/v1/chat`
 
 ---
@@ -294,7 +330,9 @@ Search the Glean index and display ranked results with snippets.
 /search "oncall runbook" --datasource confluence --page-size 5
 ```
 
-**Output** — Numbered result list, each showing title, datasource, URL, and a matching text snippet.
+**Output** — Numbered result list, each showing title, datasource, URL, a byline (author, document type, container, freshness) when the API returns metadata, and a matching text snippet.
+
+**Mock mode** — Results are ranked against the [mock corpus](MOCK_CORPUS.md): query terms score against title, tags, body, and container, `--datasource` genuinely filters (`gdrive`, `confluence`, `jira`, `github`, `slack`), and snippets come from the sentence that best matches the query. A query that matches nothing is padded with the freshest documents rather than returning empty. Page size is capped at 10.
 
 **Endpoint** — `POST /rest/api/v1/search`
 
@@ -323,6 +361,8 @@ List all datasources visible to the current token, derived from a faceted search
 
 **Output** — A list of datasource names. With `--with-counts`: document counts alongside each name. With `--with-status`: uploaded/indexed counts and coverage % from the Indexing API.
 
+**Mock mode** — Returns the five faux datasources with plausible index counts: `gdrive` 1840, `confluence` 920, `slack` 611, `jira` 430, `github` 268. See [Mock Corpus](MOCK_CORPUS.md#the-faux-datasources).
+
 **Endpoint** — `POST /rest/api/v1/search` (facets) + `POST /api/index/v1/debug/{ds}/status`
 
 ---
@@ -346,6 +386,8 @@ Get query suggestions for a partial search string.
 
 **Output** — A list of suggested completions ranked by relevance.
 
+**Mock mode** — Completions are built from the tags of documents matching what you typed, e.g. `/autocomplete "quart"` → `quart planning`, `quart tracker`, `quart capacity`.
+
 **Endpoint** — `POST /rest/api/v1/autocomplete`
 
 ---
@@ -368,6 +410,8 @@ Get document recommendations for a user based on their activity and context.
 ```
 
 **Output** — A list of recommended document titles and URLs.
+
+**Mock mode** — The five freshest [mock corpus](MOCK_CORPUS.md) documents, in full search-result shape.
 
 **Endpoint** — `POST /rest/api/v1/recommendations`
 
@@ -1109,6 +1153,8 @@ Fetch one or more documents by Glean document id or URL.
 
 **Output** — Document metadata and content for each requested id or URL.
 
+**Mock mode** — Ids and URLs resolve against the [mock corpus](MOCK_CORPUS.md#document-inventory) — pass a URL straight from `/search` and you get the same title, author, and datasource back. An id or URL that isn't in the corpus is echoed back with a placeholder title.
+
 **Endpoint** — `POST /rest/api/v1/getdocuments`
 
 ---
@@ -1130,6 +1176,8 @@ Fetch the permission list for a document.
 ```
 
 **Output** — A list of email addresses and their roles (e.g. `owner`, `viewer`).
+
+**Mock mode** — The document's author comes back as `owner` and the rest of the [people roster](MOCK_CORPUS.md#the-people-roster) as `viewer`, e.g. `/docs.permissions doc_plan_process` → `priya.raman@acme.com` as owner.
 
 **Endpoint** — `POST /rest/api/v1/getdocumentpermissions`
 
@@ -1157,6 +1205,8 @@ List entities such as people, teams, or groups from the Glean directory.
 
 **Output** — A list of entity names, emails, and titles.
 
+**Mock mode** — Returns the eight-person [Acme roster](MOCK_CORPUS.md#the-people-roster) with name, email, title, and department.
+
 **Endpoint** — `POST /rest/api/v1/listentities`
 
 ---
@@ -1178,6 +1228,8 @@ Look up a person's full profile by email address.
 ```
 
 **Output** — Name, email, title, department, and any other profile fields returned by the API.
+
+**Mock mode** — Looks the email up in the [people roster](MOCK_CORPUS.md#the-people-roster), e.g. `/people.get priya.raman@acme.com` → Director of Engineering, Platform. An unknown email still returns a profile shape.
 
 **Endpoint** — `POST /rest/api/v1/people`
 
@@ -1269,6 +1321,8 @@ List all collections in the workspace.
 ```
 
 **Output** — Collection ids, names, and descriptions.
+
+**Mock mode** — Three collections named after the [mock corpus](MOCK_CORPUS.md#document-inventory) clusters: Quarterly Planning, On-Call and Incidents, New Engineer Onboarding.
 
 **Endpoint** — `POST /rest/api/v1/listcollections`
 
@@ -1647,6 +1701,8 @@ Ask Glean AI to summarize a document by URL or id. Optionally focus the summary 
 
 **Output** — AI-generated summary in a styled box.
 
+**Mock mode** — A URL or id from the [mock corpus](MOCK_CORPUS.md#document-inventory) summarizes to that document's own opening lines, owner, and freshness. Anything else falls back to a generic summary that echoes what you passed.
+
 **Endpoint** — `POST /rest/api/v1/summarize`
 
 ---
@@ -1671,6 +1727,8 @@ List documents pending or due for verification.
 ```
 
 **Output** — Table of documents with their verification status (`VERIFIED` / `UNVERIFIED`), title, id, and last verified timestamp.
+
+**Mock mode** — The six freshest [mock corpus](MOCK_CORPUS.md) documents, alternating `UNVERIFIED` and `VERIFIED`, so the queue has both states to act on.
 
 **Endpoint** — `POST /rest/api/v1/listverifications`
 
@@ -1749,6 +1807,8 @@ Retrieve a message thread from a connected datasource such as Slack or Microsoft
 ```
 
 **Output** — Author and text for each message in the thread.
+
+**Mock mode** — Returns the corpus's three Slack threads (`#planning`, `#incident-checkout`, `#sales-eng`) with channel, author, and timestamp. See [the faux datasources](MOCK_CORPUS.md#the-faux-datasources).
 
 **Endpoint** — `POST /rest/api/v1/messages`
 

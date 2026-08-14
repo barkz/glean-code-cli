@@ -126,6 +126,16 @@ def _render_chat_response(resp: Dict[str, Any]) -> str:
     return "\n\n".join(out).strip() or "(no content)"
 
 
+def _result_byline(r: Dict[str, Any]) -> str:
+    """'Priya Raman · Document · updated 4 days ago', from whatever the API gave us."""
+    md = r.get("metadata") or (r.get("document") or {}).get("metadata") or {}
+    author = md.get("author")
+    if isinstance(author, dict):
+        author = author.get("name") or author.get("email")
+    parts = [author, md.get("documentType"), md.get("container"), md.get("updatedAgo")]
+    return "  ·  ".join(p for p in parts if p)
+
+
 def _render_search(resp: Dict[str, Any]) -> str:
     results = resp.get("results", [])
     if not results:
@@ -141,8 +151,10 @@ def _render_search(resp: Dict[str, Any]) -> str:
             snip = snips[0].get("text", "")
         header = f"{ui.style(str(i)+'.', ui.C.BLUE, ui.C.BOLD)} {ui.style(title, ui.C.WHITE, ui.C.BOLD)}"
         meta = ui.style(f"   {ds}  {url}", ui.C.GREY)
+        byline = _result_byline(r)
+        byline_line = ui.style(f"   {byline}", ui.C.GREY) if byline else ""
         body = ui.style(f"   {snip}", ui.C.WHITE) if snip else ""
-        lines.append("\n".join(x for x in [header, meta, body] if x))
+        lines.append("\n".join(x for x in [header, meta, byline_line, body] if x))
     return "\n\n".join(lines)
 
 
@@ -253,6 +265,7 @@ def cmd_status(s: Session, pos, flags):
         ("mode",          ui.style(cfg.effective_mode, ui.C.GREEN if cfg.effective_mode == "live" else ui.C.YELLOW)),
         ("mode setting",  cfg.mode),
         ("default_page_size", str(cfg.default_page_size)),
+        ("mock_corpus",   cfg.mock_corpus_path or ui.style("(built-in Acme corpus)", ui.C.GREY)),
         ("current_chat_id",   s.current_chat_id or ui.style("(none)", ui.C.GREY)),
         ("config file",   "~/.gleancode/config.json"),
     ]

@@ -45,6 +45,7 @@ class Config:
     mode: str = "auto"                        # auto | live | mock
     theme: str = "glean"                      # glean | mono | neon
     default_page_size: int = 10
+    mock_corpus_path: Optional[str] = None    # JSON file backing mock mode; falls back to the built-in corpus
     history: list = field(default_factory=list)
 
     # ---- Interactive OAuth (SSO) settings ----
