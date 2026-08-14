@@ -65,8 +65,100 @@ class TestBuildClient(unittest.TestCase):
         self.assertIsInstance(client, GleanClient)
 
     def test_forces_live_mode(self):
+        """A mock mode inherited from config.json is ignored — live by default."""
         cfg, _ = self._build()
         self.assertEqual(cfg.mode, "live")
+
+    def test_auto_mode_from_config_still_forces_live(self):
+        from glean_code.config import Config
+        cfg = Config(mode="auto")
+        with patch("glean_code.config.Config.load", return_value=cfg), \
+             patch.dict("os.environ", {}, clear=False):
+            os.environ.pop(glean_mcp.MOCK_ENV_VAR, None)
+            from glean_mcp import _build_client
+            built, _ = _build_client()
+        self.assertEqual(built.mode, "live")
+
+    def test_mock_env_var_enables_mock_mode(self):
+        cfg, _ = self._build(env={glean_mcp.MOCK_ENV_VAR: "1"})
+        self.assertEqual(cfg.mode, "mock")
+
+    def test_mock_env_var_accepts_truthy_spellings(self):
+        for value in ("1", "true", "TRUE", "yes", "on"):
+            with self.subTest(value=value):
+                cfg, _ = self._build(env={glean_mcp.MOCK_ENV_VAR: value})
+                self.assertEqual(cfg.mode, "mock")
+
+    def test_mock_env_var_ignores_other_values(self):
+        for value in ("0", "false", "no", ""):
+            with self.subTest(value=value):
+                cfg, _ = self._build(env={glean_mcp.MOCK_ENV_VAR: value})
+                self.assertEqual(cfg.mode, "live")
+
+
+# ---------------------------------------------------------------------------
+# mock-data labelling
+# ---------------------------------------------------------------------------
+
+class TestMockLabelling(unittest.TestCase):
+    """Every tool response must carry the banner when serving fake data."""
+
+    def _with_mode(self, mode):
+        from glean_code.config import Config
+        return patch.object(glean_mcp, "_cfg", Config(mode=mode))
+
+    def setUp(self):
+        self.mock_client = _client_mock()
+        self._patcher = patch.object(glean_mcp, "_client", self.mock_client)
+        self._patcher.start()
+        self.mock_client.search.return_value = {
+            "results": [{"title": "T", "url": "u", "datasource": "gdrive",
+                         "snippets": [{"text": "s"}]}]}
+        self.mock_client.chat.return_value = {
+            "chatId": "c1",
+            "messages": [{"fragments": [{"text": "answer"}], "citations": []}]}
+        self.mock_client.agents_search.return_value = {
+            "agents": [{"id": "a1", "name": "A", "description": "d"}]}
+        self.mock_client.agent_run.return_value = {"runId": "r1", "output": "done"}
+
+    def tearDown(self):
+        self._patcher.stop()
+
+    def test_all_tools_are_labelled_in_mock_mode(self):
+        calls = {
+            "search": lambda: glean_mcp.search("q"),
+            "chat": lambda: glean_mcp.chat("hi"),
+            "list_agents": glean_mcp.list_agents,
+            "run_agent": lambda: glean_mcp.run_agent("a1", "go"),
+        }
+        with self._with_mode("mock"):
+            for name, call in calls.items():
+                with self.subTest(tool=name):
+                    self.assertTrue(call().startswith(glean_mcp.MOCK_BANNER))
+
+    def test_no_label_in_live_mode(self):
+        with self._with_mode("live"):
+            self.assertNotIn(glean_mcp.MOCK_BANNER, glean_mcp.search("q"))
+            self.assertNotIn(glean_mcp.MOCK_BANNER, glean_mcp.chat("hi"))
+            self.assertNotIn(glean_mcp.MOCK_BANNER, glean_mcp.list_agents())
+            self.assertNotIn(glean_mcp.MOCK_BANNER, glean_mcp.run_agent("a1", "go"))
+
+    def test_empty_results_are_labelled_too(self):
+        self.mock_client.search.return_value = {"results": []}
+        self.mock_client.agents_search.return_value = {"agents": []}
+        with self._with_mode("mock"):
+            self.assertTrue(glean_mcp.search("q").startswith(glean_mcp.MOCK_BANNER))
+            self.assertTrue(glean_mcp.list_agents().startswith(glean_mcp.MOCK_BANNER))
+
+    def test_banner_names_the_data_as_fictional(self):
+        self.assertIn("MOCK MODE", glean_mcp.MOCK_BANNER)
+        self.assertIn("not your organisation's real content", glean_mcp.MOCK_BANNER)
+
+    def test_tool_docstrings_mention_the_env_var(self):
+        for fn in (glean_mcp.search, glean_mcp.chat,
+                   glean_mcp.list_agents, glean_mcp.run_agent):
+            with self.subTest(tool=fn.__name__):
+                self.assertIn(glean_mcp.MOCK_ENV_VAR, fn.__doc__)
 
     def test_env_var_overrides_instance(self):
         cfg, _ = self._build(env={"GLEAN_INSTANCE": "env-be.glean.com"})
