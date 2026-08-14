@@ -29,6 +29,28 @@ the glean-code REPL), or from environment variables:
     GLEAN_INSTANCE   e.g. my-company-be.glean.com
     GLEAN_TOKEN      Glean API bearer token
     GLEAN_ACT_AS     Optional email to impersonate (X-Glean-ActAs)
+    GLEAN_MOCK       Set to 1/true/yes to serve the built-in fake corpus
+
+Mock mode — opt in, never automatic:
+    The server forces live mode by default, whatever ~/.gleancode/config.json
+    says. An agent cannot tell fabricated results from real ones, so silently
+    answering it from a fictional corpus would launder made-up documents into
+    whatever the agent writes or acts on. Set GLEAN_MOCK to override, and every
+    tool response is prefixed with a mock-data banner so the label travels with
+    the content into the agent's context:
+
+    {
+      "mcpServers": {
+        "glean": {
+          "command": "python3",
+          "args": ["/absolute/path/to/glean-code-cli/glean_mcp.py"],
+          "env": {"GLEAN_MOCK": "1"}
+        }
+      }
+    }
+
+    Useful for wiring up and testing the tool loop before you have a token.
+    See docs/MOCK_CORPUS.md for what the fake corpus contains.
 
 Requires Python 3.10+ and the mcp package:
     pip install "mcp[cli]"
@@ -60,6 +82,27 @@ from glean_code.config import Config
 from glean_code.client import GleanClient, GleanError
 
 
+MOCK_ENV_VAR = "GLEAN_MOCK"
+
+# Prefixed to every tool response when the server is running on mock data, so
+# the warning reaches the agent's context alongside the content itself.
+MOCK_BANNER = (
+    "[MOCK MODE] Fictional demo data, not your organisation's real content — "
+    "do not cite or act on it as real."
+)
+
+# Appended to each tool's docstring, which is what the agent sees as the tool
+# description before it ever calls anything.
+_MOCK_DOC = (
+    "When the server is started with GLEAN_MOCK=1 this returns fictional "
+    "demo data from a built-in corpus, prefixed with a [MOCK MODE] banner."
+)
+
+
+def _wants_mock() -> bool:
+    return os.environ.get(MOCK_ENV_VAR, "").strip().lower() in ("1", "true", "yes", "on")
+
+
 def _build_client() -> tuple[Config, GleanClient]:
     cfg = Config.load()
     if os.environ.get("GLEAN_INSTANCE"):
@@ -68,11 +111,21 @@ def _build_client() -> tuple[Config, GleanClient]:
         cfg.api_token = os.environ["GLEAN_TOKEN"]
     if os.environ.get("GLEAN_ACT_AS"):
         cfg.act_as = os.environ["GLEAN_ACT_AS"]
-    cfg.mode = "live"
+    # Live unless mock is explicitly requested. Deliberately ignores whatever
+    # mode the config file carries: an inherited "auto" that quietly resolves
+    # to mock the day a token expires is exactly the failure to avoid here.
+    cfg.mode = "mock" if _wants_mock() else "live"
     return cfg, GleanClient(cfg)
 
 
 _cfg, _client = _build_client()
+
+
+def _label(text: str) -> str:
+    """Prefix a tool response with the mock banner when serving fake data."""
+    if _cfg.effective_mode != "mock":
+        return text
+    return f"{MOCK_BANNER}\n\n{text}"
 
 mcp = FastMCP("glean")
 
@@ -90,6 +143,9 @@ def search(
     Returns ranked results with titles, URLs, datasource names, and text
     snippets. Use datasource to restrict to a single source (e.g. 'confluence',
     'gdrive', 'slack', 'jira', 'github').
+
+    When the server is started with GLEAN_MOCK=1 this returns fictional demo
+    data from a built-in corpus, prefixed with a [MOCK MODE] banner.
     """
     try:
         resp = _client.search(query, page_size=page_size, datasource=datasource)
@@ -98,7 +154,7 @@ def search(
 
     results = resp.get("results", [])
     if not results:
-        return "No results found."
+        return _label("No results found.")
 
     total = resp.get("totalCount", len(results))
     lines = [f"Search results for '{query}' ({total} total):\n"]
@@ -117,7 +173,7 @@ def search(
         if snip:
             lines.append(f"   {snip}")
         lines.append("")
-    return "\n".join(lines).rstrip()
+    return _label("\n".join(lines).rstrip())
 
 
 @mcp.tool()
@@ -132,6 +188,9 @@ def chat(
     Pass chat_id to continue an existing conversation thread — the id is
     included in every response and should be forwarded on subsequent turns.
     Use agent to route the message through a named agent configuration.
+
+    When the server is started with GLEAN_MOCK=1 this returns a fictional
+    canned answer with fictional citations, prefixed with a [MOCK MODE] banner.
     """
     try:
         resp = _client.chat(message, chat_id=chat_id, agent=agent)
@@ -157,7 +216,7 @@ def chat(
                     line += f"  {doc['url']}"
                 parts.append(line)
 
-    return "\n".join(parts) if parts else "(no response)"
+    return _label("\n".join(parts)) if parts else _label("(no response)")
 
 
 @mcp.tool()
@@ -166,6 +225,9 @@ def list_agents(query: str = "") -> str:
 
     Optionally filter by name or description with the query parameter.
     The id field from each result is what run_agent expects.
+
+    When the server is started with GLEAN_MOCK=1 this returns fictional demo
+    agents, prefixed with a [MOCK MODE] banner.
     """
     try:
         resp = _client.agents_search(query=query or None)
@@ -174,7 +236,7 @@ def list_agents(query: str = "") -> str:
 
     agents = resp.get("agents", [])
     if not agents:
-        return "No agents found."
+        return _label("No agents found.")
 
     lines = ["Available agents:\n"]
     for a in agents:
@@ -184,7 +246,7 @@ def list_agents(query: str = "") -> str:
         if a.get("description"):
             lines.append(f"  description: {a['description']}")
         lines.append("")
-    return "\n".join(lines).rstrip()
+    return _label("\n".join(lines).rstrip())
 
 
 @mcp.tool()
@@ -193,6 +255,9 @@ def run_agent(agent_id: str, input: str) -> str:
 
     Blocks until the agent completes (uses the /agents/runs/wait endpoint).
     Use list_agents to discover available agent IDs.
+
+    When the server is started with GLEAN_MOCK=1 this returns a fictional
+    canned run output, prefixed with a [MOCK MODE] banner.
     """
     try:
         resp = _client.agent_run(agent_id, input)
@@ -204,13 +269,20 @@ def run_agent(agent_id: str, input: str) -> str:
     result = output if output else json.dumps(resp, indent=2)
     if run_id:
         result = f"[run_id: {run_id}]\n\n{result}"
-    return result
+    return _label(result)
 
 
 # ── entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    if not _cfg.is_live_ready:
+    if _cfg.effective_mode == "mock":
+        print(
+            f"{MOCK_ENV_VAR} is set: serving the built-in fictional corpus. "
+            "Every tool response carries a [MOCK MODE] banner.\n"
+            f"Unset {MOCK_ENV_VAR} to talk to your real Glean instance.",
+            file=sys.stderr,
+        )
+    elif not _cfg.is_live_ready:
         print(
             "Warning: no instance or token configured.\n"
             "Set GLEAN_INSTANCE + GLEAN_TOKEN env vars, "
