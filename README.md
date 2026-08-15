@@ -1,7 +1,7 @@
 # Glean Code
 
 ![Glean](https://img.shields.io/badge/Glean-343CED?style=for-the-badge&logoColor=white)
-![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white) 
+![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![Claude](https://img.shields.io/badge/Claude-D97757?style=for-the-badge&logo=claude&logoColor=white)
 
 A local, terminal-first client for the Glean Client REST API. Inspired by Claude Code. Built in Python with zero runtime dependencies.
@@ -11,83 +11,52 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 ## Contents
 
 - [What you get](#what-you-get)
+- [Getting started](#getting-started) — install, alias, first run
 - [Coming soon](#coming-soon)
-- [Getting Started](#getting-started-with-glean-code) — install, alias, first run
 - [Commands at a glance](#commands-at-a-glance)
-- [Command Reference](docs/COMMANDS.md) ← full per-command docs
-- [Natural-language planner](#natural-language-planner) · [full design notes](docs/NATURAL_LANGUAGE.md)
-- [Insights](#insights)
-- [Indexing API](#indexing-api)
-- [Custom Metadata API](#custom-metadata-api)
-- [Scaffold](#scaffold)
-- [Secure tokens](#secure-tokens)
-- [Browser SSO (OAuth)](docs/SSO_OAUTH.md)
+- [Mock mode](#mock-mode)
+- [Natural-language planner](#natural-language-planner)
+- [Tokens and auth](#tokens-and-auth)
 - [Config keys](#config-keys)
-- [Mock corpus](#mock-corpus) · [full corpus reference](docs/MOCK_CORPUS.md) — the faux datasources and documents behind offline mode
-- [Project layout](#project-layout)
 - [MCP server](#mcp-server)
-- [Running tests](#running-tests) · [Test Harness notes](docs/TESTING.md)
-- [Notes on the REST paths](#notes-on-the-rest-paths)
-- [JSON arguments in /tools.call](#json-arguments-in-toolscall)
+- [Project layout](#project-layout)
+- [Running tests](#running-tests)
+- [Documentation](#documentation) — the full reference set
+- [Changelog](CHANGELOG.md) — release history
 - [License](#license)
 
 ## What you get
 
-- Slash commands covering every major Glean Client API surface: chat, search, agents, tools, docs, people, shortcuts (Go Links), answers, summarize, verification, messages, activity, announcements, collections, pins, and insights
-- **Near-complete Indexing API coverage** — 32 of 37 endpoints exposed as commands across read/debug, single-record write, bulk, and process-all tiers
-- **Custom Metadata API** — schema-management and document-attachment endpoints (`/metadata.set-schema`, `/metadata.get-schema`, `/metadata.delete-schema`, `/metadata.attach`, `/metadata.detach`) for enriching already-indexed documents without re-uploading them
-- Full in-terminal documentation for every command via `/help <command>`
-- Tab completion that cycles through matches as you type — press Tab to step forward, Shift+Tab to step back
-- Powerline-style status bar showing mode, connected instance, auth state, and active chat thread
-- Datasource status enrichment via the Indexing API — uploaded/indexed counts, coverage %, and processing history
-- Indexing **debug toolkit** — `/debug.document`, `/debug.documents`, `/debug.user`, and `/documents.access` answer "is this doc uploaded?", "why can't user X see doc Y?", and "what groups did we upload for this user?" without leaving the REPL
-- Indexing **observability counters** — `/datasources.config`, `/documents.count`, `/documents.status`, and `/users.count` for quick health checks of any custom datasource
-- Indexing **write surface** — single-record `/index.document`, `/index.user`, `/index.group`, `/index.membership` (plus their `/index.delete-*` partners) and `/index.permissions`, all driven by `--from-file <json>` so request bodies stay auditable
-- Indexing **bulk + paged uploads** — `/index.bulk-documents|users|groups|memberships`, `/people.bulk-employees|teams`, `/shortcuts.bulk-index`, `/shortcuts.upload`, plus `/index.process-all-*` and `/people.process-all-employees-teams` to kick off long-running rebuilds
-- **Natural-language planner** — type `?login into acme-be.glean.com and search for "Q2 plan"` (or `/ask "..."`) and Glean Assistant translates it into a sequence of slash commands, validated locally and gated behind a single confirm for any destructive step. Full design in [docs/NATURAL_LANGUAGE.md](docs/NATURAL_LANGUAGE.md)
-- **`--path` mode for indexing** — `/index.document --path file.md` and `/index.bulk-documents --path ./docs/` walk a local file or folder and synthesize the request body for you (`.txt`, `.md`, `.html`, `.json`). Includes `--include`/`--exclude` globs, `--public`/`--acl-from-file` permissions, and `--dry-run` to inspect the assembled payload without calling the API
-- `/scaffold` to generate a self-contained Python starter project for chat, search, or agent use cases
-- MCP server (`glean_mcp.py`) for Claude Code, Claude Desktop, and Cursor
-- Config stored at `~/.gleancode/config.json` — supports both Client and Indexing API tokens
-- Mock mode by default so you can try every command offline (now including the 30 new indexing commands); switches to live the moment you add credentials
-- **A real mock corpus** — offline mode serves ranked results from 70 interlinked documents spread evenly across five faux datasources (`gdrive`, `confluence`, `jira`, `github`, `slack` — 14 each), so a URL from `/search` resolves in `/docs.get`, `/summarize`, and `/chat` citations. Swap in your own JSON corpus for a tailored demo. See [docs/MOCK_CORPUS.md](docs/MOCK_CORPUS.md)
-- `/insights --export <file>` dumps all returned metrics (overview, assistant, agents, datasource clicks) to a flat CSV — pipe it straight into Slack, Sheets, or any BI tool
-- Secure-ref token storage — store `token.secure.client` / `token.secure.indexing` in config and have the actual secret resolved from `$GLEAN_CLIENT_TOKEN` / `$GLEAN_INDEXING_TOKEN` at request time, with masking everywhere tokens are displayed
-- **Browser SSO** — `/auth login` runs OAuth 2.1 authorization code + PKCE against your Glean instance (same SSO path as the web app). Access tokens live in `~/.gleancode/auth.json`; API calls use them automatically via `effective_api_token`. Indexing still uses a Glean-issued indexing token. See [docs/SSO_OAUTH.md](docs/SSO_OAUTH.md)
-- Test suite in `tests/` covering the client, config, UI, auth, mock-corpus, and indexing-walk layers — run with `python3 -m pytest tests/` or `python3 -m unittest discover -s tests` (699 tests)
+- **Every major Glean Client API surface as a slash command** — chat, search, agents, tools, docs, people, shortcuts (Go Links), answers, summarize, verification, messages, activity, announcements, collections, pins, and insights
+- **Near-complete Indexing API coverage** across read/debug, single-record write, bulk, and process-all tiers — including a debug toolkit that answers "is this doc uploaded?" and "why can't user X see doc Y?" without leaving the REPL. See [docs/INDEXING.md](docs/INDEXING.md)
+- **Custom Metadata API** for enriching already-indexed documents without re-uploading them. See [docs/METADATA.md](docs/METADATA.md)
+- **Indexing from local files** — `/index.document --path file.md` and `/index.bulk-documents --path ./docs/` walk a file or folder and synthesize the request body for you, with `--dry-run` to inspect it first
+- **Natural-language planner** — type `?login into acme-be.glean.com and search for "Q2 plan"` and Glean Assistant translates it into slash commands, validated locally and gated behind a single confirm for anything destructive
+- **Offline by default** — a real mock corpus of interlinked documents across five faux datasources, so every command is explorable without credentials. See [docs/MOCK_CORPUS.md](docs/MOCK_CORPUS.md)
+- **Browser SSO or API token** — `/auth login` runs OAuth 2.1 + PKCE against your instance, or paste a Glean-issued token. Secure refs keep real secrets in environment variables, never on disk
+- **MCP server** (`glean_mcp.py`) for Claude Code, Claude Desktop, and Cursor
+- Terminal niceties: `/help <command>` for every command, tab completion that cycles matches, a powerline-style status bar, and `/scaffold` to generate stdlib-only starter projects
 
-## Coming soon
+## Getting started
 
-### Visual Studio Code Extension
-
-A native VS Code extension that brings the full Glean Code REPL — slash commands, status bar, mock/live switching, secure-token storage — into the editor sidebar. Run searches, kick off agents, and pin docs without leaving your code window.
-
-![Glean Code VS Code extension preview](assets/vscode_extension_glean-code-cli.png)
-
-<br>
-
-## Getting Started with Glean Code
-
-## Install and run
+### Install and run
 
 ```bash
 cd glean-code-cli
 python3 -m glean_code
-# or
-./glean-code
 ```
 
 Python 3.9 or newer. No pip install required. Only the standard library is used.
 
-## Create an alias
+### Create an alias
 
-After opening up a new terminal just run `glean`.
+After opening a new terminal just run `glean`.
 
 ```bash
 alias glean="PYTHONPATH=<YOUR_PATH>/glean-code-cli python3 -m glean_code"
 ```
 
-## First run
+### First run
 
 **Browser SSO (no API token to paste)** — opens your browser for Glean → your company IdP, then stores OAuth tokens in `~/.gleancode/auth.json`:
 
@@ -109,780 +78,133 @@ Details: [docs/SSO_OAUTH.md](docs/SSO_OAUTH.md).
 /chat "summarise the Q2 plan"
 ```
 
-Without Client API credentials (no `/auth` session and no `/login` token) the CLI runs in **mock** mode, serving ranked results from a built-in fake corpus (see [Mock corpus](#mock-corpus)). After `/auth login` or `/login`, it switches to live calls against `https://<instance>/rest/api/v1` (host is whatever you configure, e.g. `acme-be.glean.com`).
+Without Client API credentials (no `/auth` session and no `/login` token) the CLI runs in **mock** mode. After `/auth login` or `/login`, it switches to live calls against `https://<instance>/rest/api/v1`.
+
+## Coming soon
+
+### Visual Studio Code Extension
+
+A native VS Code extension that brings the full Glean Code REPL — slash commands, status bar, mock/live switching, secure-token storage — into the editor sidebar. Run searches, kick off agents, and pin docs without leaving your code window.
+
+![Glean Code VS Code extension preview](assets/vscode_extension_glean-code-cli.png)
 
 ## Commands at a glance
 
-### Shell
+| Area | Commands |
+| --- | --- |
+| Shell | `/help` `/status` `/doctor` `/auth` `/login` `/logout` `/open` `/ask` `/config` `/mode` `/history` `/clear` `/exit` |
+| Chat and search | `/chat` `/search` `/autocomplete` `/recommendations` `/feedback` `/datasources.list` |
+| Indexing — read & debug | `/datasources.status` `/datasources.config` `/documents.status` `/documents.count` `/users.count` `/documents.access` `/debug.document` `/debug.documents` `/debug.user` `/indexing.rotate-token` |
+| Indexing — single write | `/index.document` `/index.permissions` `/index.user` `/index.group` `/index.membership` and their `/index.delete-*` partners |
+| Indexing — bulk & process-all | `/index.documents` `/index.bulk-documents` `/index.bulk-users` `/index.bulk-groups` `/index.bulk-memberships` `/shortcuts.bulk-index` `/shortcuts.upload` `/index.process-all-documents` `/index.process-all-memberships` |
+| Indexing — people (org chart) | `/people.bulk-employees` `/people.bulk-teams` `/people.index-employee-list` `/people.process-all-employees-teams` |
+| Custom metadata | `/metadata.set-schema` `/metadata.get-schema` `/metadata.delete-schema` `/metadata.attach` `/metadata.detach` |
+| Insights & activity | `/insights` `/activity.report` |
+| Agents and tools | `/agents.list` `/agents.run` `/tools.list` `/tools.call` |
+| Docs and people | `/docs.get` `/docs.permissions` `/entities.list` `/people.get` |
+| Announcements, collections, pins | `/announcements.list` `/announcements.create` `/announcements.delete` `/collections.list` `/collections.create` `/collections.delete` `/pins.list` `/pins.create` `/pins.delete` |
+| Shortcuts (Go Links) | `/shortcuts.list` `/shortcuts.get` `/shortcuts.create` `/shortcuts.update` `/shortcuts.delete` |
+| Answers | `/answers.list` `/answers.get` `/answers.create` `/answers.update` `/answers.delete` |
+| Verification | `/verification.list` `/verification.verify` `/verification.remind` |
+| Summarize & messages | `/summarize` `/messages.get` |
+| Scaffold | `/scaffold chat` `/scaffold search` `/scaffold agent` |
 
-- [`/help`](docs/COMMANDS.md#help)
-- [`/status`](docs/COMMANDS.md#status)
-- [`/doctor`](docs/COMMANDS.md#doctor)
-- [`/auth`](docs/SSO_OAUTH.md) — browser OAuth (PKCE) SSO
-- [`/login`](docs/COMMANDS.md#login)
-- [`/logout`](docs/COMMANDS.md#logout)
-- [`/open`](docs/COMMANDS.md#open)
-- [`/ask`](docs/COMMANDS.md#ask) · also `?<request>`
-- [`/config`](docs/COMMANDS.md#config)
-- [`/mode`](docs/COMMANDS.md#mode)
-- [`/history`](docs/COMMANDS.md#history)
-- [`/clear`](docs/COMMANDS.md#clear)
-- [`/exit`](docs/COMMANDS.md#exit)
+Type `/help <command>` for parameters, examples, and the underlying REST endpoint. Bare text with no leading slash is a shortcut for `/chat`.
 
-### Chat and Search
+**Full per-command reference — usage, parameters, examples, endpoints — is in [docs/COMMANDS.md](docs/COMMANDS.md).**
 
-- [`/chat`](docs/COMMANDS.md#chat)
-- [`/search`](docs/COMMANDS.md#search)
-- [`/datasources.list`](docs/COMMANDS.md#datasourceslist)
-- [`/datasources.list --with-status`](docs/COMMANDS.md#datasourceslist)
-- [`/autocomplete`](docs/COMMANDS.md#autocomplete)
-- [`/recommendations`](docs/COMMANDS.md#recommendations)
-- [`/feedback`](docs/COMMANDS.md#feedback)
+## Mock mode
 
-### Indexing — read & debug
+Every command works offline. With no credentials configured, Glean Code serves ranked results from a built-in corpus of seventy interlinked documents belonging to one fictional company, spread evenly across five faux datasources (`gdrive`, `confluence`, `jira`, `github`, `slack` — fourteen each).
 
-- [`/datasources.status <name>`](docs/COMMANDS.md#datasourcesstatus)
-- [`/datasources.config <name>`](docs/COMMANDS.md#datasourcesconfig)
-- [`/documents.status`](docs/COMMANDS.md#documentsstatus)
-- [`/documents.count`](docs/COMMANDS.md#documentscount)
-- [`/users.count`](docs/COMMANDS.md#userscount)
-- [`/documents.access`](docs/COMMANDS.md#documentsaccess)
-- [`/debug.document`](docs/COMMANDS.md#debugdocument)
-- [`/debug.documents`](docs/COMMANDS.md#debugdocuments)
-- [`/debug.user`](docs/COMMANDS.md#debuguser)
-- [`/indexing.rotate-token`](docs/COMMANDS.md#indexingrotate-token)
+Because every mock endpoint reads from the same corpus, offline mode behaves like one coherent index rather than a pile of placeholders — a URL from `/search` resolves in `/docs.get`, `/summarize`, and `/chat` citations:
 
-### Indexing — single-record write
+```text
+/search "quarterly planning"                    # ranked against the corpus
+/search "checkout incident" --datasource jira   # the datasource filter really filters
+/summarize --url <url from result 2>            # summarises that same document
+/docs.get --url <url from result 2>             # same title, author and datasource
+/chat "how do we run quarterly planning?"       # cites documents that exist
+```
 
-- [`/index.document`](docs/COMMANDS.md#indexdocument)
-- [`/index.delete-document`](docs/COMMANDS.md#indexdelete-document)
-- [`/index.permissions`](docs/COMMANDS.md#indexpermissions)
-- [`/index.user`](docs/COMMANDS.md#indexuser)
-- [`/index.delete-user`](docs/COMMANDS.md#indexdelete-user)
-- [`/index.group`](docs/COMMANDS.md#indexgroup)
-- [`/index.delete-group`](docs/COMMANDS.md#indexdelete-group)
-- [`/index.membership`](docs/COMMANDS.md#indexmembership)
-- [`/index.delete-membership`](docs/COMMANDS.md#indexdelete-membership)
-
-### Indexing — bulk & process-all
-
-- [`/index.documents`](docs/COMMANDS.md#indexdocuments)
-- [`/index.bulk-documents`](docs/COMMANDS.md#indexbulk-documents)
-- [`/index.bulk-users`](docs/COMMANDS.md#indexbulk-users)
-- [`/index.bulk-groups`](docs/COMMANDS.md#indexbulk-groups)
-- [`/index.bulk-memberships`](docs/COMMANDS.md#indexbulk-memberships)
-- [`/shortcuts.bulk-index`](docs/COMMANDS.md#shortcutsbulk-index)
-- [`/shortcuts.upload`](docs/COMMANDS.md#shortcutsupload)
-- [`/index.process-all-documents`](docs/COMMANDS.md#indexprocess-all-documents)
-- [`/index.process-all-memberships`](docs/COMMANDS.md#indexprocess-all-memberships)
-
-### Indexing — people (org chart)
-
-- [`/people.bulk-employees`](docs/COMMANDS.md#peoplebulk-employees)
-- [`/people.bulk-teams`](docs/COMMANDS.md#peoplebulk-teams)
-- [`/people.index-employee-list`](docs/COMMANDS.md#peopleindex-employee-list)
-- [`/people.process-all-employees-teams`](docs/COMMANDS.md#peopleprocess-all-employees-teams)
-
-### Custom Metadata
-
-- [`/metadata.set-schema`](docs/COMMANDS.md#metadataset-schema)
-- [`/metadata.get-schema`](docs/COMMANDS.md#metadataget-schema)
-- [`/metadata.delete-schema`](docs/COMMANDS.md#metadatadelete-schema)
-- [`/metadata.attach`](docs/COMMANDS.md#metadataattach)
-- [`/metadata.detach`](docs/COMMANDS.md#metadatadetach)
-
-### Insights & Activity
-
-- [`/insights`](#insights)
-- [`/insights --all`](#insights)
-- [`/insights --assistant`](#insights)
-- [`/insights --agents`](#insights)
-- [`/insights --all --export <file>`](#insights)
-
-### Agents and Tools
-
-- [`/agents.list`](docs/COMMANDS.md#agentslist)
-- [`/agents.run`](docs/COMMANDS.md#agentsrun)
-- [`/tools.list`](docs/COMMANDS.md#toolslist)
-- [`/tools.call`](docs/COMMANDS.md#toolscall)
-
-### Docs and People
-
-- [`/docs.get`](docs/COMMANDS.md#docsget)
-- [`/docs.permissions`](docs/COMMANDS.md#docspermissions)
-- [`/entities.list`](docs/COMMANDS.md#entitieslist)
-- [`/people.get`](docs/COMMANDS.md#peopleget)
-
-### Announcements, Collections, Pins
-
-- [`/announcements.list`](docs/COMMANDS.md#announcementslist)
-- [`/announcements.create`](docs/COMMANDS.md#announcementscreate)
-- [`/announcements.delete`](docs/COMMANDS.md#announcementsdelete)
-- [`/collections.list`](docs/COMMANDS.md#collectionslist)
-- [`/collections.create`](docs/COMMANDS.md#collectionscreate)
-- [`/collections.delete`](docs/COMMANDS.md#collectionsdelete)
-- [`/pins.list`](docs/COMMANDS.md#pinslist)
-- [`/pins.create`](docs/COMMANDS.md#pinscreate)
-- [`/pins.delete`](docs/COMMANDS.md#pinsdelete)
-
-### Shortcuts
-
-- [`/shortcuts.list`](docs/COMMANDS.md#shortcutslist)
-- [`/shortcuts.get`](docs/COMMANDS.md#shortcutsget)
-- [`/shortcuts.create`](docs/COMMANDS.md#shortcutscreate)
-- [`/shortcuts.update`](docs/COMMANDS.md#shortcutsupdate)
-- [`/shortcuts.delete`](docs/COMMANDS.md#shortcutsdelete)
-
-### Answers
-
-- [`/answers.list`](docs/COMMANDS.md#answerslist)
-- [`/answers.get`](docs/COMMANDS.md#answersget)
-- [`/answers.create`](docs/COMMANDS.md#answerscreate)
-- [`/answers.update`](docs/COMMANDS.md#answersupdate)
-- [`/answers.delete`](docs/COMMANDS.md#answersdelete)
-
-### Summarize
-
-- [`/summarize`](#summarize)
-
-### Verification
-
-- [`/verification.list`](docs/COMMANDS.md#verificationlist)
-- [`/verification.verify`](docs/COMMANDS.md#verificationverify)
-- [`/verification.remind`](docs/COMMANDS.md#verificationremind)
-
-### Messages
-
-- [`/messages.get`](docs/COMMANDS.md#messagesget)
-
-### Activity
-
-- [`/activity.report`](docs/COMMANDS.md#activityreport)
-
-### Scaffold templates
-
-- [`/scaffold chat`](#scaffold)
-- [`/scaffold search`](#scaffold)
-- [`/scaffold agent`](#scaffold)
-
-Type `/help <command>` for parameters, examples and the underlying REST endpoint. Bare text with no leading slash is a shortcut for `/chat`.
-
----
-
-## Command Reference
-
-The full per-command reference (every slash command, with usage, parameters, examples, and the underlying REST endpoint) lives in [docs/COMMANDS.md](docs/COMMANDS.md). It is generated to match what `/help <command>` shows in the REPL.
-
-For a quick scan, see [Commands at a glance](#commands-at-a-glance) above.
-
----
+Point `mock_corpus_path` at a JSON file to swap in your own corpus for a tailored demo. Full reference, document inventory, ranking notes, and the custom-corpus file format: **[docs/MOCK_CORPUS.md](docs/MOCK_CORPUS.md)**.
 
 ## Natural-language planner
 
-Don't remember the exact slash-command incantation? Describe what you want and Glean Assistant translates it into the commands for you.
+Don't remember the exact slash-command incantation? Describe what you want and Glean Assistant translates it into commands for you.
 
 ```text
 ?login into acme-be.glean.com with my stored token, then search for "Q2 plan"
 /ask "show me datasource health and start a chat"
 ```
 
-Both forms invoke the same handler — `?` is the REPL shorthand, `/ask "..."` is the explicit form (handy for scripts and pipes).
+Both forms invoke the same handler — `?` is the REPL shorthand, `/ask "..."` is the explicit form (handy for scripts and pipes). Glean Code builds a catalogue of every registered command, sends it with your request, validates each returned step against the live command set, and shows a numbered plan. Pure reads run automatically; writes, deletes, and auth changes trigger a single `Run all? [y/N]` gate. Tokens never leave the local process — the planner sees only the placeholder `<stored>`.
 
-### How it works
+It works offline too: in mock mode the CLI pattern-matches locally and emits a canned plan instead of calling Glean.
 
-1. Build a compact catalogue of every registered command from `HANDLERS` + `DOCS`
-2. Send the catalogue + your request to your Glean instance via `POST /chat` (a dim `Asking Glean...` shows while the request is in flight)
-3. Parse the JSON array out of Glean's reply (tolerates code fences and prose)
-4. Validate each step against the live command set — unknown commands are flagged `[unknown — will be skipped]`
-5. Show a numbered plan; if any step is destructive, prompt `Run all? [y/N]` once
-6. Dispatch each valid step through the normal command handler
+Full design — architecture, prompt template, destructive set, troubleshooting: **[docs/NATURAL_LANGUAGE.md](docs/NATURAL_LANGUAGE.md)**.
 
-### Confirm policy
+## Tokens and auth
 
-Pure reads (`/search`, `/status`, `/datasources.list`, `/insights`, `/help`, ...) run automatically. The confirm gate kicks in only for writes, deletes, and auth-changing commands (`/login`, `/logout`, `/indexing.rotate-token`, all `*.create`/`*.update`/`*.delete`, every `index.*` write, all bulk and process-all jobs).
+Three ways to authenticate, in order of preference:
 
-### Mock mode
-
-`/ask` works offline — in mock mode the CLI pattern-matches your prompt locally and emits a canned plan instead of calling Glean. Useful for demos and tests. The commands the plan dispatches then run against the [mock corpus](#mock-corpus), so an offline `?search for the quarterly plan` returns real-looking documents.
-
-### Tokens never leave the local process
-
-The system prompt instructs Glean to emit the literal placeholder `<stored>` whenever the user references a saved token. Substitution happens locally, after parsing. Real secrets are also scrubbed from the in-memory history buffer by the existing `_sanitize_for_history` pass.
-
-For the full design — architecture, prompt template, destructive set, troubleshooting, extension points — see **[docs/NATURAL_LANGUAGE.md](docs/NATURAL_LANGUAGE.md)**. The `/ask` Command Reference entry is at [docs/COMMANDS.md#ask](docs/COMMANDS.md#ask).
-
----
-
-## Insights
-
-`/insights` retrieves aggregate usage data from the Glean Insights Dashboard — the same data visible in the admin UI. It covers search adoption, active user counts, search session satisfaction, datasource click distribution, and AI assistant activity.
-
-Uses the same Client API token as search and chat — no extra credentials required.
-
-### Flags
-
-| Flag | Description |
-| --- | --- |
-| _(none)_ | Overview only: MAU, WAU, employee count, sign-ups, search satisfaction, clicks by datasource |
-| `--assistant` | Adds Assistant metrics: MAU, WAU, chat messages, AI answers, summarizations |
-| `--agents` | Adds Agents metrics: MAU, WAU |
-| `--all` | All three surfaces in one call |
-| `--no-per-user` | Suppresses the per-user breakdown in the response |
-| `--export <file>` | Write all returned metrics to a CSV file (columns: `section`, `metric`, `value`) |
-
-### Examples
-
-```text
-/insights
-/insights --all
-/insights --assistant
-/insights --agents --no-per-user
-/insights --all --export insights.csv
-```
-
-### What the output shows
-
-#### Overview
-
-- Monthly and weekly active users
-- Employee count and total sign-ups (from org chart)
-- Search session satisfaction rate (%)
-- Last updated timestamp
-- Search clicks broken down by datasource (gdrive, confluence, slack, jira, etc.)
-
-#### Assistant (with `--assistant` or `--all`)
-
-- Monthly and weekly active users of the Glean Assistant
-- Chat message, AI answer, and summarization activity
-
-#### Agents (with `--agents` or `--all`)
-
-- Monthly and weekly active users across agent runs
-
-### Endpoint
-
-```text
-POST /rest/api/v1/insights
-```
-
----
-
-## Indexing API
-
-Glean Code exposes 32 of the 37 documented Indexing API endpoints — read/debug, single-record writes, bulk uploads, and long-running process-all triggers. All Indexing-API commands require a separate indexing token (Client API tokens cannot reach `/api/index/v1`):
-
-```text
-/config set indexing_token <token-or-secure-ref>
-```
-
-The token can be a literal value or the secure reference `token.secure.indexing` (resolved from `$GLEAN_INDEXING_TOKEN` at request time — see [Secure tokens](#secure-tokens)). Get a real token from your Glean admin UI (workspace settings → API tokens → Indexing).
-
-### Read & debug
-
-These are non-destructive lookups — start here when answering questions like "is this doc indexed?", "why can't user X see doc Y?", or "what's the upload count for datasource Z?"
-
-| Command | Purpose |
-| --- | --- |
-| [`/datasources.status <name>`](docs/COMMANDS.md#datasourcesstatus) | Full status for one datasource: visibility, counts, last 5 processing events |
-| [`/datasources.config <name>`](docs/COMMANDS.md#datasourcesconfig) | Live config: object types, ACL settings, trusted domains, icon URL |
-| [`/datasources.list --with-status`](docs/COMMANDS.md#datasourceslist) | All datasources with uploaded/indexed counts and coverage |
-| [`/documents.status`](docs/COMMANDS.md#documentsstatus) | Upload + indexing status for one document |
-| [`/documents.count`](docs/COMMANDS.md#documentscount) | Document count for a custom datasource |
-| [`/users.count`](docs/COMMANDS.md#userscount) | User count for a custom datasource |
-| [`/documents.access`](docs/COMMANDS.md#documentsaccess) | Whether a specific user has access to a specific document |
-| [`/debug.document`](docs/COMMANDS.md#debugdocument) | Per-doc debug payload (status + uploaded permissions) |
-| [`/debug.documents`](docs/COMMANDS.md#debugdocuments) | Bulk debug for many documents (`--from-file`) |
-| [`/debug.user`](docs/COMMANDS.md#debuguser) | Per-user debug payload (status + uploaded groups) |
-
-```text
-/datasources.config gdrive
-/documents.access --datasource gdrive --object-type Article --id doc-1 --user alice@example.com
-/debug.user gdrive alice@example.com
-```
-
-### Single-record write
-
-Each write command takes a JSON request body via `--from-file`. Deletes use convenience flags. All accept `--version <n>` for optimistic concurrency.
-
-| Command | Purpose |
-| --- | --- |
-| [`/index.document`](docs/COMMANDS.md#indexdocument) | Index one document — supports `--path <file>` mode, see below |
-| [`/index.delete-document`](docs/COMMANDS.md#indexdelete-document) | Delete one document by id |
-| [`/index.permissions`](docs/COMMANDS.md#indexpermissions) | Update document ACL |
-| [`/index.user`](docs/COMMANDS.md#indexuser) | Index one user |
-| [`/index.delete-user`](docs/COMMANDS.md#indexdelete-user) | Delete one user |
-| [`/index.group`](docs/COMMANDS.md#indexgroup) | Index one group |
-| [`/index.delete-group`](docs/COMMANDS.md#indexdelete-group) | Delete one group |
-| [`/index.membership`](docs/COMMANDS.md#indexmembership) | Index one group membership |
-| [`/index.delete-membership`](docs/COMMANDS.md#indexdelete-membership) | Delete one group membership |
-
-```text
-/index.document --from-file ./doc.json
-/index.document --path ./README.md --datasource custom1 --object-type Article --public
-/index.delete-document --datasource gdrive --object-type Article --id doc-1
-/index.permissions --from-file ./perms.json
-```
-
-### Indexing from local files (`--path`)
-
-`/index.document` and `/index.bulk-documents` both accept `--path <file-or-dir>` as an alternative to `--from-file`. The CLI walks the path, builds DocumentDefinitions for you, and POSTs them. Pair with `--dry-run` to see exactly what would be sent.
-
-| Flag | Purpose |
-| --- | --- |
-| `--path` | A file (single mode) or directory (bulk mode) |
-| `--datasource` | Required. Datasource name applied to every walked file |
-| `--object-type` | Required. e.g. `Article`, `Wiki` |
-| `--public` | Make all docs world-readable. Mutually exclusive with `--acl-from-file` |
-| `--acl-from-file` | JSON file with a `DocumentPermissionsDefinition` applied to every doc |
-| `--include` | Comma-separated globs. Default: `*.txt,*.md,*.markdown,*.html,*.htm,*.json` |
-| `--exclude` | Comma-separated globs. Default skips `.git`, `node_modules`, `__pycache__`, `.DS_Store` |
-| `--max-bytes` | Skip files larger than this. Default 5 MB |
-| `--id-prefix` | Prepended to the path-derived id slug (e.g. `--id-prefix proj` → `proj-team-onboarding`) |
-| `--view-url-prefix` | Base URL prepended to relative paths. Defaults to `file://` per file |
-| `--dry-run` | Print the assembled request body and exit without calling the API |
-
-**Supported file types:** `.txt`, `.md`, `.markdown`, `.html`, `.htm`, `.json`. Binary formats (PDF, `.docx`, etc.) are out of scope for v1.
-
-**Behaviour:**
-
-- Path-derived ids: `team/onboarding.md` → `team-onboarding`. Stable across re-runs, debuggable, datasource-safe
-- HTML files are sent as `htmlContent`; everything else as `textContent`
-- Mock mode works for `--path` exactly like every other indexing command (token still required)
-- `/index.document --path <dir>` errors and points you at `/index.bulk-documents` — single mode is single-file only
-- The bulk command warns when more than 500 files are matched. v1 sends them in one POST; auto-paging across `isFirstPage`/`isLastPage` is planned for v2
-
-```text
-# Single Markdown file, public ACL, dry-run first
-/index.document --path ./README.md \
-                --datasource custom1 --object-type Article \
-                --public --dry-run
-
-# Walk a folder, only .md and .txt, with a fixed ACL from disk
-/index.bulk-documents --path ./content/ \
-                      --datasource custom1 --object-type Article \
-                      --acl-from-file ./perms.json \
-                      --include "*.md,*.txt" --exclude "**/draft/**"
-```
-
-### Bulk + paged uploads
-
-Bulk endpoints use the standard upload-paging contract (`uploadId`, `isFirstPage`, `isLastPage`, optional `forceRestartUpload`). Wrap your full request body in a JSON file and pass it via `--from-file`. The documents-side commands also accept `--path` (see above).
-
-| Command | Endpoint family |
-| --- | --- |
-| [`/index.documents`](docs/COMMANDS.md#indexdocuments) | Paged document index |
-| [`/index.bulk-documents`](docs/COMMANDS.md#indexbulk-documents) | Bulk document index |
-| [`/index.bulk-users`](docs/COMMANDS.md#indexbulk-users) | Bulk user index |
-| [`/index.bulk-groups`](docs/COMMANDS.md#indexbulk-groups) | Bulk group index |
-| [`/index.bulk-memberships`](docs/COMMANDS.md#indexbulk-memberships) | Bulk group memberships |
-| [`/people.bulk-employees`](docs/COMMANDS.md#peoplebulk-employees) | Bulk employee records (org chart) |
-| [`/people.bulk-teams`](docs/COMMANDS.md#peoplebulk-teams) | Bulk team records (org chart) |
-| [`/people.index-employee-list`](docs/COMMANDS.md#peopleindex-employee-list) | Versioned employee list |
-| [`/shortcuts.bulk-index`](docs/COMMANDS.md#shortcutsbulk-index) | Bulk shortcuts via Indexing API ⚠ distinct from Client API `/shortcuts.*` |
-| [`/shortcuts.upload`](docs/COMMANDS.md#shortcutsupload) | Upload shortcuts via Indexing API |
-
-### Process-all (long-running)
-
-Trigger a tenant-wide reprocess after a bulk upload completes. These commands accept an optional `--datasource` filter where applicable.
-
-| Command | Purpose |
-| --- | --- |
-| [`/index.process-all-documents`](docs/COMMANDS.md#indexprocess-all-documents) | Reprocess all uploaded documents |
-| [`/index.process-all-memberships`](docs/COMMANDS.md#indexprocess-all-memberships) | Reprocess all uploaded memberships |
-| [`/people.process-all-employees-teams`](docs/COMMANDS.md#peopleprocess-all-employees-teams) | Reprocess all uploaded employees + teams |
-
-### Token rotation
-
-```text
-/indexing.rotate-token
-/config set indexing_token <new-raw-secret>
-```
-
-`/indexing.rotate-token` prints the new raw secret — store it immediately, the old one is invalidated.
-
-### Mock mode for indexing
-
-All 32 indexing commands work in mock mode as long as an indexing token is set in config — it can be any non-empty string (e.g. `mock_idx_token`). The CLI returns realistic shapes (datasource configs, doc/user counts, debug payloads, accept-style write responses) so you can rehearse a workflow before pointing at a live tenant.
-
----
-
-## Custom Metadata API
-
-Glean's Custom Metadata API lets you attach independent structured metadata to any document already indexed in Glean — across native connectors, custom datasources, anything — without re-uploading the document. These commands hit `https://<instance>-be.glean.com/rest/api/index` (note: a different base path than the rest of the Indexing API).
-
-The same `indexing_token` is reused; the token must carry one of:
-
-- `custommetadata:<group_name>` — limits access to a single named group
-- `custommetadata:global_scope` — manage schemas and metadata across any group
-
-Generate the token through your standard indexing-token workflow with the appropriate scope, then point Glean Code at it via `/config set indexing_token <token-or-secure-ref>`.
-
-### Schema management
-
-Define which keys a metadata group accepts and what type each one holds (`TEXT`, `PICKLIST`, `TEXTLIST`, or `MULTIPICKLIST`). Schemas are versioned per group and replace the previous schema on each set.
-
-| Command | Purpose |
-| --- | --- |
-| [`/metadata.set-schema`](docs/COMMANDS.md#metadataset-schema) | Create or update a group's schema (inline `--keys` or `--from-file`) |
-| [`/metadata.get-schema`](docs/COMMANDS.md#metadataget-schema) | Fetch the current schema for a group |
-| [`/metadata.delete-schema`](docs/COMMANDS.md#metadatadelete-schema) | Delete a group's schema |
-
-```text
-/metadata.set-schema --group hr --keys department:PICKLIST,region:TEXT
-/metadata.set-schema --group hr --from-file ./hr-schema.json --dry-run
-/metadata.get-schema --group hr
-/metadata.delete-schema --group hr
-```
-
-### Attaching metadata to documents
-
-Attach (or replace) a set of `(key, value)` pairs on an indexed document for a given group. The PUT semantic replaces the **full** set for the `(docId, group)` pair — include every key you want preserved.
-
-| Command | Purpose |
-| --- | --- |
-| [`/metadata.attach`](docs/COMMANDS.md#metadataattach) | Attach or replace custom metadata on a document (inline `--values` or `--from-file`) |
-| [`/metadata.detach`](docs/COMMANDS.md#metadatadetach) | Remove all custom metadata for a `(document, group)` pair |
-
-```text
-/metadata.attach --doc-id ABC --group hr --values department=Engineering,region=US
-/metadata.attach --doc-id ABC --group hr --from-file ./pairs.json
-/metadata.detach --doc-id ABC --group hr
-```
-
-Use `--from-file` whenever any value is a `TEXTLIST` or `MULTIPICKLIST` array — `--values` is for simple `TEXT`/`PICKLIST` strings only.
-
-### Querying
-
-Custom metadata becomes searchable as soon as it's indexed. Use the standard search facet syntax `<groupName><keyName>:<value>` and include `CUSTOM_METADATA` in `includeFields` on `/search` to surface it in results. See the [Glean docs](https://developers.glean.com/api-info/indexing/custom-metadata/overview) for full querying details.
-
-### Mock mode for custom metadata
-
-All five `/metadata.*` commands work in mock mode (with any non-empty `indexing_token` configured): set/get schema, attach, and detach return realistic ack-style or schema-shaped responses so you can rehearse the flow before pointing at a live tenant.
-
----
-
-## Scaffold
-
-`/scaffold` generates a self-contained Python starter file for a Glean API surface. It reads credentials from your existing `~/.gleancode/config.json` (written by `/login`) so the generated script works immediately.
-
-```text
-/scaffold chat              # interactive chat loop + single-turn CLI
-/scaffold search            # search with --datasource and --page-size flags
-/scaffold agent             # list agents and run them by id
-```
-
-Each template accepts an output directory. If omitted you are prompted, and if the directory does not exist you are asked before it is created.
-
-```text
-/scaffold chat --output ~/projects/my-chat-app
-```
-
-The generated files are stdlib-only — no `pip install` required. They also support `GLEAN_INSTANCE`, `GLEAN_TOKEN`, and `GLEAN_ACT_AS` environment variables as an alternative to the config file.
-
-## Secure tokens
-
-Glean Code never has to store a literal API token on disk. Instead of pasting the real token into config, you can store a **secure reference** — a fixed name like `token.secure.client` — and Glean Code resolves it from an environment variable at the moment a request is made.
-
-### Reference table
-
-| Reference | Resolves from | Used for |
+| Method | How | Notes |
 | --- | --- | --- |
-| `token.secure.client` | `$GLEAN_CLIENT_TOKEN` | All Client API calls (chat, search, agents, insights, etc.) |
-| `token.secure.indexing` | `$GLEAN_INDEXING_TOKEN` | Indexing API calls (`/datasources.status`, `/indexing.rotate-token`) |
+| Browser SSO | `/auth login --instance <host>` | OAuth 2.1 + PKCE, same SSO path as the web app. Tokens in `~/.gleancode/auth.json`. See [docs/SSO_OAUTH.md](docs/SSO_OAUTH.md) |
+| Secure ref | `/login --token token.secure.client` | Config stores the reference name; the real secret resolves from `$GLEAN_CLIENT_TOKEN` at request time. See [docs/SECURE_TOKENS.md](docs/SECURE_TOKENS.md) |
+| Literal token | `/login --token <bearer_token>` | Written to `~/.gleancode/config.json` with `0o600` perms, masked to `***1234` everywhere it displays |
 
-### Example — full setup
+The Client API and the Indexing API take **separate tokens** — a Client token cannot reach `/api/index/v1`. Set the indexing one with `/config set indexing_token <token-or-secure-ref>`. Indexing still uses a Glean-issued token even when the Client API is on SSO.
 
-```bash
-# 1. Put the real secrets in your shell environment.
-#    Use whatever secret manager you already trust:
-#    direnv, 1Password CLI, Doppler, AWS Secrets Manager, plain rc file, etc.
-export GLEAN_CLIENT_TOKEN="glean_xxx_real_client_token"
-export GLEAN_INDEXING_TOKEN="glean_idx_real_indexing_token"
-```
-
-```text
-# 2. Tell Glean Code to look the values up by reference.
-/login --instance acme-be.glean.com --token token.secure.client
-/config set indexing_token token.secure.indexing
-```
-
-```text
-# 3. Verify
-/status
-/doctor
-```
-
-After this, `~/.gleancode/config.json` contains the harmless string `token.secure.client`, not the real secret:
-
-```json
-{
-  "instance": "acme-be.glean.com",
-  "api_token": "token.secure.client",
-  "indexing_token": "token.secure.indexing"
-}
-```
-
-### What gets masked, where
-
-| Surface | Behaviour |
-| --- | --- |
-| `/status` | Shows `token.secure.client ($GLEAN_CLIENT_TOKEN set)` for refs, `***1234` for literal tokens, `(unset)` if neither |
-| `/config list` | Same — refs verbatim, literal tokens masked to last 4 chars |
-| `/doctor` | Verifies the env var actually resolves; reports `FAIL` if a ref is configured but the env var is empty |
-| `/history` | Strips secret values from `--token` / `--indexing-token` flags and from `/config set <token-key> <value>` so secrets never enter the in-memory history buffer |
-| `config.json` on disk | Contains only the reference name when refs are used; literal tokens are written as-is and protected with `0o600` perms |
-
-### Mixing refs and literals
-
-You can use either form for either token. A literal is fine if you're testing locally and don't want the env-var indirection — Glean Code masks literal tokens on display so they never echo to the screen in full. Switch back and forth at any time with `/config set api_token <new-value-or-ref>`.
-
-### Falling back to mock mode
-
-If a secure ref is configured but the env var is unset, Glean Code's `is_live_ready` check returns false and `/mode auto` resolves to `mock`. You'll see ranked results from the [mock corpus](#mock-corpus) instead of an unauthenticated 401 — handy for demos.
+Tokens are stripped from the in-memory history buffer and masked on every display surface. See [docs/SECURE_TOKENS.md](docs/SECURE_TOKENS.md) for the full masking matrix.
 
 ## Config keys
 
 | Key | Description | Values |
 | --- | --- | --- |
 | `instance` | Glean backend host | e.g. `acme-be.glean.com` |
-| `api_token` | Client API bearer token | Glean-issued token, or a secure ref like `token.secure.client` (see [Secure tokens](#secure-tokens)) |
-| `indexing_token` | Indexing API token (for datasource status) | Glean-issued token, or `token.secure.indexing` (see [Secure tokens](#secure-tokens)) |
+| `api_token` | Client API bearer token | Glean-issued token, or a secure ref like `token.secure.client` |
+| `indexing_token` | Indexing API token | Glean-issued token, or `token.secure.indexing` |
 | `act_as` | Impersonate a user via `X-Glean-ActAs` | Email address |
 | `base_url` | Override the computed base URL | Full URL |
 | `mode` | API mode | `auto` (default), `live`, `mock` |
 | `theme` | Terminal colour theme | `glean` (default), `mono`, `neon` |
 | `default_page_size` | Default result count for search and entities | Integer, default `10` |
-| `mock_corpus_path` | JSON file backing mock mode | Path; unset uses the built-in corpus (see [Mock corpus](#mock-corpus)) |
+| `mock_corpus_path` | JSON file backing mock mode | Path; unset uses the built-in corpus |
 
-Change any key with `/config set <key> <value>`. Use `/mode live|mock|auto` to force a mode without editing config.
+Config lives at `~/.gleancode/config.json`. Change any key with `/config set <key> <value>`. Use `/mode live|mock|auto` to force a mode without editing config.
 
-## Mock corpus
+## MCP server
 
-Mock mode is backed by a single fake corpus — seventy documents belonging to one
-fictional company (Acme), spread evenly across five faux datasources, fourteen each. Full
-reference, including the complete document inventory and the people roster:
-**[docs/MOCK_CORPUS.md](docs/MOCK_CORPUS.md)**.
+`glean_mcp.py` exposes Glean as an MCP server so Claude Code, Claude Desktop, and Cursor can call Glean search, chat, and agents as native tools. It reads the same `~/.gleancode/config.json` but forces live mode, so MCP tools hit the real API by default — mock mode is opt-in via `GLEAN_MOCK` and every mock response carries a visible fabricated-data banner.
 
-| Datasource | Docs | What lives there |
-| --- | --- | --- |
-| `gdrive` | 14 | Planning charters, trackers, policies, decks, budget models, research, meeting notes |
-| `confluence` | 14 | Handbook pages, runbooks, postmortems, onboarding, process docs, compliance matrices |
-| `jira` | 14 | Epics, stories, bugs, incidents, security and support tickets |
-| `github` | 14 | Pull requests and repository files across five repos |
-| `slack` | 14 | Channel threads — kickoffs, war rooms, rollouts, announcements |
+Requires Python 3.10+ and the `mcp` package. The REPL itself remains Python 3.9+ and stdlib-only.
 
-Because every mock endpoint reads from the same corpus, offline mode behaves like one
-coherent index rather than a pile of placeholders — a URL from `/search` resolves
-everywhere else:
-
-```text
-/search "quarterly planning"                 # ranked against the corpus
-/search "checkout incident" --datasource jira   # the datasource filter really filters
-/summarize --url <url from result 2>         # summarises that same document
-/docs.get --url <url from result 2>          # same title, author and datasource
-/docs.permissions doc_plan_process           # the author is the owner
-/chat "how do we run quarterly planning?"    # cites documents that exist
-/datasources.list --with-counts              # the five datasources above
-/entities.list --kind PEOPLE                 # the roster behind every byline
-```
-
-Search is ranked, not templated: query terms score against title, tags, body, and
-container; snippets are pulled from the sentence that best matches the query. Results
-carry an author, a document type, and an age rendered relative to now, and quarter
-labels in titles (`Q4 FY26`) are computed at request time so the corpus never reads as
-stale. When a query matches nothing the page is padded with the freshest documents
-rather than coming back empty.
-
-### Bring your own corpus
-
-Point `mock_corpus_path` at a JSON file to replace the built-in set — useful for a demo
-tailored to a specific audience. Only `title` and `body` are required per document;
-everything else gets a sensible default, and a bare JSON array works too.
-
-```bash
-/config set mock_corpus_path ~/demo-corpus.json
-```
-
-```json
-{
-  "people": {
-    "ada@northwind.com": {"name": "Ada Lovelace", "title": "Engineer", "department": "Platform"}
-  },
-  "datasourceCounts": {"gdrive": 1840, "confluence": 920},
-  "documents": [
-    {
-      "id": "doc_1",
-      "datasource": "gdrive",
-      "doc_type": "Document",
-      "container": "Platform / Planning",
-      "title": "{Q+1} Planning Charter",
-      "url": "https://docs.google.com/document/d/abc123/edit",
-      "author": "ada@northwind.com",
-      "updated_days_ago": 4,
-      "tags": ["planning", "quarterly"],
-      "body": "Full text. Used for ranking, snippets and summaries."
-    }
-  ]
-}
-```
-
-`GLEAN_MOCK_CORPUS` does the same job without touching config (it picks _which_ corpus is
-served — `GLEAN_MOCK` is the separate switch that turns mock mode on for the
-[MCP server](#running-the-mcp-server-on-mock-data)); the config key wins if
-both are set, and `/status` shows which is in effect. A malformed file surfaces as a
-normal command error, not a traceback. Full field reference:
-[docs/MOCK_CORPUS.md](docs/MOCK_CORPUS.md#bring-your-own-corpus).
+Setup for all three clients, the tool table, and the mock-mode rationale: **[docs/MCP.md](docs/MCP.md)**.
 
 ## Project layout
 
 ```text
-glean-code/
-  glean-code              launcher script
+glean-code-cli/
   glean_mcp.py            MCP server entry point
   glean_code/
-    __init__.py
     __main__.py           python -m glean_code
     cli.py                REPL loop and banner
-    ui.py                 ASCII art, colours, boxes
-    config.py             config file load and save
-    client.py             Glean REST wrapper + mock responses
-    mock_corpus.py        the fake corpus every mock endpoint reads from
     commands.py           slash command parser and handlers
+    client.py             Glean REST wrapper + mock responses
+    config.py             config file load and save
     help_docs.py          per-command documentation
+    mock_corpus.py        the fake corpus every mock endpoint reads from
+    _indexing_walk.py     --path file walking for indexing commands
     completion.py         readline tab completion
     scaffold.py           project scaffold templates
-  tests/
-    __init__.py
-    test_client.py        GleanClient and mock response tests
-    test_mock_corpus.py   corpus ranking, placeholders and custom corpus files
-    test_config.py        Config load, save and URL property tests
-    test_ui.py            ANSI helpers, box renderer and status bar tests
+    ui.py                 ASCII art, colours, boxes
+    auth_commands.py      /auth command handlers
+    auth/                 OAuth 2.1 + PKCE: oauth, pkce, callback_server,
+                          token_store, manager
+  tests/                  15 test modules, stdlib unittest only
+  docs/                   full reference set — see below
 ```
-
-## MCP server
-
-`glean_mcp.py` exposes Glean as an MCP server so Claude Code, Claude Desktop,
-and Cursor can call Glean search, chat, and agents as native tools.
-
-It reads the same `~/.gleancode/config.json` but forces `mode = "live"` regardless of what
-that file says, so MCP tools call the real API by default. Mock mode is available but must be
-asked for explicitly — see [Running the MCP server on mock data](#running-the-mcp-server-on-mock-data).
-
-**Install the MCP package (one-time):**
-
-`pip`
-
-```bash
-pip install "mcp[cli]"
-```
-
-`brew`
-
-```bash
-brew install pipx
-pipx install "mcp[cli]"
-```
-
-**Claude Code** — add to `.claude/settings.json` in your project, or to
-`~/.claude/settings.json` globally:
-
-```json
-{
-  "mcpServers": {
-    "glean": {
-      "command": "python3",
-      "args": ["/absolute/path/to/glean-code-cli/glean_mcp.py"]
-    }
-  }
-}
-```
-
-**Claude Desktop** — add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "glean": {
-      "command": "python3",
-      "args": ["/absolute/path/to/glean-code-cli/glean_mcp.py"]
-    }
-  }
-}
-```
-
-**Cursor** — add to `.cursor/mcp.json` in your project:
-
-```json
-{
-  "mcpServers": {
-    "glean": {
-      "command": "python3",
-      "args": ["/absolute/path/to/glean-code-cli/glean_mcp.py"]
-    }
-  }
-}
-```
-
-Credentials are loaded automatically from `~/.gleancode/config.json` (written
-by `/login` in the REPL). You can also pass them as environment variables:
-
-```json
-{
-  "mcpServers": {
-    "glean": {
-      "command": "python3",
-      "args": ["/absolute/path/to/glean-code-cli/glean_mcp.py"],
-      "env": {
-        "GLEAN_INSTANCE": "your-instance-be.glean.com",
-        "GLEAN_TOKEN": "your-token"
-      }
-    }
-  }
-}
-```
-
-**Tools exposed:**
-
-| Tool | Description |
-| --- | --- |
-| `search` | Search the Glean index; optional `datasource` and `page_size` |
-| `chat` | Chat with the Glean Assistant; pass `chat_id` to continue a thread |
-| `list_agents` | List available agents; optional `query` filter |
-| `run_agent` | Run an agent by id and return its output |
-
-### Running the MCP server on mock data
-
-Set `GLEAN_MOCK` on the server entry to serve the [mock corpus](#mock-corpus) instead of
-your tenant — handy for wiring up an agent and testing the tool loop before you have a token:
-
-```json
-{
-  "mcpServers": {
-    "glean": {
-      "command": "python3",
-      "args": ["/absolute/path/to/glean-code-cli/glean_mcp.py"],
-      "env": {"GLEAN_MOCK": "1"}
-    }
-  }
-}
-```
-
-Accepted values are `1`, `true`, `yes`, and `on`. Every tool response is then prefixed with:
-
-```text
-[MOCK MODE] Fictional demo data, not your organisation's real content — do not cite or act on it as real.
-```
-
-The banner is deliberate. An agent cannot tell fabricated results from real ones, and the
-corpus returns confident-looking documents with plausible URLs — without a label, made-up
-content launders straight into whatever the agent writes or acts on. The same warning is in
-each tool's description, so it reaches the model before it calls anything.
-
-For the same reason mock mode is opt-in and never inherited: `mode` in
-`~/.gleancode/config.json` is ignored by the server, including `auto`, which would otherwise
-flip an agent onto fake data the day a token expires.
-
-Requires Python 3.10+. The REPL itself remains Python 3.9+ and stdlib-only.
 
 ## Running tests
 
@@ -898,135 +220,29 @@ Or without pytest:
 python3 -m unittest discover tests/
 ```
 
-| File | What it covers |
+699 tests covering the client and every mock response, commands and dispatch, config, UI, auth, completion, help docs, the mock corpus, indexing-walk, scaffold, and the MCP server. Development notes: [docs/TESTING.md](docs/TESTING.md).
+
+## Documentation
+
+| Doc | What's in it |
 | --- | --- |
-| `tests/test_client.py` | All mock responses, GleanClient methods, error handling |
-| `tests/test_mock_corpus.py` | Corpus ranking, snippets, placeholder expansion, custom corpus files |
-| `tests/test_config.py` | Config load/save, URL property computation, mode resolution |
-| `tests/test_ui.py` | ANSI width helpers, box renderer, status bar, hyperlink |
-
-## Notes on the REST paths
-
-The client targets the documented Glean Client REST API at `https://<instance>-be.glean.com/rest/api/v1`. Paths used:
-
-```text
-POST /chat
-POST /search
-POST /autocomplete
-POST /recommendations
-POST /feedback
-POST /agents/search
-POST /agents/runs/wait
-POST /agents/runs/stream
-POST /tools/list
-POST /tools/call
-POST /getdocuments
-POST /getdocumentpermissions
-POST /listentities
-POST /people
-POST /announcements/list
-POST /announcements/create
-POST /announcements/delete
-POST /listcollections
-POST /createcollection
-POST /listpins
-POST /createpin
-POST /unpin
-POST /deletecollection
-POST /listshortcuts
-POST /getshortcut
-POST /createshortcut
-POST /updateshortcut
-POST /deleteshortcut
-POST /listanswers
-POST /getanswer
-POST /createanswer
-POST /editanswer
-POST /deleteanswer
-POST /summarize
-POST /listverifications
-POST /verify
-POST /addverificationreminder
-POST /messages
-POST /activity
-POST /insights
-```
-
-Indexing API paths (require a separate indexing token, base `https://<instance>-be.glean.com/api/index/v1`):
-
-```text
-POST /api/index/v1/rotatetoken
-
-# Read & debug
-POST /api/index/v1/getdatasourceconfig
-POST /api/index/v1/getdocumentstatus
-POST /api/index/v1/getdocumentcount
-POST /api/index/v1/getusercount
-POST /api/index/v1/checkdocumentaccess
-POST /api/index/v1/debug/{datasource}/status
-POST /api/index/v1/debug/{datasource}/document
-POST /api/index/v1/debug/{datasource}/documents
-POST /api/index/v1/debug/{datasource}/user
-
-# Single-record write
-POST /api/index/v1/indexdocument
-POST /api/index/v1/deletedocument
-POST /api/index/v1/updatepermissions
-POST /api/index/v1/indexuser
-POST /api/index/v1/deleteuser
-POST /api/index/v1/indexgroup
-POST /api/index/v1/deletegroup
-POST /api/index/v1/indexmembership
-POST /api/index/v1/deletemembership
-
-# Bulk / paged
-POST /api/index/v1/indexdocuments
-POST /api/index/v1/bulkindexdocuments
-POST /api/index/v1/bulkindexusers
-POST /api/index/v1/bulkindexgroups
-POST /api/index/v1/bulkindexmemberships
-POST /api/index/v1/bulkindexshortcuts
-POST /api/index/v1/uploadshortcuts
-POST /api/index/v1/bulkindexemployees
-POST /api/index/v1/bulkindexteams
-POST /api/index/v1/indexemployeelist
-
-# Process-all (long running)
-POST /api/index/v1/processalldocuments
-POST /api/index/v1/processallmemberships
-POST /api/index/v1/processallemployeesandteams
-```
-
-Custom Metadata API paths (require an indexing token scoped with `custommetadata:<group>` or `custommetadata:global_scope`, base `https://<instance>-be.glean.com/rest/api/index`):
-
-```text
-# Schema management
-PUT    /rest/api/index/custom-metadata/schema/{groupName}
-GET    /rest/api/index/custom-metadata/schema/{groupName}
-DELETE /rest/api/index/custom-metadata/schema/{groupName}
-
-# Document metadata
-PUT    /rest/api/index/document/{docId}/custom-metadata/{groupName}
-DELETE /rest/api/index/document/{docId}/custom-metadata/{groupName}
-```
-
-If your tenant uses a slightly different path for a given surface, change it in `glean_code/client.py`. Every method is a small wrapper around `self._post(path, body)` so the swap is a one-liner.
-
-## JSON arguments in /tools.call
-
-Wrap the JSON in single quotes so the shell parser leaves the double quotes intact:
-
-```text
-/tools.call search '{"query":"pto policy"}'
-```
-
-## Test Harness
-
-Development notes on the test suite live in [docs/TESTING.md](docs/TESTING.md). See [Running tests](#running-tests) for how to run them.
+| [docs/COMMANDS.md](docs/COMMANDS.md) | Full per-command reference — usage, parameters, examples, endpoints |
+| [docs/INDEXING.md](docs/INDEXING.md) | Indexing API: read/debug, writes, bulk, process-all, `--path` mode |
+| [docs/METADATA.md](docs/METADATA.md) | Custom Metadata API: schemas and document attachment |
+| [docs/INSIGHTS.md](docs/INSIGHTS.md) | `/insights` flags, output, and CSV export |
+| [docs/MOCK_CORPUS.md](docs/MOCK_CORPUS.md) | The offline corpus — inventory, ranking, bring-your-own format |
+| [docs/NATURAL_LANGUAGE.md](docs/NATURAL_LANGUAGE.md) | Planner design, prompt template, destructive set |
+| [docs/SSO_OAUTH.md](docs/SSO_OAUTH.md) | Browser SSO via OAuth 2.1 + PKCE |
+| [docs/SECURE_TOKENS.md](docs/SECURE_TOKENS.md) | Secure refs, masking matrix, mock-mode fallback |
+| [docs/MCP.md](docs/MCP.md) | MCP server setup for Claude Code, Claude Desktop, Cursor |
+| [docs/REST_PATHS.md](docs/REST_PATHS.md) | Every REST path this client targets, and how to retarget them |
+| [docs/TESTING.md](docs/TESTING.md) | Test-suite development notes |
+| [CHANGELOG.md](CHANGELOG.md) | Release history |
 
 ---
 
 ## License
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
 [MIT](LICENSE) © 2026 barkz
