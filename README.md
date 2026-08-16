@@ -8,8 +8,27 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 
 ![Glean Code terminal screenshot](assets/glean_code_cli_example.png)
 
+## Highlights
+
+- **One-command install, and a Spotlight-launchable macOS app** — `python3 install.py` builds a
+  single-file zipapp (~84 KB, still zero dependencies) and puts `glean` on your PATH, plus a
+  registered `Glean.app` so `Cmd+Space` → "Glean" opens the REPL.
+  [#11](https://github.com/barkz/glean-code-cli/pull/11) ·
+  [`e46d517`](https://github.com/barkz/glean-code-cli/commit/e46d517)
+- **Every REST call audited against Glean's published OpenAPI spec** — the new
+  [incompatibility report](incompat_report.md) documents 12 Client API divergences from spec
+  `0.9.0`, with locations and fixes. Indexing and Custom Metadata verified clean.
+  [#10](https://github.com/barkz/glean-code-cli/pull/10) ·
+  [`f81902d`](https://github.com/barkz/glean-code-cli/commit/f81902d)
+- **Repo hygiene fixes** — removed 35 tracked `__pycache__` artifacts, corrected stale docs
+  (the suite is 721 tests, not 604), and dropped a Spotlight ignore rule that macOS never
+  honored.
+  [#12](https://github.com/barkz/glean-code-cli/pull/12) ·
+  [`17199b5`](https://github.com/barkz/glean-code-cli/commit/17199b5)
+
 ## Contents
 
+- [Highlights](#highlights) — what landed recently
 - [What you get](#what-you-get)
 - [Getting started](#getting-started) — install, alias, first run
 - [Coming soon](#coming-soon)
