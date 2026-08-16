@@ -1,0 +1,56 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: python ${{ matrix.python }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.9 is the documented floor (ships with macOS); 3.13 is the ceiling we claim.
+        os: [ubuntu-latest]
+        python: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+        include:
+          # The installer's macOS app-bundle path only really exercises on macOS.
+          - os: macos-latest
+            python: "3.12"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Confirm zero runtime dependencies
+        run: |
+          test ! -f pyproject.toml && test ! -f setup.py && test ! -f requirements.txt \
+            && echo "no dependency manifests, as intended"
+
+      - name: Run the test suite
+        env:
+          PYTHONPYCACHEPREFIX: ${{ runner.temp }}/pycache
+        run: python -m unittest discover tests/ -v
+
+      - name: Build and smoke-test the installer artifact
+        env:
+          PYTHONPYCACHEPREFIX: ${{ runner.temp }}/pycache
+        run: |
+          python install.py --cli-only --prefix "$RUNNER_TEMP/bin"
+          echo '/status' | "$RUNNER_TEMP/bin/glean" | grep -q "mode" \
+            && echo "installed CLI responds"
+
+      - name: Confirm the build left no artifacts in the tree
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::working tree dirty after build"; git status --short; exit 1
+          fi
