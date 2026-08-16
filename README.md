@@ -40,7 +40,7 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 
 ## Getting started
 
-### Install and run
+### Run it straight from the repo
 
 ```bash
 cd glean-code-cli
@@ -49,9 +49,30 @@ python3 -m glean_code
 
 Python 3.9 or newer. No pip install required. Only the standard library is used.
 
-### Create an alias
+### Or install it
 
-After opening a new terminal just run `glean`.
+```bash
+python3 install.py
+```
+
+This builds a single-file zipapp (~84 KB, still stdlib-only) and installs it as
+`glean` in `~/.local/bin`. On macOS it also creates `~/Applications/Glean.app` and
+registers it with LaunchServices, so the REPL is launchable from Spotlight —
+`Cmd+Space` → "Glean" → Enter opens it in a Terminal window.
+
+| Flag | Effect |
+| --- | --- |
+| _(none)_ | Install the CLI and, on macOS, the Spotlight app |
+| `--cli-only` | Skip the macOS app bundle |
+| `--dev` | App launches from the working tree, so edits apply with no rebuild |
+| `--prefix DIR` | Install the `glean` executable somewhere other than `~/.local/bin` |
+| `--verify` | Report what is currently installed |
+| `--uninstall` | Remove everything the installer created (config is left alone) |
+
+Re-run `python3 install.py` after pulling changes to refresh the snapshot, or install
+once with `--dev` and skip that step entirely.
+
+### Or just alias it
 
 ```bash
 alias glean="PYTHONPATH=<YOUR_PATH>/glean-code-cli python3 -m glean_code"
@@ -187,6 +208,7 @@ Setup for all three clients, the tool table, and the mock-mode rationale: **[doc
 
 ```text
 glean-code-cli/
+  install.py              CLI + macOS app installer (python3 install.py)
   glean_mcp.py            MCP server entry point
   glean_code/
     __main__.py           python -m glean_code
@@ -203,7 +225,7 @@ glean-code-cli/
     auth_commands.py      /auth command handlers
     auth/                 OAuth 2.1 + PKCE: oauth, pkce, callback_server,
                           token_store, manager
-  tests/                  15 test modules, stdlib unittest only
+  tests/                  16 test modules, stdlib unittest only
   docs/                   full reference set — see below
 ```
 
@@ -221,7 +243,7 @@ Or without pytest:
 python3 -m unittest discover tests/
 ```
 
-699 tests covering the client and every mock response, commands and dispatch, config, UI, auth, completion, help docs, the mock corpus, indexing-walk, scaffold, and the MCP server. Development notes: [docs/TESTING.md](docs/TESTING.md).
+721 tests covering the client and every mock response, commands and dispatch, config, UI, auth, completion, help docs, the mock corpus, indexing-walk, scaffold, the installer, and the MCP server. Development notes: [docs/TESTING.md](docs/TESTING.md).
 
 ## Documentation
 
