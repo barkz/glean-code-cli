@@ -6,6 +6,10 @@ glean_code/__pycache__/
 .claude/settings.json
 git/
 
+# Keeps macOS Spotlight from indexing the repo (stops .pyc/.py name collisions
+# with the Glean.app launcher in Cmd+Space)
+.metadata_never_index
+
 # Build output (zipapp staging dir and the .pyz artifact)
 # .noindex suffix keeps macOS Spotlight from indexing the artifact
 build/
