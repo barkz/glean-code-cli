@@ -10,14 +10,8 @@ git/
 # with the Glean.app launcher in Cmd+Space)
 .metadata_never_index
 
-# Build output (zipapp staging dir and the .pyz artifact)
-# .noindex suffix keeps macOS Spotlight from indexing the artifact
-build/
-build.noindex/
-
 # Never commit secrets (tokens may match GLEAN_* or glean_tok_* patterns)
 .env
 .env.*
 *.pem
 auth.json
-git/
