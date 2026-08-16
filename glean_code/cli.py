@@ -30,25 +30,42 @@ def main() -> None:
 
     setup_readline()
 
-    while session.running:
-        try:
-            bar = ui.status_bar(
-                mode=config.effective_mode,
-                instance=config.instance,
-                has_token=config.is_live_ready,
-                act_as=config.act_as,
-                chat_id=session.current_chat_id,
-            )
-            if bar:
-                print(bar)
-            line = input(ui.prompt_str(config.effective_mode))
-        except (EOFError, KeyboardInterrupt):
-            print()
-            break
-        try:
-            dispatch(session, line)
-        except Exception as e:  # defensive: never crash the REPL
-            ui.print_err(f"Unhandled error: {e}")
+    # Terminal title tracks mode and instance, so several open windows stay
+    # tellable apart. Only rewritten when the state actually changes.
+    last_title = None
+    try:
+        while session.running:
+            try:
+                title = ui.title_text(
+                    mode=config.effective_mode,
+                    instance=config.instance,
+                    has_token=config.is_live_ready,
+                    style_name=config.window_title,
+                )
+                if title and title != last_title:
+                    ui.set_title(title)
+                    last_title = title
+
+                bar = ui.status_bar(
+                    mode=config.effective_mode,
+                    instance=config.instance,
+                    has_token=config.is_live_ready,
+                    act_as=config.act_as,
+                    chat_id=session.current_chat_id,
+                )
+                if bar:
+                    print(bar)
+                line = input(ui.prompt_str(config.effective_mode))
+            except (EOFError, KeyboardInterrupt):
+                print()
+                break
+            try:
+                dispatch(session, line)
+            except Exception as e:  # defensive: never crash the REPL
+                ui.print_err(f"Unhandled error: {e}")
+    finally:
+        if last_title:
+            ui.clear_title()
 
 
 if __name__ == "__main__":
