@@ -22,6 +22,7 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 - [Project layout](#project-layout)
 - [Running tests](#running-tests)
 - [Documentation](#documentation) — the full reference set
+- ℹ️ [API incompatibility report](git/incompat_report.md) — known divergences from the Glean spec
 - [Changelog](CHANGELOG.md) — release history
 - [License](#license)
 
@@ -238,6 +239,13 @@ python3 -m unittest discover tests/
 | [docs/REST_PATHS.md](docs/REST_PATHS.md) | Every REST path this client targets, and how to retarget them |
 | [docs/TESTING.md](docs/TESTING.md) | Test-suite development notes |
 | [CHANGELOG.md](CHANGELOG.md) | Release history |
+| ℹ️ [git/incompat_report.md](git/incompat_report.md) | **API incompatibility report** — where the client diverges from the published Glean OpenAPI spec |
+
+> [!NOTE]
+> ℹ️ **Known API incompatibilities.** Twelve Client API commands currently diverge from Glean's
+> published OpenAPI spec — seven return 404/405/400 against a live tenant. The Indexing and
+> Custom Metadata surfaces are unaffected. Mock mode masks all of it, so the test suite passes.
+> Full detail, locations, and suggested fixes: **[git/incompat_report.md](git/incompat_report.md)**.
 
 ---
 
