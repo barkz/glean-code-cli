@@ -22,7 +22,7 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 - [Project layout](#project-layout)
 - [Running tests](#running-tests)
 - [Documentation](#documentation) — the full reference set
-- ℹ️ [API incompatibility report](git/incompat_report.md) — known divergences from the Glean spec
+- ℹ️ [API incompatibility report](incompat_report.md) — known divergences from the Glean spec
 - [Changelog](CHANGELOG.md) — release history
 - [License](#license)
 
