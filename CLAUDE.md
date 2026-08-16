@@ -10,12 +10,15 @@ Glean Code is a terminal-first REPL client for the Glean REST API (chat, search,
 
 ```bash
 # Run the REPL
-python3 -m glean_code        # or ./glean-code
+python3 -m glean_code
+
+# Install it (builds a stdlib-only zipapp; adds a macOS Spotlight app bundle)
+python3 install.py           # --cli-only, --dev, --prefix, --verify, --uninstall
 
 # Pipe a single command (non-interactive; cli.py detects a non-tty stdin)
 echo '/search "q2 plan"' | python3 -m glean_code
 
-# Run the full test suite (604 tests, stdlib unittest — works with or without pytest)
+# Run the full test suite (721 tests, stdlib unittest — works with or without pytest)
 python3 -m pytest tests/
 python3 -m unittest discover tests/
 
@@ -26,6 +29,11 @@ python3 -m unittest tests.test_commands.TestParseArgs.test_flag_with_value
 ```
 
 There is no build step, no `pip install`, no linter config, and no `pyproject.toml`/`setup.py`. Tests use only the stdlib (`unittest`, `unittest.mock`) and make no network calls.
+
+`install.py` is the only thing that produces an artifact: it stages the package in a temp
+directory and emits a zipapp, so nothing is ever built inside the repo. On macOS set
+`PYTHONPYCACHEPREFIX=~/.cache/python` to keep `__pycache__` out of the working tree —
+Spotlight indexes stray `.pyc` files and they hijack Cmd+Space searches for "glean".
 
 ## Mock vs. live mode (central design idea)
 
