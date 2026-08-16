@@ -10,6 +10,18 @@ Diffed the client against Glean's published OpenAPI specifications rather than d
 - `https://gleanwork.github.io/open-api/specs/final/client_rest.yaml`
 - `https://gleanwork.github.io/open-api/specs/final/indexing.yaml`
 
+**Spec version diffed against:**
+
+| Field | Value |
+| --- | --- |
+| `info.version` | **0.9.0** (identical in both specs) |
+| `openapi` | 3.0.0 |
+| `x-source-commit-sha` | `b923d85b9eec5decd44211937ba04c915306821a` |
+| Verified current | 2026-08-16 — re-fetched and byte-identical to the copy diffed |
+
+The same 0.9.0 contract is what the official `glean-api-client` SDK is generated from, so
+every finding below applies to the SDK surface as well.
+
 Both specs were parsed and every path, HTTP method, and required request field was compared to what the client actually sends. The notable findings were independently confirmed against the developer portal (`developers.glean.com/api/client-api/*/overview`).
 
 ## Summary

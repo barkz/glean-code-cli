@@ -7,7 +7,9 @@ glean_code/__pycache__/
 git/
 
 # Build output (zipapp staging dir and the .pyz artifact)
+# .noindex suffix keeps macOS Spotlight from indexing the artifact
 build/
+build.noindex/
 
 # Never commit secrets (tokens may match GLEAN_* or glean_tok_* patterns)
 .env
