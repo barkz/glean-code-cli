@@ -8,9 +8,28 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 
 ![Glean Code terminal screenshot](assets/glean_code_cli_example.png)
 
+## Highlights
+
+- **One-command install, and a Spotlight-launchable macOS app** — `python3 install.py` builds a
+  single-file zipapp (~84 KB, still zero dependencies) and puts `glean` on your PATH, plus a
+  registered `Glean.app` so `Cmd+Space` → "Glean" opens the REPL.
+  [#11](https://github.com/barkz/glean-code-cli/pull/11) ·
+  [`e46d517`](https://github.com/barkz/glean-code-cli/commit/e46d517)
+- **Every REST call audited against Glean's published OpenAPI spec** — the new
+  [incompatibility report](incompat_report.md) documents 12 Client API divergences from spec
+  `0.9.0`, with locations and fixes. Indexing and Custom Metadata verified clean.
+  [#10](https://github.com/barkz/glean-code-cli/pull/10) ·
+  [`f81902d`](https://github.com/barkz/glean-code-cli/commit/f81902d)
+- **Repo hygiene fixes** — removed 35 tracked `__pycache__` artifacts, corrected stale docs
+  (the suite is 721 tests, not 604), and dropped a Spotlight ignore rule that macOS never
+  honored.
+  [#12](https://github.com/barkz/glean-code-cli/pull/12) ·
+  [`17199b5`](https://github.com/barkz/glean-code-cli/commit/17199b5)
+
 ## Contents
 
-- [What you get](#what-you-get)
+- [Highlights](#highlights) — what landed recently
+- [Overview](#overview)
 - [Getting started](#getting-started) — install, alias, first run
 - [Coming soon](#coming-soon)
 - [Commands at a glance](#commands-at-a-glance)
@@ -26,7 +45,7 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 - [Changelog](CHANGELOG.md) — release history
 - [License](#license)
 
-## What you get
+## Overview
 
 - **Every major Glean Client API surface as a slash command** — chat, search, agents, tools, docs, people, shortcuts (Go Links), answers, summarize, verification, messages, activity, announcements, collections, pins, and insights
 - **Near-complete Indexing API coverage** across read/debug, single-record write, bulk, and process-all tiers — including a debug toolkit that answers "is this doc uploaded?" and "why can't user X see doc Y?" without leaving the REPL. See [docs/INDEXING.md](docs/INDEXING.md)
