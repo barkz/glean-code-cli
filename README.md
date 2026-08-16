@@ -29,7 +29,7 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 ## Contents
 
 - [Highlights](#highlights) — what landed recently
-- [What you get](#what-you-get)
+- [Overview](#overview)
 - [Getting started](#getting-started) — install, alias, first run
 - [Coming soon](#coming-soon)
 - [Commands at a glance](#commands-at-a-glance)
@@ -45,7 +45,7 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 - [Changelog](CHANGELOG.md) — release history
 - [License](#license)
 
-## What you get
+## Overview
 
 - **Every major Glean Client API surface as a slash command** — chat, search, agents, tools, docs, people, shortcuts (Go Links), answers, summarize, verification, messages, activity, announcements, collections, pins, and insights
 - **Near-complete Indexing API coverage** across read/debug, single-record write, bulk, and process-all tiers — including a debug toolkit that answers "is this doc uploaded?" and "why can't user X see doc Y?" without leaving the REPL. See [docs/INDEXING.md](docs/INDEXING.md)
