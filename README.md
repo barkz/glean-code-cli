@@ -243,6 +243,13 @@ Or without pytest:
 python3 -m unittest discover tests/
 ```
 
+On macOS, keep bytecode caches out of the working tree — Spotlight indexes stray `.pyc`
+files, and they outrank the `Glean.app` launcher in `Cmd+Space`:
+
+```bash
+export PYTHONPYCACHEPREFIX="$HOME/.cache/python"
+```
+
 721 tests covering the client and every mock response, commands and dispatch, config, UI, auth, completion, help docs, the mock corpus, indexing-walk, scaffold, the installer, and the MCP server. Development notes: [docs/TESTING.md](docs/TESTING.md).
 
 ## Documentation
