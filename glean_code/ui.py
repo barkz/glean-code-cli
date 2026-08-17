@@ -80,6 +80,51 @@ def hyperlink(url: str, text: str) -> str:
     return f"\033]8;;{url}\033\\{text}\033]8;;\033\\"
 
 
+def title_text(
+    mode: str,
+    instance: Optional[str] = None,
+    has_token: bool = False,
+    style_name: str = "full",
+) -> str:
+    """Build the terminal window/tab title for the current session state.
+
+    style_name:
+        full   "Glean Code - acme-be.glean.com (live)"
+        plain  "Glean Code (live)"      - omits the tenant hostname
+        off    ""                       - caller should not set a title
+    """
+    if style_name == "off":
+        return ""
+
+    label = mode if mode in ("live", "mock") else "auto"
+    if mode == "auto":
+        label = "live" if has_token else "mock"
+
+    if style_name == "plain" or not instance:
+        return f"Glean Code ({label})"
+
+    host = instance
+    if "://" in host:
+        host = host.split("://", 1)[1].split("/")[0]
+    return f"Glean Code - {host} ({label})"
+
+
+def set_title(text: str) -> None:
+    """Set the terminal window and tab title via OSC 0.
+
+    No-op when stdout is not a TTY, so piped runs stay clean.
+    """
+    if not sys.stdout.isatty():
+        return
+    sys.stdout.write(f"\033]0;{text}\007")
+    sys.stdout.flush()
+
+
+def clear_title() -> None:
+    """Hand the title back to the shell on exit."""
+    set_title("")
+
+
 def term_width(default: int = 80) -> int:
     try:
         return shutil.get_terminal_size().columns

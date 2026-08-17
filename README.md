@@ -213,6 +213,7 @@ Tokens are stripped from the in-memory history buffer and masked on every displa
 | `theme` | Terminal colour theme | `glean` (default), `mono`, `neon` |
 | `default_page_size` | Default result count for search and entities | Integer, default `10` |
 | `mock_corpus_path` | JSON file backing mock mode | Path; unset uses the built-in corpus |
+| `window_title` | Terminal window/tab title | `full` (default, includes the instance host), `plain` (mode only), `off` |
 
 Config lives at `~/.gleancode/config.json`. Change any key with `/config set <key> <value>`. Use `/mode live|mock|auto` to force a mode without editing config.
 

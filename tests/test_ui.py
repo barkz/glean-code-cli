@@ -1,8 +1,10 @@
 """Tests for glean_code.ui"""
+import io
 import os
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -295,3 +297,56 @@ class TestStatusBar(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestTitleText(unittest.TestCase):
+    def test_full_includes_host_and_mode(self):
+        self.assertEqual(
+            ui.title_text("live", "acme-be.glean.com", True),
+            "Glean Code - acme-be.glean.com (live)",
+        )
+
+    def test_plain_omits_the_hostname(self):
+        self.assertEqual(
+            ui.title_text("live", "acme-be.glean.com", True, "plain"),
+            "Glean Code (live)",
+        )
+
+    def test_off_returns_empty(self):
+        self.assertEqual(ui.title_text("live", "acme-be.glean.com", True, "off"), "")
+
+    def test_auto_resolves_to_live_or_mock(self):
+        self.assertIn("(live)", ui.title_text("auto", "h", has_token=True))
+        self.assertIn("(mock)", ui.title_text("auto", "h", has_token=False))
+
+    def test_no_instance_falls_back_to_short_form(self):
+        self.assertEqual(ui.title_text("mock", None, False), "Glean Code (mock)")
+
+    def test_scheme_and_path_are_stripped_from_host(self):
+        self.assertEqual(
+            ui.title_text("live", "https://acme-be.glean.com/rest/api/v1", True),
+            "Glean Code - acme-be.glean.com (live)",
+        )
+
+
+class TestSetTitle(unittest.TestCase):
+    def test_writes_osc_sequence_when_tty(self):
+        buf = io.StringIO()
+        buf.isatty = lambda: True
+        with mock.patch.object(ui.sys, "stdout", buf):
+            ui.set_title("Hello")
+        self.assertEqual(buf.getvalue(), "\033]0;Hello\007")
+
+    def test_silent_when_not_a_tty(self):
+        buf = io.StringIO()
+        buf.isatty = lambda: False
+        with mock.patch.object(ui.sys, "stdout", buf):
+            ui.set_title("Hello")
+        self.assertEqual(buf.getvalue(), "")
+
+    def test_clear_title_emits_empty_title(self):
+        buf = io.StringIO()
+        buf.isatty = lambda: True
+        with mock.patch.object(ui.sys, "stdout", buf):
+            ui.clear_title()
+        self.assertEqual(buf.getvalue(), "\033]0;\007")
