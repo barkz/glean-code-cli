@@ -43,6 +43,7 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 - [Running tests](#running-tests)
 - [Documentation](#documentation) — the full reference set
 - ℹ️ [API incompatibility report](incompat_report.md) — known divergences from the Glean spec
+- [Support](SUPPORT.md) — best-effort response expectations, how to report a bug
 - [Changelog](CHANGELOG.md) — release history
 - [License](#license)
 
@@ -306,6 +307,7 @@ export PYTHONPYCACHEPREFIX="$HOME/.cache/python"
 | [docs/MCP.md](docs/MCP.md) | MCP server setup for Claude Code, Claude Desktop, Cursor |
 | [docs/REST_PATHS.md](docs/REST_PATHS.md) | Every REST path this client targets, and how to retarget them |
 | [docs/TESTING.md](docs/TESTING.md) | Test-suite development notes |
+| [SUPPORT.md](SUPPORT.md) | Best-effort support expectations, triage order, how to file a good bug report |
 | [CHANGELOG.md](CHANGELOG.md) | Release history |
 | ℹ️ [git/incompat_report.md](git/incompat_report.md) | **API incompatibility report** — where the client diverges from the published Glean OpenAPI spec |
 
