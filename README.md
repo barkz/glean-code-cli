@@ -13,7 +13,7 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 
 - **One-command install, and a Spotlight-launchable macOS app** — `python3 install.py` builds a
   single-file zipapp (~84 KB, still zero dependencies) and puts `glean` on your PATH, plus a
-  registered `Glean.app` so `Cmd+Space` → "Glean" opens the REPL.
+  registered `Glean Code.app` so `Cmd+Space` → "Glean Code" opens the REPL.
   [#11](https://github.com/barkz/glean-code-cli/pull/11) ·
   [`e46d517`](https://github.com/barkz/glean-code-cli/commit/e46d517)
 - **Every REST call audited against Glean's published OpenAPI spec** — the new
@@ -22,7 +22,7 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
   [#10](https://github.com/barkz/glean-code-cli/pull/10) ·
   [`f81902d`](https://github.com/barkz/glean-code-cli/commit/f81902d)
 - **Repo hygiene fixes** — removed 35 tracked `__pycache__` artifacts, corrected stale docs
-  (the suite is 721 tests, not 604), and dropped a Spotlight ignore rule that macOS never
+  (the documented test count was stale by over a hundred), and dropped a Spotlight ignore rule that macOS never
   honored.
   [#12](https://github.com/barkz/glean-code-cli/pull/12) ·
   [`17199b5`](https://github.com/barkz/glean-code-cli/commit/17199b5)
@@ -76,9 +76,9 @@ python3 install.py
 ```
 
 This builds a single-file zipapp (~84 KB, still stdlib-only) and installs it as
-`glean` in `~/.local/bin`. On macOS it also creates `~/Applications/Glean.app` and
-registers it with LaunchServices, so the REPL is launchable from Spotlight —
-`Cmd+Space` → "Glean" → Enter opens it in a Terminal window.
+`glean` in `~/.local/bin`. On macOS it also creates `~/Applications/Glean Code.app`
+and registers it with LaunchServices, so the REPL is launchable from Spotlight —
+`Cmd+Space` → "Glean Code" → Enter opens it in a Terminal window.
 
 | Flag | Effect |
 | --- | --- |
@@ -87,10 +87,25 @@ registers it with LaunchServices, so the REPL is launchable from Spotlight —
 | `--dev` | App launches from the working tree, so edits apply with no rebuild |
 | `--prefix DIR` | Install the `glean` executable somewhere other than `~/.local/bin` |
 | `--verify` | Report what is currently installed |
-| `--uninstall` | Remove everything the installer created (config is left alone) |
+| `--uninstall` | Remove the CLI and the app bundle this installer created (config is left alone) |
 
 Re-run `python3 install.py` after pulling changes to refresh the snapshot, or install
 once with `--dev` and skip that step entirely.
+
+**The bundle is called `Glean Code.app`, never `Glean.app`** — the latter is Glean's own
+desktop client (`com.glean.desktop`). The installer reads `CFBundleIdentifier` before it
+writes anything and refuses a bundle it did not create, and `--uninstall` skips one for the
+same reason, so neither can damage an app it doesn't own:
+
+```text
+x ~/Applications/Glean Code.app already exists and belongs to another app
+  (CFBundleIdentifier: com.glean.desktop).
+  Refusing to write into it. Move or rename that bundle, or run with --cli-only.
+```
+
+If you installed before this change you have a `Glean.app` bundle that we do own; the next
+`python3 install.py` removes it and replaces it with `Glean Code.app`. That's why the
+Spotlight entry changes name — nothing is lost.
 
 ### Or just alias it
 
@@ -221,7 +236,10 @@ Config lives at `~/.gleancode/config.json`. Change any key with `/config set <ke
 
 `glean_mcp.py` exposes Glean as an MCP server so Claude Code, Claude Desktop, and Cursor can call Glean search, chat, and agents as native tools. It reads the same `~/.gleancode/config.json` but forces live mode, so MCP tools hit the real API by default — mock mode is opt-in via `GLEAN_MOCK` and every mock response carries a visible fabricated-data banner.
 
-Requires Python 3.10+ and the `mcp` package. The REPL itself remains Python 3.9+ and stdlib-only.
+Requires Python 3.10+ and the **v1 line** of the `mcp` package — install it as
+`mcp[cli]>=1,<2`. mcp 2.0.0 renamed `FastMCP` to `MCPServer` and removed the module this
+server imports, so an unpinned install breaks it ([details](docs/MCP.md#mcp-sdk-v2)). The
+REPL itself remains Python 3.9+ and stdlib-only.
 
 Setup for all three clients, the tool table, and the mock-mode rationale: **[docs/MCP.md](docs/MCP.md)**.
 
@@ -265,13 +283,13 @@ python3 -m unittest discover tests/
 ```
 
 On macOS, keep bytecode caches out of the working tree — Spotlight indexes stray `.pyc`
-files, and they outrank the `Glean.app` launcher in `Cmd+Space`:
+files, and they outrank the `Glean Code.app` launcher in `Cmd+Space`:
 
 ```bash
 export PYTHONPYCACHEPREFIX="$HOME/.cache/python"
 ```
 
-721 tests covering the client and every mock response, commands and dispatch, config, UI, auth, completion, help docs, the mock corpus, indexing-walk, scaffold, the installer, and the MCP server. Development notes: [docs/TESTING.md](docs/TESTING.md).
+740 tests covering the client and every mock response, commands and dispatch, config, UI, auth, completion, help docs, the mock corpus, indexing-walk, scaffold, the installer, and the MCP server. Development notes: [docs/TESTING.md](docs/TESTING.md).
 
 ## Documentation
 

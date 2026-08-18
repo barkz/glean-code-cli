@@ -2,7 +2,7 @@
 
 Notes on the test suite added during development of glean-code-cli. See [Running tests](../README.md#running-tests) for the user-facing instructions on how to run the tests.
 
-All 699 tests pass. Here's what was added across the development passes:
+All 740 tests pass. Here's what was added across the development passes:
 
 `tests/test_commands_extended.py` (155 new tests) — covers all previously untested commands:
 
@@ -47,6 +47,14 @@ All 699 tests pass. Here's what was added across the development passes:
 - Placeholders — `{Q}` / `{Q+1}` / `{FY}` expansion, next quarter differs from current, no raw placeholders leak into results
 - Cross-endpoint coherence — a `/search` result URL resolves through `/getdocuments` and `/summarize` to the same document, `/chat` citations track the question, `/getdocumentpermissions` owner is the document author, `/people` reads the roster
 - Custom corpus files — `mock_corpus_path` and `GLEAN_MOCK_CORPUS` overrides (config wins), bare-array form, and `CorpusError` on a missing file, invalid JSON, a document with no title, or an empty document list
+
+`tests/test_install.py` (10 new tests) — covers app-bundle ownership in the installer:
+
+- `bundle_identifier` / `owns_bundle` — reads `CFBundleIdentifier` out of `Info.plist`; a missing bundle counts as ours (nothing to clobber), a foreign identifier and an unreadable or binary plist do not
+- Refusal — `install_macos_app` exits rather than writing into a bundle it did not create, leaving that bundle's `Info.plist` byte-identical and creating no `Contents/Resources`
+- Legacy cleanup — an old `Glean.app` is removed on install when we own it, and left alone when it belongs to another app
+- Uninstall — removes our own bundle, and never deletes a foreign one (the regression that would have deleted a user's Glean Desktop install)
+- The default `APP_DIR` is asserted **not** to be `Glean.app`
 
 `tests/test_mcp.py` (9 new tests) — covers mock mode on the MCP server:
 
