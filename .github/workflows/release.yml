@@ -1,4 +1,4 @@
-name: tests
+name: release
 
 on:
   push:
@@ -54,3 +54,24 @@ jobs:
           if [ -n "$(git status --porcelain)" ]; then
             echo "::error::working tree dirty after build"; git status --short; exit 1
           fi
+
+      # One leg only — actions/upload-artifact@v4 rejects a second upload under
+      # the same name, and the zipapp is identical across the matrix anyway.
+      - name: Build the downloadable zipapp
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
+        env:
+          PYTHONPYCACHEPREFIX: ${{ runner.temp }}/pycache
+        run: |
+          python -c "
+          import pathlib, install
+          out = install.build_zipapp(pathlib.Path('$RUNNER_TEMP/glean-code.pyz'))
+          print(f'built {out} ({out.stat().st_size / 1024:.0f} KB)')
+          "
+
+      - name: Upload glean-code.pyz
+        if: matrix.os == 'ubuntu-latest' && matrix.python == '3.13'
+        uses: actions/upload-artifact@v4
+        with:
+          name: glean-code-pyz
+          path: ${{ runner.temp }}/glean-code.pyz
+          if-no-files-found: error

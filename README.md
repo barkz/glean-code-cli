@@ -3,7 +3,7 @@
 ![Glean](https://img.shields.io/badge/Glean-343CED?style=for-the-badge&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![Claude](https://img.shields.io/badge/Claude-D97757?style=for-the-badge&logo=claude&logoColor=white)
-[![Tests](https://img.shields.io/github/actions/workflow/status/barkz/glean-code-cli/tests.yml?style=for-the-badge&label=tests&logo=githubactions&logoColor=white)](https://github.com/barkz/glean-code-cli/actions/workflows/tests.yml)
+[![Release](https://img.shields.io/github/actions/workflow/status/barkz/glean-code-cli/release.yml?style=for-the-badge&label=release&logo=githubactions&logoColor=white)](https://github.com/barkz/glean-code-cli/actions/workflows/release.yml)
 
 A local, terminal-first client for the Glean Client REST API. Inspired by Claude Code. Built in Python with zero runtime dependencies.
 
