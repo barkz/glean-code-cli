@@ -2,8 +2,12 @@
 """Glean Code installer.
 
 Builds the single-file zipapp and installs it so `glean` is on your PATH. On
-macOS it also creates a Glean.app bundle so the REPL is launchable from
-Spotlight (Cmd+Space -> "Glean").
+macOS it also creates a "Glean Code.app" bundle so the REPL is launchable from
+Spotlight (Cmd+Space -> "Glean Code").
+
+The bundle is deliberately not named Glean.app — that belongs to Glean's own
+desktop client. The installer never writes into, or removes, an app bundle it
+did not create.
 
 Usage:
     python3 install.py                 Build and install (CLI + macOS app)
@@ -36,8 +40,20 @@ PACKAGE_DIR = REPO_ROOT / "glean_code"
 DEFAULT_PREFIX = Path.home() / ".local" / "bin"
 CLI_NAME = "glean"
 
-APP_DIR = Path.home() / "Applications" / "Glean.app"
+# Deliberately NOT "Glean.app": that is Glean's own desktop client
+# (com.glean.desktop). Writing into a bundle we did not create would corrupt a
+# signed third-party app — macOS blocks it with EPERM, and uninstall would have
+# deleted it outright.
+APP_DIR = Path.home() / "Applications" / "Glean Code.app"
 BUNDLE_ID = "com.glean.gleancode.launcher"
+
+# Earlier versions installed to Glean.app. Cleaned up on install/uninstall, but
+# only when the bundle is one we actually created — see owns_bundle().
+LEGACY_APP_DIR = Path.home() / "Applications" / "Glean.app"
+
+# Name of the executable inside the bundle. Distinct from Glean Desktop's
+# "Glean" so the two are never confused in Spotlight or Activity Monitor.
+APP_EXECUTABLE = "GleanCode"
 
 LSREGISTER = (
     "/System/Library/Frameworks/CoreServices.framework/Frameworks"
@@ -52,10 +68,10 @@ INFO_PLIST = """<?xml version="1.0" encoding="UTF-8"?>
 "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key>                 <string>Glean</string>
-    <key>CFBundleDisplayName</key>          <string>Glean</string>
+    <key>CFBundleName</key>                 <string>Glean Code</string>
+    <key>CFBundleDisplayName</key>          <string>Glean Code</string>
     <key>CFBundleIdentifier</key>           <string>{bundle_id}</string>
-    <key>CFBundleExecutable</key>           <string>Glean</string>
+    <key>CFBundleExecutable</key>           <string>{executable}</string>
     <key>CFBundlePackageType</key>          <string>APPL</string>
     <key>CFBundleVersion</key>              <string>{version}</string>
     <key>CFBundleShortVersionString</key>   <string>{version}</string>
@@ -177,8 +193,49 @@ def _launch_script(dev: bool) -> str:
     )
 
 
+def bundle_identifier(app_dir: Path) -> Optional[str]:
+    """Read CFBundleIdentifier out of an app bundle's Info.plist, or None."""
+    plist = app_dir / "Contents" / "Info.plist"
+    try:
+        text = plist.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    # Info.plist may be binary; a text scan is enough to spot the key we set,
+    # and anything unreadable is treated as "not ours", which is the safe call.
+    marker = "<key>CFBundleIdentifier</key>"
+    if marker not in text:
+        return None
+    tail = text.split(marker, 1)[1]
+    start = tail.find("<string>")
+    end = tail.find("</string>", start)
+    if start == -1 or end == -1:
+        return None
+    return tail[start + len("<string>"):end].strip()
+
+
+def owns_bundle(app_dir: Path) -> bool:
+    """True only for an app bundle this installer created.
+
+    A missing bundle counts as ours — there is nothing to clobber. Anything
+    else (another vendor's app, an unreadable plist) does not, so we never
+    write into or delete something we did not put there.
+    """
+    if not app_dir.exists():
+        return True
+    return bundle_identifier(app_dir) == BUNDLE_ID
+
+
 def install_macos_app(pyz: Path, dev: bool = False) -> Path:
-    """Create ~/Applications/Glean.app and register it with LaunchServices."""
+    """Create ~/Applications/Glean Code.app and register it with LaunchServices."""
+    if not owns_bundle(APP_DIR):
+        found = bundle_identifier(APP_DIR) or "unknown"
+        _fail(
+            f"{_tilde(APP_DIR)} already exists and belongs to another app "
+            f"(CFBundleIdentifier: {found}).\n"
+            f"    Refusing to write into it. Move or rename that bundle, or run "
+            f"with --cli-only to skip the app."
+        )
+
     macos_dir = APP_DIR / "Contents" / "MacOS"
     resources = APP_DIR / "Contents" / "Resources"
     for d in (macos_dir, resources):
@@ -194,7 +251,7 @@ def install_macos_app(pyz: Path, dev: bool = False) -> Path:
 
     # The bundle executable just hands the .command to Terminal, which gives
     # the REPL a real terminal window and keeps it open afterwards.
-    executable = macos_dir / "Glean"
+    executable = macos_dir / APP_EXECUTABLE
     executable.write_text(
         "#!/bin/zsh\n"
         '# Opens Terminal running the Glean Code REPL.\n'
@@ -205,9 +262,17 @@ def install_macos_app(pyz: Path, dev: bool = False) -> Path:
     executable.chmod(0o755)
 
     (APP_DIR / "Contents" / "Info.plist").write_text(
-        INFO_PLIST.format(bundle_id=BUNDLE_ID, version=package_version()),
+        INFO_PLIST.format(bundle_id=BUNDLE_ID, version=package_version(),
+                          executable=APP_EXECUTABLE),
         encoding="utf-8",
     )
+
+    # An older release installed to Glean.app. Remove it, but only if it is
+    # genuinely ours — on a machine with Glean Desktop it never is.
+    if LEGACY_APP_DIR.exists() and owns_bundle(LEGACY_APP_DIR):
+        shutil.rmtree(LEGACY_APP_DIR)
+        _info(f"removed old {_tilde(LEGACY_APP_DIR)}")
+
     return APP_DIR
 
 
@@ -293,14 +358,14 @@ def do_install(args: argparse.Namespace) -> int:
                 if attrs.get(key):
                     _info(f"{key} = {attrs[key]}")
             if attrs.get("kMDItemContentType") == "com.apple.application-bundle":
-                _ok('Spotlight ranks it as an Application — Cmd+Space "Glean" wins')
+                _ok('Spotlight ranks it as an Application — Cmd+Space "Glean Code" wins')
             else:
                 _warn("Spotlight has not indexed it yet; it should appear shortly")
 
     print("\nDone. Launch it with:\n")
     print(f"    {CLI_NAME}                    (terminal)")
     if is_macos() and not args.cli_only:
-        print("    Cmd+Space -> \"Glean\"      (Spotlight)")
+        print("    Cmd+Space -> \"Glean Code\" (Spotlight)")
     print()
     return 0
 
@@ -317,7 +382,7 @@ def do_verify(_args: argparse.Namespace) -> int:
             if not on_path(prefix):
                 _warn(f"{_tilde(prefix)} is not on your PATH")
 
-    if is_macos() and APP_DIR.exists():
+    if is_macos() and APP_DIR.exists() and owns_bundle(APP_DIR):
         found = True
         _ok(f"app  {_tilde(APP_DIR)}")
         attrs = spotlight_attributes(APP_DIR)
@@ -325,6 +390,10 @@ def do_verify(_args: argparse.Namespace) -> int:
             _info(f"{key} = {value}")
         if attrs.get("kMDItemContentType") != "com.apple.application-bundle":
             _warn("not indexed as an application — run: python3 install.py")
+
+    if is_macos() and LEGACY_APP_DIR.exists() and owns_bundle(LEGACY_APP_DIR):
+        found = True
+        _warn(f"old bundle at {_tilde(LEGACY_APP_DIR)} — re-run install.py to replace it")
 
     if not found:
         _info("nothing installed. Run: python3 install.py")
@@ -343,9 +412,15 @@ def do_uninstall(args: argparse.Namespace) -> int:
             _ok(f"removed {_tilde(cli)}")
             removed = True
 
-    if APP_DIR.exists():
-        shutil.rmtree(APP_DIR)
-        _ok(f"removed {_tilde(APP_DIR)}")
+    for app_dir in (APP_DIR, LEGACY_APP_DIR):
+        if not app_dir.exists():
+            continue
+        if not owns_bundle(app_dir):
+            found = bundle_identifier(app_dir) or "unknown"
+            _info(f"leaving {_tilde(app_dir)} in place — belongs to another app ({found})")
+            continue
+        shutil.rmtree(app_dir)
+        _ok(f"removed {_tilde(app_dir)}")
         removed = True
 
     legacy = Path.home() / "Applications" / "Glean.command"
