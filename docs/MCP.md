@@ -12,15 +12,17 @@ asked for explicitly — see [Running the MCP server on mock data](#running-the-
 `pip`
 
 ```bash
-pip install "mcp[cli]"
+pip install "mcp[cli]>=1,<2"
 ```
 
 `brew`
 
 ```bash
 brew install pipx
-pipx install "mcp[cli]"
+pipx install "mcp[cli]>=1,<2"
 ```
+
+The `<2` bound is required — see [MCP SDK v2](#mcp-sdk-v2) below.
 
 **Claude Code** — add to `.claude/settings.json` in your project, or to
 `~/.claude/settings.json` globally:
@@ -122,6 +124,38 @@ For the same reason mock mode is opt-in and never inherited: `mode` in
 flip an agent onto fake data the day a token expires.
 
 Requires Python 3.10+. The REPL itself remains Python 3.9+ and stdlib-only.
+
+## MCP SDK v2
+
+`glean_mcp.py` targets the **v1 line** of the `mcp` SDK. Install it with an upper bound:
+
+```bash
+pip install "mcp[cli]>=1,<2"
+```
+
+mcp **2.0.0** (released 2026-07-28) renamed `FastMCP` to `MCPServer` and removed the
+`mcp.server.fastmcp` module this server imports. Without the bound, a fresh
+`pip install "mcp[cli]"` resolves to 2.x and the server dies on import:
+
+```text
+ModuleNotFoundError: No module named 'mcp.server.fastmcp'
+```
+
+The server detects that case specifically and says so, rather than telling you to reinstall
+the package that just broke it:
+
+```text
+Found the 'mcp' package (version 2.0.0), but it does not provide
+mcp.server.fastmcp. That module was removed in mcp 2.0.0, which renamed
+FastMCP to MCPServer. glean_mcp.py has not been ported to the v2 API yet.
+Pin the v1 line:  pip install "mcp[cli]>=1,<2"
+```
+
+An existing 1.x install is unaffected — nothing needs to change until you upgrade.
+
+**Outstanding work:** port `glean_mcp.py` to the v2 API (`from mcp.server import MCPServer`;
+the decorator API is unchanged, so the four `@mcp.tool()` handlers should carry over largely
+as-is). Once ported, drop the `<2` bound here and in the module docstring.
 
 ---
 

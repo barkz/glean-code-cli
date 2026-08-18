@@ -52,8 +52,13 @@ Mock mode — opt in, never automatic:
     Useful for wiring up and testing the tool loop before you have a token.
     See docs/MOCK_CORPUS.md for what the fake corpus contains.
 
-Requires Python 3.10+ and the mcp package:
-    pip install "mcp[cli]"
+Requires Python 3.10+ and the v1 line of the mcp package:
+    pip install "mcp[cli]>=1,<2"
+
+The pin is deliberate. mcp 2.0.0 (released 2026-07-28) renamed FastMCP to
+MCPServer and removed the mcp.server.fastmcp module this server imports;
+without an upper bound a fresh install resolves to 2.x and fails on import.
+Drop the pin once this file is ported to the v2 API.
 """
 from __future__ import annotations
 
@@ -68,14 +73,45 @@ _HERE = Path(__file__).parent
 if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
+MCP_REQUIREMENT = 'mcp[cli]>=1,<2'
+
+
+def _installed_mcp_version() -> Optional[str]:
+    """Version of the installed mcp package, or None when it isn't installed."""
+    try:
+        import mcp  # noqa: F401  (imported for the side effect of finding it)
+    except ImportError:
+        return None
+    try:
+        from importlib.metadata import version
+        return version("mcp")
+    except Exception:
+        # Importable but unmeasurable — still installed, which is what matters.
+        return "unknown"
+
+
 try:
     from mcp.server.fastmcp import FastMCP
 except ImportError:
-    print(
-        "The 'mcp' package is required to run the Glean MCP server.\n"
-        "Install it with:  pip install \"mcp[cli]\"\n",
-        file=sys.stderr,
-    )
+    # Two very different failures land here, and telling them apart matters:
+    # the mcp SDK removed mcp.server.fastmcp in v2.0.0 (FastMCP became
+    # MCPServer), so on a v2 install the package IS present and the old
+    # "pip install mcp[cli]" advice reinstalls the very thing that broke.
+    _found = _installed_mcp_version()
+    if _found is None:
+        print(
+            "The 'mcp' package is required to run the Glean MCP server.\n"
+            f'Install it with:  pip install "{MCP_REQUIREMENT}"\n',
+            file=sys.stderr,
+        )
+    else:
+        print(
+            f"Found the 'mcp' package (version {_found}), but it does not provide\n"
+            "mcp.server.fastmcp. That module was removed in mcp 2.0.0, which renamed\n"
+            "FastMCP to MCPServer. glean_mcp.py has not been ported to the v2 API yet.\n"
+            f'Pin the v1 line:  pip install "{MCP_REQUIREMENT}"\n',
+            file=sys.stderr,
+        )
     sys.exit(1)
 
 from glean_code.config import Config
