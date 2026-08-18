@@ -3,6 +3,7 @@
 Every test redirects the installer at a temporary directory, so the real
 ~/.local/bin and ~/Applications are never touched.
 """
+import argparse
 import subprocess
 import sys
 import tempfile
@@ -102,16 +103,19 @@ class TestOnPath(unittest.TestCase):
 
 class TestMacosAppBundle(unittest.TestCase):
     def _build(self, tmp, dev=False):
-        app_dir = Path(tmp) / "Glean.app"
+        app_dir = Path(tmp) / "Glean Code.app"
         pyz = install.build_zipapp(Path(tmp) / "src.pyz")
-        with mock.patch.object(install, "APP_DIR", app_dir):
+        # LEGACY_APP_DIR is redirected too: install_macos_app cleans up an old
+        # bundle, and a test must never reach into the real ~/Applications.
+        with mock.patch.object(install, "APP_DIR", app_dir), \
+             mock.patch.object(install, "LEGACY_APP_DIR", Path(tmp) / "Glean.app"):
             return install.install_macos_app(pyz, dev=dev), app_dir
 
     def test_creates_full_bundle_layout(self):
         with tempfile.TemporaryDirectory() as tmp:
             _, app = self._build(tmp)
             self.assertTrue((app / "Contents" / "Info.plist").exists())
-            self.assertTrue((app / "Contents" / "MacOS" / "Glean").exists())
+            self.assertTrue((app / "Contents" / "MacOS" / install.APP_EXECUTABLE).exists())
             self.assertTrue((app / "Contents" / "Resources" / "glean-code.pyz").exists())
             self.assertTrue(
                 (app / "Contents" / "Resources" / "glean-launch.command").exists()
@@ -120,7 +124,7 @@ class TestMacosAppBundle(unittest.TestCase):
     def test_executables_have_exec_bit(self):
         with tempfile.TemporaryDirectory() as tmp:
             _, app = self._build(tmp)
-            for rel in ("Contents/MacOS/Glean",
+            for rel in (f"Contents/MacOS/{install.APP_EXECUTABLE}",
                         "Contents/Resources/glean-launch.command"):
                 self.assertTrue((app / rel).stat().st_mode & 0o111, rel)
 
@@ -137,8 +141,8 @@ class TestMacosAppBundle(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             _, app = self._build(tmp)
             data = plistlib.loads((app / "Contents" / "Info.plist").read_bytes())
-            self.assertEqual(data["CFBundleName"], "Glean")
-            self.assertEqual(data["CFBundleExecutable"], "Glean")
+            self.assertEqual(data["CFBundleName"], "Glean Code")
+            self.assertEqual(data["CFBundleExecutable"], install.APP_EXECUTABLE)
             self.assertEqual(data["CFBundlePackageType"], "APPL")
 
     def test_dev_mode_changes_only_the_launch_command(self):
@@ -146,6 +150,105 @@ class TestMacosAppBundle(unittest.TestCase):
             _, app = self._build(tmp, dev=True)
             body = (app / "Contents" / "Resources" / "glean-launch.command").read_text()
             self.assertIn("-m glean_code", body)
+
+
+class TestBundleOwnership(unittest.TestCase):
+    """The installer must never write into or delete another vendor's app.
+
+    ~/Applications/Glean.app is Glean's own desktop client on many machines.
+    Writing there corrupts a signed bundle; uninstalling there deletes it.
+    """
+
+    def _make_bundle(self, root: Path, name: str, bundle_id: str) -> Path:
+        app = root / name
+        (app / "Contents").mkdir(parents=True)
+        (app / "Contents" / "Info.plist").write_text(
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<plist version="1.0"><dict>\n'
+            "<key>CFBundleIdentifier</key>"
+            f"<string>{bundle_id}</string>\n"
+            "</dict></plist>\n",
+            encoding="utf-8",
+        )
+        return app
+
+    def test_default_app_dir_is_not_glean_desktops(self):
+        self.assertNotEqual(install.APP_DIR.name, "Glean.app")
+        self.assertEqual(install.LEGACY_APP_DIR.name, "Glean.app")
+
+    def test_reads_our_own_bundle_identifier(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app = self._make_bundle(Path(tmp), "Glean Code.app", install.BUNDLE_ID)
+            self.assertEqual(install.bundle_identifier(app), install.BUNDLE_ID)
+            self.assertTrue(install.owns_bundle(app))
+
+    def test_foreign_bundle_is_not_ours(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app = self._make_bundle(Path(tmp), "Glean.app", "com.glean.desktop")
+            self.assertEqual(install.bundle_identifier(app), "com.glean.desktop")
+            self.assertFalse(install.owns_bundle(app))
+
+    def test_missing_bundle_counts_as_ours(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertTrue(install.owns_bundle(Path(tmp) / "nothing.app"))
+
+    def test_unreadable_plist_is_not_ours(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app = Path(tmp) / "Weird.app"
+            (app / "Contents").mkdir(parents=True)
+            (app / "Contents" / "Info.plist").write_bytes(b"bplist00\x00\x01binary")
+            self.assertIsNone(install.bundle_identifier(app))
+            self.assertFalse(install.owns_bundle(app))
+
+    def test_install_refuses_to_write_into_a_foreign_bundle(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app = self._make_bundle(Path(tmp), "Glean Code.app", "com.glean.desktop")
+            before = (app / "Contents" / "Info.plist").read_text()
+            pyz = install.build_zipapp(Path(tmp) / "src.pyz")
+            with mock.patch.object(install, "APP_DIR", app), \
+                 mock.patch.object(install, "LEGACY_APP_DIR", Path(tmp) / "Legacy.app"):
+                with self.assertRaises(SystemExit):
+                    install.install_macos_app(pyz)
+            self.assertEqual((app / "Contents" / "Info.plist").read_text(), before)
+            self.assertFalse((app / "Contents" / "Resources").exists())
+
+    def test_install_replaces_a_legacy_bundle_it_owns(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            legacy = self._make_bundle(Path(tmp), "Glean.app", install.BUNDLE_ID)
+            pyz = install.build_zipapp(Path(tmp) / "src.pyz")
+            with mock.patch.object(install, "APP_DIR", Path(tmp) / "Glean Code.app"), \
+                 mock.patch.object(install, "LEGACY_APP_DIR", legacy):
+                install.install_macos_app(pyz)
+            self.assertFalse(legacy.exists())
+
+    def test_install_leaves_a_foreign_legacy_bundle_alone(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            legacy = self._make_bundle(Path(tmp), "Glean.app", "com.glean.desktop")
+            pyz = install.build_zipapp(Path(tmp) / "src.pyz")
+            with mock.patch.object(install, "APP_DIR", Path(tmp) / "Glean Code.app"), \
+                 mock.patch.object(install, "LEGACY_APP_DIR", legacy):
+                install.install_macos_app(pyz)
+            self.assertTrue((legacy / "Contents" / "Info.plist").exists())
+
+    def test_uninstall_never_deletes_a_foreign_bundle(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            desktop = self._make_bundle(Path(tmp), "Glean.app", "com.glean.desktop")
+            args = argparse.Namespace(prefix=str(Path(tmp) / "bin"))
+            with mock.patch.object(install, "APP_DIR", Path(tmp) / "Glean Code.app"), \
+                 mock.patch.object(install, "LEGACY_APP_DIR", desktop), \
+                 mock.patch.object(install, "DEFAULT_PREFIX", Path(tmp) / "bin"):
+                install.do_uninstall(args)
+            self.assertTrue(desktop.exists(), "Glean Desktop must survive uninstall")
+
+    def test_uninstall_removes_our_own_bundle(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ours = self._make_bundle(Path(tmp), "Glean Code.app", install.BUNDLE_ID)
+            args = argparse.Namespace(prefix=str(Path(tmp) / "bin"))
+            with mock.patch.object(install, "APP_DIR", ours), \
+                 mock.patch.object(install, "LEGACY_APP_DIR", Path(tmp) / "Glean.app"), \
+                 mock.patch.object(install, "DEFAULT_PREFIX", Path(tmp) / "bin"):
+                install.do_uninstall(args)
+            self.assertFalse(ours.exists())
 
 
 class TestArgParsing(unittest.TestCase):
