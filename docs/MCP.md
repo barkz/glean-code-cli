@@ -125,6 +125,78 @@ flip an agent onto fake data the day a token expires.
 
 Requires Python 3.10+. The REPL itself remains Python 3.9+ and stdlib-only.
 
+## Starting a server from the REPL
+
+The setups above are the normal ones: the client owns the server's lifecycle, spawning
+`glean_mcp.py` over **stdio** whenever it needs it. Nothing to start by hand.
+
+When you do want a server running independently — to point several clients at one process, to
+watch its log while you work, or to check the thing comes up at all — `/mcp` handles it from
+inside `glean`:
+
+```text
+/mcp status                 # mcp version, compatibility, and any running server
+/mcp config claude-code     # the JSON block to paste, per client
+/mcp start --port 9000      # run it detached over HTTP
+/mcp config --url           # the JSON block pointing at that running server
+/mcp stop
+```
+
+```text
+── mcp ─────────────────────────────────────────────────────────────
+  mcp package    1.29.0  (v1 line, compatible)
+  server script  glean_mcp.py
+  server         running  pid 73343, up 4m
+  endpoint       http://127.0.0.1:8791/mcp
+  would serve    mock  [MOCK MODE banner active]
+  tools          search, chat, list_agents, run_agent
+  log            ~/.gleancode/mcp.log
+────────────────────────────────────────────────────────────────────
+```
+
+**`/mcp start` never uses stdio.** stdio is a pipe pair between a client and the server it
+spawned; started from the REPL there would be no client on the other end, and the REPL already
+owns its own stdin and stdout. `start` therefore runs `streamable-http` (default) or `sse`,
+which a client attaches to by URL — `/mcp config --url` prints that form. This only helps if
+your client supports URL-based servers; for a client that spawns commands, use the stdio form.
+
+Details worth knowing:
+
+- **Binds `127.0.0.1` by default.** A live server holds whatever credentials your config has.
+  `--host` can widen that; think before it does.
+- **The server outlives the REPL.** It is started in its own session, so `/exit` leaves it
+  running. State lives in `~/.gleancode/mcp.json`, which is how a later `glean` session still
+  finds it, and stale entries are cleared automatically when the process is gone.
+- **Mock mode is inherited.** Start it while the REPL is in mock mode (or pass `--mock`) and
+  the server serves the built-in corpus with the `[MOCK MODE]` banner on every response.
+- **Logs go to `~/.gleancode/mcp.log`.** A server that dies on startup — a port already in
+  use, most often — is reported immediately, with the log path for the detail.
+
+### Sitting alongside Glean's own MCP server
+
+Glean ships its own hosted MCP server. It is a different thing from this one: it talks to your
+tenant directly, while `glean_mcp.py` wraps the Client REST API and adds mock mode. `/mcp` only
+manages this repo's server — it never detects, starts, or talks to Glean's.
+
+They collide in exactly one place. Both would naturally be registered under the key `glean`:
+
+```json
+{ "mcpServers": { "glean": { ... } } }
+```
+
+Pasting one over the other **silently replaces it** — no error, you simply end up with a
+different set of tools than you expected. Use a distinct key to keep both:
+
+```text
+/mcp config --name glean-cli
+```
+
+```json
+{ "mcpServers": { "glean-cli": { "command": "python3", "args": ["…/glean_mcp.py"] } } }
+```
+
+`/mcp config` warns about this whenever it emits the default name.
+
 ## MCP SDK v2
 
 `glean_mcp.py` targets the **v1 line** of the `mcp` SDK. Install it with an upper bound:

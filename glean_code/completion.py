@@ -30,6 +30,9 @@ _CONFIG_KEYS = [
 
 _CONFIG_SUBCMDS = ["get", "set", "list"]
 
+_MCP_SUBCMDS = ["status", "config", "start", "stop"]
+_MCP_CLIENTS = ["claude-code", "claude-desktop", "cursor"]
+
 
 class _Completer:
     def __init__(self) -> None:
@@ -106,6 +109,16 @@ class _Completer:
                     if len(tokens) == 3 or (len(tokens) == 4 and not ends_with_space):
                         partial = "" if ends_with_space else tokens[-1]
                         return [v for v in _FLAG_VALUES["mode"] if v.startswith(partial)]
+
+        # ── /mcp subcommands, then client names for `config` ─────────────
+        if cmd == "mcp":
+            if len(tokens) == 1 or (len(tokens) == 2 and not ends_with_space):
+                partial = "" if ends_with_space else tokens[-1]
+                return [s for s in _MCP_SUBCMDS if s.startswith(partial)]
+            if tokens[1] == "config" and (len(tokens) == 2
+                                          or (len(tokens) == 3 and not ends_with_space)):
+                partial = "" if ends_with_space else tokens[-1]
+                return [c for c in _MCP_CLIENTS if c.startswith(partial)]
 
         # ── /help <command-tab> ──────────────────────────────────────────
         if cmd == "help":

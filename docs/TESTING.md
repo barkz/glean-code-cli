@@ -2,7 +2,7 @@
 
 Notes on the test suite added during development of glean-code-cli. See [Running tests](../README.md#running-tests) for the user-facing instructions on how to run the tests.
 
-All 740 tests pass. Here's what was added across the development passes:
+All 776 tests pass. Here's what was added across the development passes:
 
 `tests/test_commands_extended.py` (155 new tests) — covers all previously untested commands:
 
@@ -61,3 +61,15 @@ All 740 tests pass. Here's what was added across the development passes:
 - `_build_client` — forces live mode whatever `mode` the config file carries (including `auto`), and switches to mock only when `GLEAN_MOCK` is set; truthy spellings (`1`, `true`, `yes`, `on`) accepted, everything else ignored
 - Labelling — all four tools (`search`, `chat`, `list_agents`, `run_agent`) prefix their response with the `[MOCK MODE]` banner when serving fake data, including empty-result responses, and never in live mode
 - Tool descriptions — every tool docstring names `GLEAN_MOCK`, so the warning reaches the agent before it calls anything
+
+`tests/test_mcp_control.py` (36 new tests) — covers `/mcp` server control:
+
+- Package diagnostics — reports the installed `mcp` version and whether it can actually run the server (v1 provides `mcp.server.fastmcp`; v2 does not)
+- State file — roundtrip, unreadable-file tolerance, and clearing a stale entry when the recorded pid is dead or has been reused by another process
+- `start` refusals — stdio (which needs a client on the other end), unknown transports, missing package, an incompatible v2 install named by version, and a second start while one is running
+- `stop` — signals and clears state; a no-op when nothing is running
+- Client config — the stdio command form and the URL form, both JSON-serialisable
+- Defaults — loopback-only bind, non-stdio default transport, and tool names checked against `glean_mcp.py` itself
+- Command dispatch — bare `/mcp` shows status, unknown subcommands and clients error, `--url` without a server errors, a non-numeric `--port` errors
+
+Every test redirects the state and log paths at a temp directory, so `~/.gleancode/` is never touched.

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import re
 import shlex
 import socket
@@ -20,6 +21,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple  # noqa: F401
 
 from . import ui
 from . import _indexing_walk as _walk
+from . import mcp_control as _mcp
 from .client import GleanClient, GleanError
 from .config import Config, SECURE_REFS, is_secure_ref, resolve_secure
 from .help_docs import DOCS, COMMAND_GROUPS
@@ -411,6 +413,126 @@ def cmd_config(s: Session, pos, flags):
         ui.print_ok(f"{key} updated.")
         return
     ui.print_err("Usage: /config [get <key> | set <key> <value> | list]")
+
+
+def _mcp_status(s: Session) -> None:
+    version, compatible = _mcp.mcp_package()
+    if version is None:
+        pkg = ui.style("not installed", ui.C.RED)
+    elif compatible:
+        pkg = ui.style(f"{version}  (v1 line, compatible)", ui.C.GREEN)
+    else:
+        pkg = ui.style(f"{version}  (v2 — no mcp.server.fastmcp)", ui.C.RED)
+
+    state = _mcp.running()
+    if state:
+        server = ui.style(f"running  pid {state['pid']}, up {_mcp.uptime(state)}", ui.C.GREEN)
+        where = state["url"]
+        served = "mock  [MOCK MODE banner active]" if state.get("mock") else "live"
+    else:
+        server = ui.style("not running", ui.C.GREY)
+        where = ui.style("(start one with /mcp start, or let your client spawn stdio)", ui.C.GREY)
+        # Not running: report what a client-spawned stdio server would do.
+        served = "live" if not os.environ.get("GLEAN_MOCK") else "mock"
+
+    rows = [
+        ("mcp package", pkg),
+        ("server script", _mcp.SERVER_SCRIPT.name),
+        ("server", server),
+        ("endpoint", where),
+        ("would serve", served),
+        ("tools", ", ".join(_mcp.tool_names())),
+    ]
+    if state:
+        rows.append(("log", state.get("log", str(_mcp.LOG_PATH))))
+    print(ui.rule("mcp"))
+    print(ui.kv_table(rows))
+    print(ui.rule())
+
+    if version is None or not compatible:
+        ui.print_err(f'Install the supported line:  pip install "{_mcp.REQUIRED_MCP}"')
+
+
+def _mcp_config(s: Session, pos, flags) -> None:
+    state = _mcp.running()
+    use_url = bool(flags.get("url")) or (state is not None and not flags.get("stdio"))
+    url = state["url"] if (use_url and state) else None
+    if flags.get("url") and not state:
+        ui.print_err("No server is running, so there's no URL to point at. "
+                     "Start one with /mcp start, or omit --url for the stdio form.")
+        return
+
+    client = (pos[0] if pos else "").lower()
+    if client and client not in _mcp.CLIENTS:
+        ui.print_err(f"Unknown client '{client}'. "
+                     f"Choose one of: {', '.join(_mcp.CLIENTS)}")
+        return
+
+    name = str(flags.get("name") or _mcp.DEFAULT_SERVER_NAME)
+
+    print(ui.rule(f"mcp config{' · ' + client if client else ''}"))
+    if client:
+        ui.print_info(f"Add to {_mcp.CLIENTS[client]}")
+    print(_render_json(_mcp.client_config(url, name=name)))
+    print(ui.rule())
+    if url:
+        ui.print_info("URL form — points at the server /mcp start is running. "
+                      "It stops working when that server stops.")
+    else:
+        ui.print_info("Command form — the client spawns its own stdio server. "
+                      "This is the durable setup.")
+    if name == _mcp.DEFAULT_SERVER_NAME:
+        ui.print_info(f"Pasting replaces any existing \"{name}\" entry — including "
+                      "Glean's own hosted MCP server, if you have it registered under "
+                      "that name. Use --name glean-cli to keep both.")
+
+
+def _mcp_start(s: Session, flags) -> None:
+    try:
+        port = int(flags.get("port") or _mcp.DEFAULT_PORT)
+    except (TypeError, ValueError):
+        ui.print_err("--port must be an integer.")
+        return
+    transport = str(flags.get("transport") or _mcp.DEFAULT_TRANSPORT)
+    host = str(flags.get("host") or _mcp.DEFAULT_HOST)
+    mock = bool(flags.get("mock")) or s.config.effective_mode == "mock"
+
+    try:
+        state = _mcp.start(host=host, port=port, transport=transport, mock=mock)
+    except RuntimeError as e:
+        ui.print_err(str(e))
+        return
+
+    ui.print_ok(f"started  {state['url']}  (pid {state['pid']})")
+    if state.get("mock"):
+        ui.print_info("Serving the built-in corpus — every tool response carries "
+                      "a [MOCK MODE] banner.")
+    ui.print_info("Add it to a client as a URL server: /mcp config --url")
+    ui.print_info(f"Logs: {state.get('log')}")
+
+
+def _mcp_stop(s: Session) -> None:
+    state = _mcp.stop()
+    if not state:
+        ui.print_info("No server was running.")
+        return
+    ui.print_ok(f"stopped pid {state['pid']}  ({state['url']})")
+
+
+@register("mcp")
+def cmd_mcp(s: Session, pos, flags):
+    sub = (pos[0] if pos else "status").lower()
+    rest = pos[1:]
+    if sub == "status":
+        _mcp_status(s)
+    elif sub == "config":
+        _mcp_config(s, rest, flags)
+    elif sub == "start":
+        _mcp_start(s, flags)
+    elif sub == "stop":
+        _mcp_stop(s)
+    else:
+        ui.print_err("Usage: /mcp <status|config|start|stop>")
 
 
 @register("mode")

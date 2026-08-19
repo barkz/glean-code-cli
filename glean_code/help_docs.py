@@ -123,6 +123,36 @@ DOCS: Dict[str, CommandDoc] = {
         "examples": ["/mode auto", "/mode mock", "/mode live"],
         "endpoint": "(local)",
     },
+    "mcp": {
+        "summary": "Inspect, configure, and run the bundled MCP server.",
+        "usage": "/mcp <status|config|start|stop> [client] [--url] [--stdio] [--name <key>] "
+                 "[--port <n>] [--host <addr>] [--transport <t>] [--mock]",
+        "params": [
+            ("status", "Package version, compatibility, whether a server is running, and where."),
+            ("config", "Print the JSON block to paste into a client. "
+                       "Optional client: claude-code, claude-desktop, cursor."),
+            ("start", "Run the server detached over HTTP. stdio can't be started from "
+                      "the REPL — that's the transport your MCP client spawns itself."),
+            ("stop", "Terminate the server started by /mcp start."),
+            ("--url", "config: emit the URL form pointing at the running server."),
+            ("--stdio", "config: force the command form even while a server is running."),
+            ("--name", "config: key under mcpServers. Default 'glean' — use a different one "
+                       "(e.g. glean-cli) to sit alongside Glean's own hosted MCP server."),
+            ("--port", f"start: bind port. Default {8787}."),
+            ("--host", "start: bind address. Default 127.0.0.1 (loopback only)."),
+            ("--transport", "start: streamable-http (default) or sse."),
+            ("--mock", "start: serve the built-in corpus. Implied when the REPL is in mock mode."),
+        ],
+        "examples": [
+            "/mcp status",
+            "/mcp config claude-code",
+            "/mcp config --name glean-cli",
+            "/mcp start --port 9000",
+            "/mcp config --url",
+            "/mcp stop",
+        ],
+        "endpoint": "(local — spawns glean_mcp.py)",
+    },
     "doctor": {
         "summary": "Run a health check on your Glean Code setup. "
                    "Inspects config, URL shape, DNS, TCP and runs a tiny auth probe.",
@@ -993,7 +1023,7 @@ DOCS: Dict[str, CommandDoc] = {
 
 
 COMMAND_GROUPS: List[Tuple[str, List[str]]] = [
-    ("Shell",          ["help", "status", "doctor", "login", "auth", "logout", "open", "ask", "config", "mode", "history", "clear", "exit"]),
+    ("Shell",          ["help", "status", "doctor", "login", "auth", "logout", "open", "ask", "config", "mode", "mcp", "history", "clear", "exit"]),
     ("Chat & Search",  ["chat", "search", "datasources.list", "datasources.status", "autocomplete", "recommendations", "feedback"]),
     ("Agents & Tools", ["agents.list", "agents.run", "tools.list", "tools.call"]),
     ("Docs & People",  ["docs.get", "docs.permissions", "entities.list", "people.get"]),
