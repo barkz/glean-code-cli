@@ -238,6 +238,87 @@ Inspect, configure, and run the bundled MCP server without leaving the REPL.
 
 ---
 
+#### /flow
+
+Map what you have investigated: captured chats, the documents they cited, and the connections between them. Full guide: [docs/FLOW_MAPPER.md](FLOW_MAPPER.md).
+
+```text
+/flow <status|enrich|link|show|timeline|purge> [--docs <n>] [--links <n>] [--limit <n>] [--min-score <f>] [--output <file>] [--print] [--all] [--older-than <days>]
+```
+
+| Subcommand | Description |
+| --- | --- |
+| `status` | Capture setting, database path and size, and what has been recorded. The default when no subcommand is given. |
+| `enrich` | Fetch document text for captured citations, via `/getdocuments` then `/summarize`. Required before linking. |
+| `link` | Find document-to-document and cross-session links. |
+| `show` | Draw the captured investigations as a vertical rail, with connections branching off it. |
+| `timeline` | Write a self-contained HTML timeline and open it. |
+| `purge` | Delete captured data, after confirming. |
+
+| Flag | Description |
+| --- | --- |
+| `--docs` | `show`: documents listed per session before the rest are counted. Default `6`. |
+| `--links` | `show`: connections drawn per session before the rest are counted. Default `3`. |
+| `--limit` | `enrich`: documents to fetch in one run. Default `50`. |
+| `--min-score` | `link`: phrase-link threshold, 0–1. Default `0.45`. Higher is stricter. |
+| `--output` | `timeline`: where to write the HTML. Default a temp file. |
+| `--print` | `timeline`: write without opening a browser. |
+| `--all` | `purge`: every instance and mode, not just the current one. |
+| `--older-than` | `purge`: only sessions older than this many days. |
+
+```text
+/flow status
+/flow enrich
+/flow link --min-score 0.6
+/flow show
+/flow show --docs 3
+/flow timeline --output ~/flow.html
+/flow purge --older-than 30
+```
+
+**Output** — `show` draws each session as a node on a vertical rail, with its questions, sources, and any connection branching off in yellow:
+
+```text
+── flow: acme-be.glean.com · mock ────────────────────────────────────────────
+
+  ●─ 1  what happened in the checkout incident?
+  │     Tue 18 Aug 2026, 22:05  ·  4 turns  ·  6 sources
+  │     ↳ who owned the fix?
+  │
+  │     ▪ confluence Postmortem: Checkout Latency Incident (INC-1183)
+  │     ▪ slack      War room thread: checkout 5xx spike
+  │     ▪ jira       INC-1183 — Elevated 5xx on checkout API
+  │     … 3 more documents
+  │
+  ├──◆ linked-document  0.60  →  2 ───────────────────────────────────────────
+  │    Postmortem: Checkout Latency Incident (INC-1183)
+  │      ↓  shares: incident, checkout
+  │    Customer QBR — Northwind Retail
+  │
+  ●─ 2  what are the risks going into the Northwind renewal?
+  │     Tue 18 Aug 2026, 22:05  ·  2 turns  ·  3 sources
+  │
+  │     ▪ gdrive     Customer QBR — Northwind Retail
+  │     ▪ jira       SUP-882 — Northwind: search results missing Confluence…
+  │     ▪ slack      Northwind attachment issue — need connector eyes
+  │
+──────────────────────────────────────────────────────────────────────────────
+```
+
+Documents a thread kept returning to lead the list; the rest hold the order they were cited in. Connections are ordered by how much they tell you — a `linked-document` link found something, while a `shared-citation` link between two runs of the same question is trivially certain and says little — so the discovery is never buried under a wall of `1.00` scores.
+
+Each document is tagged with its datasource in a consistent colour, so a source is recognisable before you read its name. A connection names the session it reaches (`→ 2`), stacks the two documents that bridge around a `↓`, and prints the shared evidence — `shares: incident, checkout` — so every link can be read rather than taken on trust. Colour is decoration only: piped, redirected, or under `NO_COLOR`, the glyphs still carry the structure.
+
+`status` prints a table; `timeline` reports the file written; `purge` confirms before deleting.
+
+**Capture is opt-in for live data.** The `flow_capture` config key defaults to `mock`, so real tenant content is never recorded until you set it to `on`. A local database has no permission model — see [the retention section](FLOW_MAPPER.md#privacy-retention-and-the-parts-to-think-about) before enabling it against a tenant.
+
+**Mock mode** — the built-in corpus is what this feature was tuned against: seven identifier clusters plus a QBR that references an incident in prose with no ticket number, which is the link worth finding.
+
+**Endpoint** — `(local — ~/.gleancode/flow.db; enrich calls /getdocuments or /summarize)`
+
+---
+
 #### /ask
 
 Translate a natural-language request into a sequence of Glean Code slash commands using Glean Assistant as the planner. Read [docs/NATURAL_LANGUAGE.md](NATURAL_LANGUAGE.md) for the full design.

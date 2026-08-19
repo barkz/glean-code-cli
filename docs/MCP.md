@@ -90,6 +90,9 @@ by `/login` in the REPL). You can also pass them as environment variables:
 | `chat` | Chat with the Glean Assistant; pass `chat_id` to continue a thread |
 | `list_agents` | List available agents; optional `query` filter |
 | `run_agent` | Run an agent by id and return its output |
+| `get_flow` | The captured investigation graph — sessions, citations, links. See [docs/FLOW_MAPPER.md](FLOW_MAPPER.md) |
+| `get_flow_summary` | What was investigated and what connected to what, in prose |
+| `get_flow_collapsed` | The compact view — threads folded into counted nodes |
 
 ## Running the MCP server on mock data
 
@@ -149,7 +152,8 @@ inside `glean`:
   server         running  pid 73343, up 4m
   endpoint       http://127.0.0.1:8791/mcp
   would serve    mock  [MOCK MODE banner active]
-  tools          search, chat, list_agents, run_agent
+  tools          search, chat, list_agents, run_agent, get_flow,
+                 get_flow_summary, get_flow_collapsed
   log            ~/.gleancode/mcp.log
 ────────────────────────────────────────────────────────────────────
 ```

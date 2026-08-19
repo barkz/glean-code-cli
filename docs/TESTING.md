@@ -2,7 +2,7 @@
 
 Notes on the test suite added during development of glean-code-cli. See [Running tests](../README.md#running-tests) for the user-facing instructions on how to run the tests.
 
-All 776 tests pass. Here's what was added across the development passes:
+All 834 tests pass. Here's what was added across the development passes:
 
 `tests/test_commands_extended.py` (155 new tests) — covers all previously untested commands:
 
@@ -73,3 +73,23 @@ All 776 tests pass. Here's what was added across the development passes:
 - Command dispatch — bare `/mcp` shows status, unknown subcommands and clients error, `--url` without a server errors, a non-numeric `--port` errors
 
 Every test redirects the state and log paths at a temp directory, so `~/.gleancode/` is never touched.
+
+`tests/test_flow.py` (58 new tests) — covers the flow mapper:
+
+- Capture gating — the `flow_capture` key defaults to `mock`, so live tenant content is never recorded by accident; `on` records both modes and `off` records nothing
+- Capture — chat turns, citations, and search snippets land in SQLite; a shared `chatId` is one session and a new one starts another; every row is tagged with instance and mode; a capture failure cannot break the API call
+- Enrichment — document text is fetched, and comes from `/getdocuments` now that the mock returns a body
+- Linking — identifier links are exact and score 1.0; two sessions with no shared wording connect through a document that mentions the other's subject in passing; link evidence is asserted to be specific rather than generic; links never cross an instance or mode partition
+- Title anchoring — the scorer prefers a word from the other document's title over a rarer word that appears nowhere meaningful, which is what stops "across" and "percent" being offered as evidence
+- Queries and purge — summary, collapsed, and single-session views are JSON-serialisable; purge is scoped to a partition or clears everything
+- Rendering — the timeline is self-contained (no external references), well-formed HTML, badges mock data, renders connections with their evidence, and handles an empty database
+- Command dispatch — bare `/flow` shows status, unknown subcommands error, and bad `--min-score` / `--limit` / `--docs` values are rejected
+- Schema migration — a database written before `session_links` carried `to_doc` gains the column on open, keeps its existing rows, and can be reopened repeatedly without the migration running twice
+- `/flow show` rendering — sessions hang off a vertical rail, documents are labelled with their datasource, and a connection branches off with both document titles, the shared evidence, and the session number it reaches
+- Colour is decoration — with colour disabled the output contains no escape sequences and every structural glyph (`●─`, `│`, `├──◆`, `↓`, `▪`) is still present, so the shape survives being piped
+- Width — no line exceeds the terminal width at 40, 58, 84, or 120 columns, with colour on and off. Measured on *visible* width, since ANSI escapes have zero display width and `len()` would pass a broken layout
+- Ordering — informative links (`linked-document`) come before trivial ones (`shared-citation`) regardless of score, verified against a database built by running the same investigation twice; documents a thread returned to lead the list, and singly-cited ones keep citation order rather than being interleaved by rank
+- Overflow — `--links` caps connections per session and counts the remainder, and both `--docs` and `--links` reject non-integers
+- Datasource colours — known sources each get a distinct colour, lookup ignores case and padding, and an unknown source falls back to grey rather than borrowing a familiar source's colour
+
+The module patches out the mock client's simulated 0.25s network latency; without that these 58 tests take 31 seconds instead of 2.

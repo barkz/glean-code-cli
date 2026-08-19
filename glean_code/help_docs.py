@@ -153,6 +153,37 @@ DOCS: Dict[str, CommandDoc] = {
         ],
         "endpoint": "(local — spawns glean_mcp.py)",
     },
+    "flow": {
+        "summary": "Map what you have investigated: captured chats, their sources, and what connects.",
+        "usage": "/flow <status|enrich|link|show|timeline|purge> [--docs <n>] [--links <n>] [--limit <n>] "
+                 "[--min-score <f>] [--output <file>] [--print] [--all] [--older-than <days>]",
+        "params": [
+            ("status", "Capture setting, database size, and what has been recorded."),
+            ("enrich", "Fetch document text for captured citations. Needed before linking."),
+            ("link", "Find document and cross-session links. Run after enrich."),
+            ("show", "Print sessions, their sources, and the connections between them."),
+            ("timeline", "Write a self-contained HTML timeline and open it."),
+            ("purge", "Delete captured data. Confirms first."),
+            ("--docs", "show: documents listed per session before the rest are counted. Default 6."),
+            ("--links", "show: connections drawn per session before the rest are counted. Default 3."),
+            ("--limit", "enrich: how many documents to fetch. Default 50."),
+            ("--min-score", "link: phrase-link threshold, 0-1. Default 0.45. Higher is stricter."),
+            ("--output", "timeline: where to write the HTML. Default a temp file."),
+            ("--print", "timeline: write the file without opening a browser."),
+            ("--all", "purge: every instance and mode, not just the current one."),
+            ("--older-than", "purge: only sessions older than this many days."),
+        ],
+        "examples": [
+            "/flow status",
+            "/flow enrich",
+            "/flow link --min-score 0.6",
+            "/flow show",
+            "/flow show --docs 3",
+            "/flow timeline --output ~/flow.html",
+            "/flow purge --older-than 30",
+        ],
+        "endpoint": "(local — ~/.gleancode/flow.db; enrich calls /getdocuments or /summarize)",
+    },
     "doctor": {
         "summary": "Run a health check on your Glean Code setup. "
                    "Inspects config, URL shape, DNS, TCP and runs a tiny auth probe.",
@@ -1023,7 +1054,7 @@ DOCS: Dict[str, CommandDoc] = {
 
 
 COMMAND_GROUPS: List[Tuple[str, List[str]]] = [
-    ("Shell",          ["help", "status", "doctor", "login", "auth", "logout", "open", "ask", "config", "mode", "mcp", "history", "clear", "exit"]),
+    ("Shell",          ["help", "status", "doctor", "login", "auth", "logout", "open", "ask", "config", "mode", "mcp", "flow", "history", "clear", "exit"]),
     ("Chat & Search",  ["chat", "search", "datasources.list", "datasources.status", "autocomplete", "recommendations", "feedback"]),
     ("Agents & Tools", ["agents.list", "agents.run", "tools.list", "tools.call"]),
     ("Docs & People",  ["docs.get", "docs.permissions", "entities.list", "people.get"]),

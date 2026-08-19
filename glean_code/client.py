@@ -40,6 +40,7 @@ try:
 except Exception:  # pragma: no cover
     urllib = None  # type: ignore
 
+from . import flow as _flow
 from . import mock_corpus
 from .config import Config
 
@@ -66,13 +67,26 @@ class GleanClient:
             h["X-Glean-ActAs"] = self.config.act_as
         return h
 
+    def _capture(self, path: str, body: Dict[str, Any], resp: Dict[str, Any]) -> None:
+        """Hand the exchange to the flow mapper, if capture is on for this mode.
+
+        Every Client API call funnels through _post, so this one hook covers
+        the REPL and the MCP server alike. flow.record never raises: a capture
+        bug must not fail a user's command.
+        """
+        setting = getattr(self.config, "flow_capture", _flow.DEFAULT_CAPTURE)
+        if _flow.capture_enabled(setting, self.config.effective_mode):
+            _flow.record(self.config, path, body, resp)
+
     def _post(self, path: str, body: Dict[str, Any]) -> Dict[str, Any]:
         if self.config.effective_mode == "mock":
             mock_corpus.use_path(self.config.mock_corpus_path)
             try:
-                return _mock_response(path, body)
+                resp = _mock_response(path, body)
             except mock_corpus.CorpusError as e:
                 raise GleanError(str(e)) from None
+            self._capture(path, body, resp)
+            return resp
 
         base = self.config.effective_base_url
         if not base:
@@ -85,7 +99,9 @@ class GleanClient:
                 raw = resp.read().decode("utf-8")
                 if not raw:
                     return {}
-                return json.loads(raw)
+                parsed = json.loads(raw)
+                self._capture(path, body, parsed)
+                return parsed
         except urllib.error.HTTPError as e:
             body_text = e.read().decode("utf-8", "replace")
             raise GleanError(f"HTTP {e.code} from {path}: {body_text}") from None
@@ -712,7 +728,13 @@ def _mock_response(path: str, body: Dict[str, Any]) -> Dict[str, Any]:
         for s in specs:
             hit = mock_corpus.find(s)
             if hit:
-                docs.append(mock_corpus.as_document(hit))
+                doc = mock_corpus.as_document(hit)
+                # Real /getdocuments returns document text; the mock used to
+                # return metadata only, which left anything downstream of a
+                # citation (the flow mapper especially) with nothing to read.
+                doc["body"] = {"mimeType": "text/plain",
+                               "textContent": mock_corpus.expand(hit["body"])}
+                docs.append(doc)
                 continue
             # Unknown id/url: echo it back so callers still get what they asked for.
             docs.append({"id": s.get("id") or s.get("url"),

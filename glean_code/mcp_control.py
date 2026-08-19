@@ -265,4 +265,5 @@ def client_config(url: Optional[str] = None,
 
 def tool_names() -> List[str]:
     """The tools the server exposes. Kept in sync with glean_mcp.py by test."""
-    return ["search", "chat", "list_agents", "run_agent"]
+    return ["search", "chat", "list_agents", "run_agent",
+            "get_flow", "get_flow_summary", "get_flow_collapsed"]
