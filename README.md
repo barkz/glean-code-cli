@@ -261,6 +261,7 @@ glean-code-cli/
     client.py             Glean REST wrapper + mock responses
     config.py             config file load and save
     help_docs.py          per-command documentation
+    mcp_control.py        /mcp — MCP server diagnostics and process control
     mock_corpus.py        the fake corpus every mock endpoint reads from
     _indexing_walk.py     --path file walking for indexing commands
     completion.py         readline tab completion
@@ -269,7 +270,7 @@ glean-code-cli/
     auth_commands.py      /auth command handlers
     auth/                 OAuth 2.1 + PKCE: oauth, pkce, callback_server,
                           token_store, manager
-  tests/                  16 test modules, stdlib unittest only
+  tests/                  17 test modules, stdlib unittest only
   docs/                   full reference set — see below
 ```
 
