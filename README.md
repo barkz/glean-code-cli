@@ -146,6 +146,24 @@ A native VS Code extension that brings the full Glean Code REPL — slash comman
 
 ![Glean Code VS Code extension preview](assets/vscode_extension_glean-code-cli.png)
 
+### Flow Mapper
+
+`/flow` records the investigations you run — every `/chat` and `/search`, and the documents they
+cited — then finds the connections between them. Not only the obvious "both mentioned INC-1183",
+but the indirect case: two conversations sharing no vocabulary at all, connected because a
+document cited by one refers to the other's subject in passing.
+
+Below, a checkout incident and a customer renewal link on `incident, checkout`. Neither
+conversation mentions the other. The QBR simply refers to "the checkout incident" in prose —
+no ticket number, nothing to join on.
+
+![Flow Mapper preview — /flow show drawing two linked investigations](assets/flow_mapper_preview.png)
+
+Sessions run down a rail in the order you worked; each connection branches off it carrying the
+evidence that earned it, so every link can be read rather than taken on trust. Capture is local
+SQLite, defaults to recording mock traffic only, and the whole thing works offline against the
+built-in corpus — no token needed to try it.
+
 ## Commands at a glance
 
 | Area | Commands |
