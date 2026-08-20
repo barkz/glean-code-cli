@@ -14,6 +14,45 @@ For what Glean Code is and how to run it, see the [README](README.md).
   commands, status bar, mock/live switching, secure-token storage) into the editor
   sidebar. In progress.
 
+## 2026-08-18
+
+### Added
+
+- **`/mcp`** — inspect, configure, and run the bundled MCP server without leaving the REPL.
+  `/mcp status` reports the installed `mcp` version, whether it can actually run the server,
+  and any running instance's pid, URL, uptime, and mode. `/mcp config [client]` prints the
+  paste-ready JSON for Claude Code, Claude Desktop, or Cursor. `/mcp start` runs the server
+  detached over HTTP and `/mcp stop` terminates it. Documented in
+  [docs/COMMANDS.md](docs/COMMANDS.md) and [docs/MCP.md](docs/MCP.md).
+- **`--name` on `/mcp config`** — the emitted block keys the server as `glean` by default,
+  the same name Glean's own hosted MCP server would use. `--name glean-cli` keeps both
+  registered; the default form warns that pasting replaces an existing entry.
+- **Transport flags on `glean_mcp.py`** — `--transport stdio|sse|streamable-http`, `--host`,
+  and `--port`. stdio remains the default and is what MCP clients spawn; the HTTP transports
+  exist so the server can run detached, since a stdio server started from the REPL would have
+  no client on the other end of its pipes.
+- **`SUPPORT.md`** — best-effort support expectations, triage order, and what makes a bug
+  report actionable. Surfaced by GitHub in the new-issue chooser.
+
+### Changed
+
+- **The macOS app bundle is now `Glean Code.app`**, not `Glean.app` — the latter is Glean's
+  own desktop client (`com.glean.desktop`). The installer reads `CFBundleIdentifier` before
+  writing and refuses a bundle it did not create; `--uninstall` skips one for the same reason.
+  A pre-existing `Glean.app` that we own is replaced on the next install.
+- **CI workflow renamed** from `tests.yml` to `release.yml`, and it now publishes the built
+  zipapp as a downloadable workflow artifact.
+
+### Fixed
+
+- **`pip install "mcp[cli]"` broke fresh installs.** The MCP SDK's 2.0.0 release renamed
+  `FastMCP` to `MCPServer` and removed the `mcp.server.fastmcp` module `glean_mcp.py` imports,
+  so an unpinned install resolved to 2.x and failed on import. Install instructions now pin
+  `mcp[cli]>=1,<2`, and the import guard distinguishes "not installed" from "installed but
+  incompatible" instead of advising a reinstall of the version that just broke.
+- **`--uninstall` could delete a user's Glean Desktop installation** — it called `rmtree` on
+  the app path with no ownership check.
+
 ## 2026-08-14
 
 ### Added

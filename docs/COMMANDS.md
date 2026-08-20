@@ -194,6 +194,50 @@ Quickly switch the API mode without editing config.
 
 ---
 
+#### /mcp
+
+Inspect, configure, and run the bundled MCP server without leaving the REPL.
+
+```text
+/mcp <status|config|start|stop> [client] [--url] [--stdio] [--name <key>] [--port <n>] [--host <addr>] [--transport <t>] [--mock]
+```
+
+| Subcommand | Description |
+| --- | --- |
+| `status` | Installed `mcp` version and whether it can run the server, plus the running server's pid, URL, uptime, and mode. The default when no subcommand is given. |
+| `config` | Print the JSON block to paste into a client. Optional client name: `claude-code`, `claude-desktop`, `cursor`. |
+| `start` | Run the server detached over HTTP and record where it landed. |
+| `stop` | Terminate the server `start` launched. |
+
+| Flag | Description |
+| --- | --- |
+| `--url` | `config`: emit the URL form pointing at the running server. |
+| `--stdio` | `config`: force the command form even while a server is running. |
+| `--name` | `config`: key under `mcpServers`. Default `glean`. |
+| `--port` | `start`: bind port. Default `8787`. |
+| `--host` | `start`: bind address. Default `127.0.0.1`. |
+| `--transport` | `start`: `streamable-http` (default) or `sse`. |
+| `--mock` | `start`: serve the built-in corpus. Implied when the REPL is in mock mode. |
+
+```text
+/mcp status
+/mcp config claude-code
+/mcp config --name glean-cli
+/mcp start --port 9000
+/mcp config --url
+/mcp stop
+```
+
+**Output** — `status` prints a key/value table; `config` prints JSON; `start` and `stop` confirm with the pid and URL.
+
+**`start` cannot use stdio, by design.** stdio is the transport an MCP client spawns for itself over a pipe pair — started from the REPL it would have no client on the other end. `/mcp start` therefore runs `streamable-http` (or `sse`), which a client attaches to by URL. For the ordinary setup, use `/mcp config` and let the client spawn the server. See [docs/MCP.md](MCP.md#starting-a-server-from-the-repl).
+
+**Name collisions.** The emitted block keys the server as `glean` under `mcpServers`. Glean's own hosted MCP server would naturally be registered under that name too, and pasting over it silently swaps the toolset with no error. Use `--name glean-cli` to run both side by side.
+
+**Endpoint** — `(local — spawns glean_mcp.py)`
+
+---
+
 #### /ask
 
 Translate a natural-language request into a sequence of Glean Code slash commands using Glean Assistant as the planner. Read [docs/NATURAL_LANGUAGE.md](NATURAL_LANGUAGE.md) for the full design.

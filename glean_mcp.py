@@ -310,7 +310,35 @@ def run_agent(agent_id: str, input: str) -> str:
 
 # ── entry point ───────────────────────────────────────────────────────────────
 
+def _parse_args(argv: Optional[list] = None) -> "argparse.Namespace":
+    """Transport selection. stdio is the default and what MCP clients spawn.
+
+    The HTTP transports exist so the server can be started detached — from the
+    glean REPL's `/mcp start`, or by hand — since a stdio server needs a client
+    on the other end of its pipes to be useful at all.
+    """
+    import argparse
+    parser = argparse.ArgumentParser(
+        prog="glean_mcp.py",
+        description="Glean MCP server. Defaults to stdio, which is what MCP clients spawn.",
+    )
+    parser.add_argument("--transport", default="stdio",
+                        choices=["stdio", "sse", "streamable-http"],
+                        help="wire transport (default: stdio)")
+    parser.add_argument("--host", default="127.0.0.1",
+                        help="bind address for the HTTP transports (default: 127.0.0.1)")
+    parser.add_argument("--port", type=int, default=8787,
+                        help="bind port for the HTTP transports (default: 8787)")
+    return parser.parse_args(argv)
+
+
 if __name__ == "__main__":
+    _args = _parse_args()
+    if _args.transport != "stdio":
+        # FastMCP reads host/port off its settings object, not run().
+        mcp.settings.host = _args.host
+        mcp.settings.port = _args.port
+
     if _cfg.effective_mode == "mock":
         print(
             f"{MOCK_ENV_VAR} is set: serving the built-in fictional corpus. "
@@ -325,4 +353,7 @@ if __name__ == "__main__":
             "or run /login inside glean-code first.",
             file=sys.stderr,
         )
-    mcp.run(transport="stdio")
+    if _args.transport != "stdio":
+        print(f"serving MCP over {_args.transport} on "
+              f"http://{_args.host}:{_args.port}", file=sys.stderr)
+    mcp.run(transport=_args.transport)

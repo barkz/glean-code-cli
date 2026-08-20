@@ -168,7 +168,7 @@ built-in corpus — no token needed to try it.
 
 | Area | Commands |
 | --- | --- |
-| Shell | `/help` `/status` `/doctor` `/auth` `/login` `/logout` `/open` `/ask` `/config` `/mode` `/history` `/clear` `/exit` |
+| Shell | `/help` `/status` `/doctor` `/auth` `/login` `/logout` `/open` `/ask` `/config` `/mode` `/mcp` `/history` `/clear` `/exit` |
 | Chat and search | `/chat` `/search` `/autocomplete` `/recommendations` `/feedback` `/datasources.list` |
 | Indexing — read & debug | `/datasources.status` `/datasources.config` `/documents.status` `/documents.count` `/users.count` `/documents.access` `/debug.document` `/debug.documents` `/debug.user` `/indexing.rotate-token` |
 | Indexing — single write | `/index.document` `/index.permissions` `/index.user` `/index.group` `/index.membership` and their `/index.delete-*` partners |
@@ -260,6 +260,10 @@ Requires Python 3.10+ and the **v1 line** of the `mcp` package — install it as
 server imports, so an unpinned install breaks it ([details](docs/MCP.md#mcp-sdk-v2)). The
 REPL itself remains Python 3.9+ and stdlib-only.
 
+`/mcp` drives it from inside the REPL — `/mcp status` for version and health, `/mcp config
+<client>` for the paste-ready JSON, and `/mcp start` to run one detached over HTTP when you
+want a server that isn't owned by a client.
+
 Setup for all three clients, the tool table, and the mock-mode rationale: **[docs/MCP.md](docs/MCP.md)**.
 
 ## Project layout
@@ -275,6 +279,7 @@ glean-code-cli/
     client.py             Glean REST wrapper + mock responses
     config.py             config file load and save
     help_docs.py          per-command documentation
+    mcp_control.py        /mcp — MCP server diagnostics and process control
     mock_corpus.py        the fake corpus every mock endpoint reads from
     _indexing_walk.py     --path file walking for indexing commands
     completion.py         readline tab completion
@@ -283,7 +288,7 @@ glean-code-cli/
     auth_commands.py      /auth command handlers
     auth/                 OAuth 2.1 + PKCE: oauth, pkce, callback_server,
                           token_store, manager
-  tests/                  16 test modules, stdlib unittest only
+  tests/                  17 test modules, stdlib unittest only
   docs/                   full reference set — see below
 ```
 
@@ -308,7 +313,7 @@ files, and they outrank the `Glean Code.app` launcher in `Cmd+Space`:
 export PYTHONPYCACHEPREFIX="$HOME/.cache/python"
 ```
 
-740 tests covering the client and every mock response, commands and dispatch, config, UI, auth, completion, help docs, the mock corpus, indexing-walk, scaffold, the installer, and the MCP server. Development notes: [docs/TESTING.md](docs/TESTING.md).
+776 tests covering the client and every mock response, commands and dispatch, config, UI, auth, completion, help docs, the mock corpus, indexing-walk, scaffold, the installer, and the MCP server. Development notes: [docs/TESTING.md](docs/TESTING.md).
 
 ## Documentation
 
