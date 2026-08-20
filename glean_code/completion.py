@@ -33,6 +33,8 @@ _CONFIG_SUBCMDS = ["get", "set", "list"]
 _MCP_SUBCMDS = ["status", "config", "start", "stop"]
 _MCP_CLIENTS = ["claude-code", "claude-desktop", "cursor"]
 
+_FLOW_SUBCMDS = ["status", "enrich", "link", "show", "timeline", "purge"]
+
 
 class _Completer:
     def __init__(self) -> None:
@@ -119,6 +121,12 @@ class _Completer:
                                           or (len(tokens) == 3 and not ends_with_space)):
                 partial = "" if ends_with_space else tokens[-1]
                 return [c for c in _MCP_CLIENTS if c.startswith(partial)]
+
+        # ── /flow subcommands ────────────────────────────────────────────
+        if cmd == "flow":
+            if len(tokens) == 1 or (len(tokens) == 2 and not ends_with_space):
+                partial = "" if ends_with_space else tokens[-1]
+                return [s for s in _FLOW_SUBCMDS if s.startswith(partial)]
 
         # ── /help <command-tab> ──────────────────────────────────────────
         if cmd == "help":

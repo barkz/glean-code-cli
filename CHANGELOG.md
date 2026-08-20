@@ -18,6 +18,35 @@ For what Glean Code is and how to run it, see the [README](README.md).
 
 ### Added
 
+- **Flow mapper (`/flow`)** — a local capture layer that records the investigations you run,
+  enriches their citations with real document text, and finds the connections between them.
+  Chat turns group by the `chatId` the API returns, so threading is exact rather than inferred.
+  Linking runs in three tiers — shared ticket identifiers, shared phrases anchored on document
+  titles, and cross-session links through a shared or linked document — and every link stores
+  the evidence for it. `/flow timeline` renders a self-contained HTML timeline with no external
+  references. Data lives in `~/.gleancode/flow.db` (`0600`), partitioned by instance, mode, and
+  `act_as` so fictional corpus rows can never link to real tenant content. Capture defaults to
+  **mock only**; recording live data is opt-in via `flow_capture`, because a local cache has no
+  permission model. Full guide: [docs/FLOW_MAPPER.md](docs/FLOW_MAPPER.md).
+- **`/flow show` draws a rail.** Sessions are nodes on a vertical spine in the order they
+  happened; a connection branches off it on a yellow `├──◆`, stacking the two documents that
+  bridge around a `↓` with the evidence that earned the link. Each cited document is tagged with
+  its datasource in a consistent colour. Colour is decoration only — piped or under `NO_COLOR`
+  the glyphs still carry the structure — and no line exceeds the terminal width at any size.
+  `--docs <n>` sets how many documents are listed per session before the rest are counted.
+- **`/flow show` orders by what tells you something.** Connections are ranked by kind before
+  score, because a `shared-citation` link scores `1.00` and says only "you ran this twice"
+  while the `linked-document` link that found something scores lower — re-running one
+  investigation used to bury the discovery under a wall of `1.00`s. Documents a thread kept
+  returning to lead; the rest hold citation order, since sorting by rank interleaves the turns
+  (every turn's citations restart at rank 0). `--links <n>` caps connections per session.
+- **Per-datasource colours** — `ui.DATASOURCE_COLOURS` and `ui.datasource_colour()`, so one
+  source looks the same wherever it appears. Unknown datasources fall back to grey rather than
+  being assigned a colour, which would let an unfamiliar source impersonate a familiar one.
+- **`width` on `ui.rule()`** — so a block that caps its own columns can draw rules that match.
+- **Three more MCP tools** — `get_flow`, `get_flow_summary`, and `get_flow_collapsed` expose the
+  captured graph to an agent, with the same `[MOCK MODE]` banner and partition rules.
+- **`flow_capture` config key** — `mock` (default), `on`, or `off`.
 - **`/mcp`** — inspect, configure, and run the bundled MCP server without leaving the REPL.
   `/mcp status` reports the installed `mcp` version, whether it can actually run the server,
   and any running instance's pid, URL, uptime, and mode. `/mcp config [client]` prints the
@@ -43,8 +72,16 @@ For what Glean Code is and how to run it, see the [README](README.md).
 - **CI workflow renamed** from `tests.yml` to `release.yml`, and it now publishes the built
   zipapp as a downloadable workflow artifact.
 
+### Changed
+
+- **`session_links` records both ends of a link** (`to_doc`), and `get_flow_summary` returns the
+  structured parts — document titles, the shared evidence, and each end's session id — instead
+  of only a sentence built for a human. Schema version 2; `connect()` migrates an existing
+  database by adding the column, since `CREATE TABLE IF NOT EXISTS` never reaches one.
+
 ### Fixed
 
+- **Mock `/getdocuments` returned no document content.** Real `/getdocuments` returns a body; the mock returned metadata only, which left anything downstream of a citation with nothing to read. It now returns the corpus document's text.
 - **`pip install "mcp[cli]"` broke fresh installs.** The MCP SDK's 2.0.0 release renamed
   `FastMCP` to `MCPServer` and removed the `mcp.server.fastmcp` module `glean_mcp.py` imports,
   so an unpinned install resolved to 2.x and failed on import. Install instructions now pin

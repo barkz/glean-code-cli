@@ -46,6 +46,7 @@ class Config:
     theme: str = "glean"                      # glean | mono | neon
     default_page_size: int = 10
     mock_corpus_path: Optional[str] = None    # JSON file backing mock mode; falls back to the built-in corpus
+    flow_capture: str = "mock"                # mock | on | off — see docs/FLOW_MAPPER.md
     window_title: str = "full"                # full | plain (no hostname) | off
     history: list = field(default_factory=list)
 

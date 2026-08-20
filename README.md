@@ -39,6 +39,7 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 - [Tokens and auth](#tokens-and-auth)
 - [Config keys](#config-keys)
 - [MCP server](#mcp-server)
+- [Flow mapper](#flow-mapper) — map what you have investigated
 - [Project layout](#project-layout)
 - [Running tests](#running-tests)
 - [Documentation](#documentation) — the full reference set
@@ -57,6 +58,7 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 - **Offline by default** — a real mock corpus of interlinked documents across five faux datasources, so every command is explorable without credentials. See [docs/MOCK_CORPUS.md](docs/MOCK_CORPUS.md)
 - **Browser SSO or API token** — `/auth login` runs OAuth 2.1 + PKCE against your instance, or paste a Glean-issued token. Secure refs keep real secrets in environment variables, never on disk
 - **MCP server** (`glean_mcp.py`) for Claude Code, Claude Desktop, and Cursor
+- **Flow mapper** — `/flow` records the investigations you run, enriches their citations with real text, and finds connections between conversations that never shared context. `/flow show` draws them as a rail with each connection branching off it and the evidence that earned it; `/flow timeline` renders the same graph as a self-contained HTML page. Local SQLite, opt-in for live data. See [docs/FLOW_MAPPER.md](docs/FLOW_MAPPER.md)
 - Terminal niceties: `/help <command>` for every command, tab completion that cycles matches, a powerline-style status bar, and `/scaffold` to generate stdlib-only starter projects
 
 ## Getting started
@@ -146,29 +148,11 @@ A native VS Code extension that brings the full Glean Code REPL — slash comman
 
 ![Glean Code VS Code extension preview](assets/vscode_extension_glean-code-cli.png)
 
-### Flow Mapper
-
-`/flow` records the investigations you run — every `/chat` and `/search`, and the documents they
-cited — then finds the connections between them. Not only the obvious "both mentioned INC-1183",
-but the indirect case: two conversations sharing no vocabulary at all, connected because a
-document cited by one refers to the other's subject in passing.
-
-Below, a checkout incident and a customer renewal link on `incident, checkout`. Neither
-conversation mentions the other. The QBR simply refers to "the checkout incident" in prose —
-no ticket number, nothing to join on.
-
-![Flow Mapper preview — /flow show drawing two linked investigations](assets/flow_mapper_preview.png)
-
-Sessions run down a rail in the order you worked; each connection branches off it carrying the
-evidence that earned it, so every link can be read rather than taken on trust. Capture is local
-SQLite, defaults to recording mock traffic only, and the whole thing works offline against the
-built-in corpus — no token needed to try it.
-
 ## Commands at a glance
 
 | Area | Commands |
 | --- | --- |
-| Shell | `/help` `/status` `/doctor` `/auth` `/login` `/logout` `/open` `/ask` `/config` `/mode` `/mcp` `/history` `/clear` `/exit` |
+| Shell | `/help` `/status` `/doctor` `/auth` `/login` `/logout` `/open` `/ask` `/config` `/mode` `/mcp` `/flow` `/history` `/clear` `/exit` |
 | Chat and search | `/chat` `/search` `/autocomplete` `/recommendations` `/feedback` `/datasources.list` |
 | Indexing — read & debug | `/datasources.status` `/datasources.config` `/documents.status` `/documents.count` `/users.count` `/documents.access` `/debug.document` `/debug.documents` `/debug.user` `/indexing.rotate-token` |
 | Indexing — single write | `/index.document` `/index.permissions` `/index.user` `/index.group` `/index.membership` and their `/index.delete-*` partners |
@@ -266,6 +250,20 @@ want a server that isn't owned by a client.
 
 Setup for all three clients, the tool table, and the mock-mode rationale: **[docs/MCP.md](docs/MCP.md)**.
 
+## Flow mapper
+
+`/flow` records the investigations you run — every `/chat` and `/search`, and the documents they cited — then finds the connections between them. Not only the obvious "both mentioned INC-1183", but the indirect case: two conversations sharing no vocabulary at all, connected because a document cited by one refers to the other's subject in passing.
+
+Below, a checkout incident and a customer renewal link on `incident, checkout`. Neither conversation mentions the other. The QBR simply refers to "the checkout incident" in prose — no ticket number, nothing to join on.
+
+![Flow mapper — /flow show drawing two linked investigations](assets/flow_mapper_preview.png)
+
+Sessions run down a rail in the order you worked; each connection branches off it carrying the evidence that earned it, so every link can be read rather than taken on trust. `/flow timeline` renders the same graph as a self-contained HTML page.
+
+Capture is a local SQLite database at `~/.gleancode/flow.db`, partitioned so mock content can never link to real tenant content. It defaults to recording **mock traffic only** — a local cache has no permission model, so recording live data is opt-in via `flow_capture`.
+
+The whole feature works offline against the built-in corpus, with no token. Full guide: **[docs/FLOW_MAPPER.md](docs/FLOW_MAPPER.md)**.
+
 ## Project layout
 
 ```text
@@ -280,6 +278,7 @@ glean-code-cli/
     config.py             config file load and save
     help_docs.py          per-command documentation
     mcp_control.py        /mcp — MCP server diagnostics and process control
+    flow.py               /flow — capture, enrich, link, and render investigations
     mock_corpus.py        the fake corpus every mock endpoint reads from
     _indexing_walk.py     --path file walking for indexing commands
     completion.py         readline tab completion
@@ -288,7 +287,7 @@ glean-code-cli/
     auth_commands.py      /auth command handlers
     auth/                 OAuth 2.1 + PKCE: oauth, pkce, callback_server,
                           token_store, manager
-  tests/                  17 test modules, stdlib unittest only
+  tests/                  18 test modules, stdlib unittest only
   docs/                   full reference set — see below
 ```
 
@@ -313,7 +312,7 @@ files, and they outrank the `Glean Code.app` launcher in `Cmd+Space`:
 export PYTHONPYCACHEPREFIX="$HOME/.cache/python"
 ```
 
-776 tests covering the client and every mock response, commands and dispatch, config, UI, auth, completion, help docs, the mock corpus, indexing-walk, scaffold, the installer, and the MCP server. Development notes: [docs/TESTING.md](docs/TESTING.md).
+834 tests covering the client and every mock response, commands and dispatch, config, UI, auth, completion, help docs, the mock corpus, indexing-walk, scaffold, the installer, the MCP server, and the flow mapper. Development notes: [docs/TESTING.md](docs/TESTING.md).
 
 ## Documentation
 
@@ -328,6 +327,7 @@ export PYTHONPYCACHEPREFIX="$HOME/.cache/python"
 | [docs/SSO_OAUTH.md](docs/SSO_OAUTH.md) | Browser SSO via OAuth 2.1 + PKCE |
 | [docs/SECURE_TOKENS.md](docs/SECURE_TOKENS.md) | Secure refs, masking matrix, mock-mode fallback |
 | [docs/MCP.md](docs/MCP.md) | MCP server setup for Claude Code, Claude Desktop, Cursor |
+| [docs/FLOW_MAPPER.md](docs/FLOW_MAPPER.md) | `/flow` — capturing investigations, linking them, and the retention questions |
 | [docs/REST_PATHS.md](docs/REST_PATHS.md) | Every REST path this client targets, and how to retarget them |
 | [docs/TESTING.md](docs/TESTING.md) | Test-suite development notes |
 | [SUPPORT.md](SUPPORT.md) | Best-effort support expectations, triage order, how to file a good bug report |

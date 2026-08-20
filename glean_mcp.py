@@ -116,6 +116,7 @@ except ImportError:
 
 from glean_code.config import Config
 from glean_code.client import GleanClient, GleanError
+from glean_code import flow as _flow
 
 
 MOCK_ENV_VAR = "GLEAN_MOCK"
@@ -306,6 +307,105 @@ def run_agent(agent_id: str, input: str) -> str:
     if run_id:
         result = f"[run_id: {run_id}]\n\n{result}"
     return _label(result)
+
+
+# ── flow mapper ───────────────────────────────────────────────────────────────
+
+
+def _flow_scope() -> tuple:
+    """Flow data is partitioned; never read across instance or mode."""
+    return (_cfg.instance or "local").strip(), _cfg.effective_mode
+
+
+@mcp.tool()
+def get_flow(session_id: Optional[int] = None) -> str:
+    """Get the captured investigation graph: sessions, questions, cited documents, and links.
+
+    Call this when the user asks what they looked into previously, whether two
+    topics are related, or where a document came up before. Returns every
+    session in the current instance and mode, each with its turns and
+    citations, plus document-to-document and session-to-session links with the
+    evidence for each.
+
+    Pass session_id to narrow to one investigation.
+
+    When the server is started with GLEAN_MOCK=1 this returns fictional demo
+    data from a built-in corpus, prefixed with a [MOCK MODE] banner.
+    """
+    instance, mode = _flow_scope()
+    try:
+        data = _flow.get_flow(session_id=session_id, instance=instance, mode=mode)
+    except Exception as e:  # noqa: BLE001
+        return f"Error reading the flow database: {e}"
+    if not data["sessions"]:
+        return _label(f"No captured sessions for {instance} in {mode} mode.")
+    return _label(json.dumps(data, indent=2, default=str))
+
+
+@mcp.tool()
+def get_flow_summary() -> str:
+    """Summarise what was investigated and which investigations connect to each other.
+
+    Call this instead of get_flow when the user wants the narrative rather than
+    the raw graph — "what have I been looking at", "is this related to anything
+    I've seen". Returns one entry per session with its questions and documents,
+    then the connections between sessions with a plain-language reason for each.
+
+    Connections are the useful part: two investigations that never shared
+    context can be linked because a document cited by one mentions the other's
+    subject in passing.
+
+    When the server is started with GLEAN_MOCK=1 this returns fictional demo
+    data from a built-in corpus, prefixed with a [MOCK MODE] banner.
+    """
+    instance, mode = _flow_scope()
+    try:
+        data = _flow.get_flow_summary(instance=instance, mode=mode)
+    except Exception as e:  # noqa: BLE001
+        return f"Error reading the flow database: {e}"
+    if not data["sessions"]:
+        return _label(f"No captured sessions for {instance} in {mode} mode.")
+
+    lines = [f"{len(data['sessions'])} session(s) in {instance} ({mode} mode):", ""]
+    for s in data["sessions"]:
+        head = s["questions"][0] if s["questions"] else f"session {s['session_id']}"
+        lines.append(f"[{s['session_id']}] {head}")
+        for q in s["questions"][1:]:
+            lines.append(f"      also asked: {q}")
+        for d in s["documents"]:
+            lines.append(f"      cited: {d['title'] or d['doc_id']}")
+        lines.append("")
+    if data["connections"]:
+        lines.append("Connections between sessions:")
+        for c in data["connections"]:
+            lines.append(f"  {c['a']}")
+            lines.append(f"    <-> {c['b']}")
+            lines.append(f"    {c['kind']} (score {c['score']}): {c['why']}")
+    else:
+        lines.append("No connections found between sessions.")
+    return _label("\n".join(lines))
+
+
+@mcp.tool()
+def get_flow_collapsed() -> str:
+    """Get the compact view: threads folded into single nodes with turn and question counts.
+
+    Call this when the full graph would be too much — a long history, or a
+    first look before drilling in with get_flow. Repeated questions collapse
+    into one entry with a count, and each thread reports how many turns and
+    documents it holds rather than listing them all.
+
+    When the server is started with GLEAN_MOCK=1 this returns fictional demo
+    data from a built-in corpus, prefixed with a [MOCK MODE] banner.
+    """
+    instance, mode = _flow_scope()
+    try:
+        data = _flow.get_flow_collapsed(instance=instance, mode=mode)
+    except Exception as e:  # noqa: BLE001
+        return f"Error reading the flow database: {e}"
+    if not data["threads"]:
+        return _label(f"No captured sessions for {instance} in {mode} mode.")
+    return _label(json.dumps(data, indent=2, default=str))
 
 
 # ── entry point ───────────────────────────────────────────────────────────────

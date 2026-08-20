@@ -21,6 +21,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple  # noqa: F401
 
 from . import ui
 from . import _indexing_walk as _walk
+from . import flow as _flow
 from . import mcp_control as _mcp
 from .client import GleanClient, GleanError
 from .config import Config, SECURE_REFS, is_secure_ref, resolve_secure
@@ -2446,6 +2447,275 @@ def cmd_scaffold(s: Session, pos, flags):
 
     ui.print_ok(f"Created {out_path}")
     ui.print_info(f"Run with:  python3 {out_path}")
+
+
+# -------------------- flow mapper --------------------
+
+
+def _flow_scope(s: Session):
+    """Every query is scoped to one (instance, mode) partition.
+
+    Fictional corpus rows and real tenant rows live in the same file and must
+    never be linked to each other, so nothing here is ever queried globally.
+    """
+    return (s.config.instance or "local").strip(), s.config.effective_mode
+
+
+def _flow_status(s: Session) -> None:
+    st = _flow.stats()
+    instance, mode = _flow_scope(s)
+    setting = getattr(s.config, "flow_capture", _flow.DEFAULT_CAPTURE)
+    on = _flow.capture_enabled(setting, mode)
+    capture = ui.style(f"{setting}  →  {'recording' if on else 'not recording'} in {mode} mode",
+                       ui.C.GREEN if on else ui.C.GREY)
+    rows = [
+        ("capture", capture),
+        ("database", f"{st['path']}  ({st['size'] / 1024:.0f} KB)"),
+        ("scope", f"{instance} · {mode}"),
+        ("sessions", str(st["sessions"])),
+        ("turns", str(st["turns"])),
+        ("documents", f"{st['documents']}  ({st['enriched']} enriched)"),
+        ("document links", str(st["doc_links"])),
+        ("session links", str(st["session_links"])),
+    ]
+    print(ui.rule("flow"))
+    print(ui.kv_table(rows))
+    print(ui.rule())
+    if st["documents"] and st["enriched"] < st["documents"]:
+        ui.print_info(f"{st['documents'] - st['enriched']} documents have no text yet — "
+                      "run /flow enrich to fetch it.")
+
+
+def _flow_enrich(s: Session, flags) -> None:
+    try:
+        limit = int(flags.get("limit") or 50)
+    except (TypeError, ValueError):
+        ui.print_err("--limit must be an integer.")
+        return
+    enriched, attempted = _flow.enrich(s.client, s.config, limit=limit)
+    if not attempted:
+        ui.print_info("Every captured document already has text.")
+        return
+    ui.print_ok(f"Enriched {enriched} of {attempted} documents.")
+    if enriched < attempted:
+        ui.print_info("The rest returned no content — they stay in the graph as metadata.")
+
+
+def _flow_link(s: Session, flags) -> None:
+    instance, mode = _flow_scope(s)
+    try:
+        min_score = float(flags.get("min-score") or flags.get("min_score") or 0.45)
+    except (TypeError, ValueError):
+        ui.print_err("--min-score must be a number.")
+        return
+    docs = _flow.link_documents(instance=instance, mode=mode, min_score=min_score)
+    sess = _flow.link_sessions(instance=instance, mode=mode)
+    ui.print_ok(f"{docs} document links, {sess} session links.")
+    if sess:
+        ui.print_info("See them with /flow show, or /flow timeline for the rendered view.")
+
+
+def _flow_fit(text: str, width: int, collapse: bool = True) -> str:
+    """One line, no wider than width. Long titles lose their tail, not the shape.
+
+    Questions and titles arrive with newlines and runs of spaces in them, so
+    they are collapsed first. Lines this module composed itself are already
+    spaced deliberately — pass collapse=False to leave that spacing alone.
+    """
+    text = " ".join((text or "").split()) if collapse else (text or "")
+    if width <= 1 or len(text) <= width:
+        return text
+    return text[: max(1, width - 1)].rstrip() + "…"
+
+
+def _flow_bridge(c, order, width: int) -> None:
+    """One connection, branching off the rail.
+
+    The two documents stack around a downward arrow carrying the shared
+    evidence, so which way the link runs and why are both visible without
+    reading prose. Drawn in yellow — the rail stays grey, so the branch reads
+    as a departure from the spine rather than part of it.
+    """
+    accent = lambda t: ui.style(t, ui.C.YELLOW)          # noqa: E731
+    dim = lambda t: ui.style(t, ui.C.GREY)               # noqa: E731
+
+    target = order.get(c["_to_session"], c["_to_session"])
+    label = f"{c['kind']}  {float(c['score']):.2f}  →  {target}"
+    # "  " + "├──◆" + " " + label + " "
+    bar = "─" * max(0, width - 8 - len(label))
+    print(f"  {accent('├──◆')} {accent(label)} {dim(bar)}")
+
+    body_w = width - 9
+    if c["kind"] == "shared-citation":
+        print(f"  {accent('│')}    {dim('both cited:')} "
+              f"{_flow_fit(c['to_title'] or c['to_doc'] or '?', body_w - 12)}")
+    else:
+        print(f"  {accent('│')}    {_flow_fit(c['from_title'] or c['from_doc'] or '?', body_w)}")
+        shares = c.get("shares") or c.get("via_kind") or "related content"
+        print(f"  {accent('│')}      {accent('↓')}  {dim('shares: ' + _flow_fit(shares, body_w - 12))}")
+        print(f"  {accent('│')}    {_flow_fit(c['to_title'] or c['to_doc'] or '?', body_w)}")
+
+
+def _flow_show(s: Session, flags) -> None:
+    instance, mode = _flow_scope(s)
+    summary = _flow.get_flow_summary(instance=instance, mode=mode)
+    if not summary["sessions"]:
+        ui.print_info("Nothing captured for this instance and mode yet.")
+        return
+    try:
+        max_docs = int(flags.get("docs") or 6)
+    except (TypeError, ValueError):
+        ui.print_err("--docs must be an integer.")
+        return
+    try:
+        max_links = int(flags.get("links") or 3)
+    except (TypeError, ValueError):
+        ui.print_err("--links must be an integer.")
+        return
+
+    width = max(40, min(ui.term_width(), 100))
+    rail = lambda g: ui.style(g, ui.C.GREY)              # noqa: E731
+    dim = lambda t: ui.style(t, ui.C.GREY)               # noqa: E731
+
+    sessions = summary["sessions"]
+    order = {sess["session_id"]: i + 1 for i, sess in enumerate(sessions)}
+
+    # Hang each connection off the session it leaves from. A link may reach a
+    # session outside this partition, or arrive from one — keep it either way
+    # and point the arrow at whichever end we can actually name.
+    outgoing = {}
+    for c in summary["connections"]:
+        a, b = c["a_session"], c["b_session"]
+        if a in order:
+            outgoing.setdefault(a, []).append(dict(c, _to_session=b))
+        elif b in order:
+            flipped = dict(c, _to_session=a,
+                           from_title=c["to_title"], to_title=c["from_title"],
+                           from_doc=c["to_doc"], to_doc=c["from_doc"])
+            outgoing.setdefault(b, []).append(flipped)
+
+    ds_w = min(12, max(6, max((len(d.get("datasource") or "") for sess in sessions
+                              for d in sess["documents"]), default=6)))
+
+    print(ui.rule(f"flow: {instance} · {mode}", width=width))
+    print()
+    for sess in sessions:
+        n = order[sess["session_id"]]
+        head = sess["questions"][0] if sess["questions"] else f"session {sess['session_id']}"
+        print(f"  {ui.style('●', ui.C.BLUE)}{rail('─')} "
+              f"{ui.style(str(n), ui.C.BLUE, ui.C.BOLD)}  "
+              f"{ui.style(_flow_fit(head, width - 8), ui.C.WHITE, ui.C.BOLD)}")
+
+        docs = sess["documents"]
+        turns = sess.get("turn_count") or len(sess["questions"])
+        meta = (f"{_flow.when(sess['started_at'])}  ·  "
+                f"{turns} turn{'s' if turns != 1 else ''}  ·  "
+                f"{len(docs)} source{'s' if len(docs) != 1 else ''}")
+        print(f"  {rail('│')}     {dim(_flow_fit(meta, width - 8, collapse=False))}")
+        for q in sess["questions"][1:4]:
+            print(f"  {rail('│')}     {dim('↳ ' + _flow_fit(q, width - 12))}")
+        more_q = len(sess["questions"]) - 4
+        if more_q > 0:
+            print(f"  {rail('│')}     {dim(f'↳ +{more_q} more')}")
+
+        if docs:
+            print(f"  {rail('│')}")
+        for d in docs[:max_docs]:
+            name = (d.get("datasource") or "—")[:ds_w]
+            colour = ui.datasource_colour(d.get("datasource"))
+            title = _flow_fit(d.get("title") or d["doc_id"], width - ds_w - 12)
+            print(f"  {rail('│')}     {ui.style('▪', colour)} "
+                  f"{ui.style(name.ljust(ds_w), colour)} {title}")
+        if len(docs) > max_docs:
+            rest = len(docs) - max_docs
+            print(f"  {rail('│')}     "
+                  f"{dim(f'… {rest} more document' + ('s' if rest != 1 else ''))}")
+
+        print(f"  {rail('│')}")
+        links = outgoing.get(sess["session_id"], [])
+        for c in links[:max_links]:
+            _flow_bridge(c, order, width)
+            print(f"  {rail('│')}")
+        if len(links) > max_links:
+            hidden = len(links) - max_links
+            plural = "s" if hidden != 1 else ""
+            print(f"  {rail('│')}    "
+                  f"{dim(f'… {hidden} weaker connection{plural} not shown')}")
+            print(f"  {rail('│')}")
+
+    if not summary["connections"]:
+        print(dim("  no connections yet — run /flow enrich, then /flow link"))
+        print()
+    print(ui.rule(width=width))
+
+
+def _flow_timeline(s: Session, flags) -> None:
+    import tempfile
+    instance, mode = _flow_scope(s)
+    out = flags.get("output") or flags.get("o")
+    if not out:
+        out = Path(tempfile.gettempdir()) / "glean-flow.html"
+    try:
+        path = _flow.write_timeline(Path(out), instance=instance, mode=mode)
+    except OSError as e:
+        ui.print_err(f"Could not write the timeline: {e}")
+        return
+    ui.print_ok(f"Wrote {path}")
+    if flags.get("print") or flags.get("no-open") or flags.get("no_open"):
+        return
+    try:
+        webbrowser.open(path.as_uri(), new=2)
+        ui.print_info("Opened in your browser.")
+    except Exception as e:  # noqa: BLE001 - headless is normal over SSH
+        ui.print_info(f"Open it manually: {path}  ({e})")
+
+
+def _flow_purge(s: Session, pos, flags) -> None:
+    instance, mode = _flow_scope(s)
+    everything = bool(flags.get("all"))
+    days = flags.get("older-than") or flags.get("older_than")
+    try:
+        days = float(days) if days is not None else None
+    except (TypeError, ValueError):
+        ui.print_err("--older-than must be a number of days.")
+        return
+
+    what = ("everything in the database" if everything
+            else f"captured data for {instance} · {mode}"
+                 + (f" older than {days:g} days" if days else ""))
+    try:
+        confirm = input(ui.style(f"Delete {what}? [y/N]: ", ui.C.YELLOW)).strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        ui.print_info("Cancelled.")
+        return
+    if confirm not in ("y", "yes"):
+        ui.print_info("Cancelled.")
+        return
+
+    removed = _flow.purge(instance=None if everything else instance,
+                          mode=None if everything else mode,
+                          older_than_days=days)
+    ui.print_ok(f"Removed {removed} session{'s' if removed != 1 else ''}.")
+
+
+@register("flow")
+def cmd_flow(s: Session, pos, flags):
+    sub = (pos[0] if pos else "status").lower()
+    if sub == "status":
+        _flow_status(s)
+    elif sub == "enrich":
+        _flow_enrich(s, flags)
+    elif sub == "link":
+        _flow_link(s, flags)
+    elif sub == "show":
+        _flow_show(s, flags)
+    elif sub == "timeline":
+        _flow_timeline(s, flags)
+    elif sub == "purge":
+        _flow_purge(s, pos[1:], flags)
+    else:
+        ui.print_err("Usage: /flow <status|enrich|link|show|timeline|purge>")
 
 
 # -------------------- natural-language planner --------------------

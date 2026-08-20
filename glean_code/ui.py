@@ -61,6 +61,29 @@ class C:
     WHITE  = "\033[38;5;255m"
 
 
+# Per-datasource colour. A source should be recognisable before you read its
+# name, and the same source should look the same everywhere it appears.
+# Anything not listed falls back to grey rather than picking a colour at
+# random, so an unfamiliar datasource never impersonates a familiar one.
+DATASOURCE_COLOURS = {
+    "gdrive":     C.BLUE,
+    "confluence": C.CYAN,
+    "jira":       C.PURPLE,
+    "slack":      C.GREEN,
+    "github":     C.GREY,
+    "sharepoint": C.TEAL,
+    "notion":     C.WHITE,
+    "salesforce": C.BLUE,
+    "zendesk":    C.TEAL,
+    "gmail":      C.RED,
+    "outlook":    C.RED,
+}
+
+
+def datasource_colour(name: Optional[str]) -> str:
+    return DATASOURCE_COLOURS.get((name or "").strip().lower(), C.GREY)
+
+
 def supports_colour() -> bool:
     if os.environ.get("NO_COLOR"):
         return False
@@ -229,8 +252,9 @@ def box(title: str, body: str, colour: str = C.BLUE) -> str:
     return "\n".join(lines)
 
 
-def rule(label: str = "", colour: str = C.GREY) -> str:
-    w = term_width()
+def rule(label: str = "", colour: str = C.GREY, width: Optional[int] = None) -> str:
+    """A horizontal rule. Pass width to match a block that caps its own columns."""
+    w = width if width is not None else term_width()
     if label:
         bar = "─" * max(0, w - len(label) - 4)
         return style(f"── {label} {bar}", colour)
