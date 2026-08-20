@@ -2638,8 +2638,9 @@ def _flow_show(s: Session, flags) -> None:
             print(f"  {rail('│')}")
         if len(links) > max_links:
             hidden = len(links) - max_links
+            plural = "s" if hidden != 1 else ""
             print(f"  {rail('│')}    "
-                  f"{dim(f'… {hidden} weaker connection{"s" if hidden != 1 else ""} not shown')}")
+                  f"{dim(f'… {hidden} weaker connection{plural} not shown')}")
             print(f"  {rail('│')}")
 
     if not summary["connections"]:
