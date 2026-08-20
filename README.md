@@ -39,6 +39,7 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 - [Tokens and auth](#tokens-and-auth)
 - [Config keys](#config-keys)
 - [MCP server](#mcp-server)
+- [Flow mapper](#flow-mapper) — map what you have investigated
 - [Project layout](#project-layout)
 - [Running tests](#running-tests)
 - [Documentation](#documentation) — the full reference set
@@ -147,24 +148,6 @@ A native VS Code extension that brings the full Glean Code REPL — slash comman
 
 ![Glean Code VS Code extension preview](assets/vscode_extension_glean-code-cli.png)
 
-### Flow Mapper
-
-`/flow` records the investigations you run — every `/chat` and `/search`, and the documents they
-cited — then finds the connections between them. Not only the obvious "both mentioned INC-1183",
-but the indirect case: two conversations sharing no vocabulary at all, connected because a
-document cited by one refers to the other's subject in passing.
-
-Below, a checkout incident and a customer renewal link on `incident, checkout`. Neither
-conversation mentions the other. The QBR simply refers to "the checkout incident" in prose —
-no ticket number, nothing to join on.
-
-![Flow Mapper preview — /flow show drawing two linked investigations](assets/flow_mapper_preview.png)
-
-Sessions run down a rail in the order you worked; each connection branches off it carrying the
-evidence that earned it, so every link can be read rather than taken on trust. Capture is local
-SQLite, defaults to recording mock traffic only, and the whole thing works offline against the
-built-in corpus — no token needed to try it.
-
 ## Commands at a glance
 
 | Area | Commands |
@@ -266,6 +249,20 @@ REPL itself remains Python 3.9+ and stdlib-only.
 want a server that isn't owned by a client.
 
 Setup for all three clients, the tool table, and the mock-mode rationale: **[docs/MCP.md](docs/MCP.md)**.
+
+## Flow mapper
+
+`/flow` records the investigations you run — every `/chat` and `/search`, and the documents they cited — then finds the connections between them. Not only the obvious "both mentioned INC-1183", but the indirect case: two conversations sharing no vocabulary at all, connected because a document cited by one refers to the other's subject in passing.
+
+Below, a checkout incident and a customer renewal link on `incident, checkout`. Neither conversation mentions the other. The QBR simply refers to "the checkout incident" in prose — no ticket number, nothing to join on.
+
+![Flow mapper — /flow show drawing two linked investigations](assets/flow_mapper_preview.png)
+
+Sessions run down a rail in the order you worked; each connection branches off it carrying the evidence that earned it, so every link can be read rather than taken on trust. `/flow timeline` renders the same graph as a self-contained HTML page.
+
+Capture is a local SQLite database at `~/.gleancode/flow.db`, partitioned so mock content can never link to real tenant content. It defaults to recording **mock traffic only** — a local cache has no permission model, so recording live data is opt-in via `flow_capture`.
+
+The whole feature works offline against the built-in corpus, with no token. Full guide: **[docs/FLOW_MAPPER.md](docs/FLOW_MAPPER.md)**.
 
 ## Project layout
 
