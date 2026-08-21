@@ -203,44 +203,60 @@ class TestCmdLogin(unittest.TestCase):
             })
         self.assertEqual(s.config.act_as, "user@example.com")
 
-    def test_requires_instance(self):
+    def test_oauth_login_accepts_positional_instance_id(self):
         s = _mock_session()
-        with patch("builtins.print") as mock_print:
-            HANDLERS["login"](s, [], {"token": "tok"})
-        output = " ".join(str(a) for call in mock_print.call_args_list for a in call[0])
-        self.assertIn("Usage", output)
+        with patch("glean_code.auth_commands.cmd_auth") as auth_cmd, \
+             patch.object(s.config, "save"), \
+             patch("builtins.print"):
+            HANDLERS["login"](s, ["acme"], {"no-browser": True})
+        auth_cmd.assert_called_once_with(
+            s, ["login"], {"no-browser": True, "instance": "acme"}
+        )
 
-    def test_requires_token(self):
+    def test_oauth_login_accepts_instance_flag_without_token(self):
+        s = _mock_session()
+        with patch("glean_code.auth_commands.cmd_auth") as auth_cmd, \
+             patch.object(s.config, "save"), \
+             patch("builtins.print"):
+            HANDLERS["login"](s, [], {"instance": "acme-be.glean.com"})
+        auth_cmd.assert_called_once_with(
+            s, ["login"], {"instance": "acme-be.glean.com"}
+        )
+
+    def test_requires_instance_for_oauth(self):
         s = _mock_session()
         with patch("builtins.print") as mock_print:
-            HANDLERS["login"](s, [], {"instance": "acme-be.glean.com"})
+            HANDLERS["login"](s, [], {})
         output = " ".join(str(a) for call in mock_print.call_args_list for a in call[0])
         self.assertIn("Usage", output)
 
     def test_rejects_invalid_hostname(self):
         s = _mock_session()
         with patch("builtins.print") as mock_print:
-            HANDLERS["login"](s, [], {"instance": "notahost", "token": "tok"})
+            HANDLERS["login"](s, [], {"instance": "not a host", "token": "tok"})
         output = " ".join(str(a) for call in mock_print.call_args_list for a in call[0])
         self.assertIn("hostname", output.lower())
 
 
 class TestCmdLogout(unittest.TestCase):
-    def test_clears_token(self):
+    def test_clears_token_and_oauth_credentials(self):
         s = _mock_session()
         s.config.api_token = "tok"
         with patch("builtins.print"), \
              patch.object(s.config, "save"), \
-             patch.object(s, "refresh_client"):
+             patch.object(s, "refresh_client"), \
+             patch("glean_code.auth.token_store.clear_tokens") as clear_tokens:
             HANDLERS["logout"](s, [], {})
         self.assertIsNone(s.config.api_token)
+        clear_tokens.assert_called_once_with()
 
     def test_clears_act_as(self):
         s = _mock_session()
         s.config.act_as = "user@example.com"
         with patch("builtins.print"), \
              patch.object(s.config, "save"), \
-             patch.object(s, "refresh_client"):
+             patch.object(s, "refresh_client"), \
+             patch("glean_code.auth.token_store.clear_tokens"):
             HANDLERS["logout"](s, [], {})
         self.assertIsNone(s.config.act_as)
 

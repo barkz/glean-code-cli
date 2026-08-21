@@ -25,6 +25,8 @@ _FLAG_VALUES: Dict[str, List[str]] = {
 
 _CONFIG_KEYS = [
     "instance", "api_token", "indexing_token", "act_as", "base_url",
+    "oauth_client_id", "oauth_client_instance", "oauth_scopes", "redirect_port",
+    "oauth_authorize_url", "oauth_token_url", "oauth_registration_url",
     "mode", "theme", "default_page_size", "mock_corpus_path",
 ]
 

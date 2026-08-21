@@ -55,7 +55,7 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 - **Indexing from local files** — `/index.document --path file.md` and `/index.bulk-documents --path ./docs/` walk a file or folder and synthesize the request body for you, with `--dry-run` to inspect it first
 - **Natural-language planner** — type `?login into acme-be.glean.com and search for "Q2 plan"` and Glean Assistant translates it into slash commands, validated locally and gated behind a single confirm for anything destructive
 - **Offline by default** — a real mock corpus of interlinked documents across five faux datasources, so every command is explorable without credentials. See [docs/MOCK_CORPUS.md](docs/MOCK_CORPUS.md)
-- **Browser SSO or API token** — `/auth login` runs OAuth 2.1 + PKCE against your instance, or paste a Glean-issued token. Secure refs keep real secrets in environment variables, never on disk
+- **Browser SSO or API token** — `/login <hostname-or-instance-id>` starts OAuth 2.1 + PKCE, or `/login --token ...` uses a Glean-issued token. Secure refs keep real secrets in environment variables, never on disk
 - **MCP server** (`glean_mcp.py`) for Claude Code, Claude Desktop, and Cursor
 - Terminal niceties: `/help <command>` for every command, tab completion that cycles matches, a powerline-style status bar, and `/scaffold` to generate stdlib-only starter projects
 
@@ -116,27 +116,16 @@ alias glean="PYTHONPATH=<YOUR_PATH>/glean-code-cli python3 -m glean_code"
 
 ### First run
 
-**Browser SSO (no API token to paste)** — opens your browser for Glean → your company IdP, then stores OAuth tokens in `~/.gleancode/auth.json`:
+**Sign in with Glean OAuth** using a backend hostname or instance ID:
 
 ```text
-/auth login --instance acme-be.glean.com
+/login <hostname-or-instance-id>
 /status
 /search "quarterly planning"
 /chat "summarise the Q2 plan"
 ```
 
-Details: [docs/SSO_OAUTH.md](docs/SSO_OAUTH.md).
-
-**API token** — paste a Glean-issued Client API token (same live API, different auth path):
-
-```text
-/login --instance acme-be.glean.com --token <bearer_token>
-/status
-/search "quarterly planning"
-/chat "summarise the Q2 plan"
-```
-
-Without Client API credentials (no `/auth` session and no `/login` token) the CLI runs in **mock** mode. After `/auth login` or `/login`, it switches to live calls against `https://<instance>/rest/api/v1`.
+For example, `/login acme` uses the instance ID `acme`. Run `/help login` for other login options. Without login, the CLI runs in **mock** mode.
 
 ## Coming soon
 
@@ -208,7 +197,7 @@ Three ways to authenticate, in order of preference:
 
 | Method | How | Notes |
 | --- | --- | --- |
-| Browser SSO | `/auth login --instance <host>` | OAuth 2.1 + PKCE, same SSO path as the web app. Tokens in `~/.gleancode/auth.json`. See [docs/SSO_OAUTH.md](docs/SSO_OAUTH.md) |
+| Browser SSO | `/login <hostname-or-instance-id>` | OAuth 2.1 + PKCE with DCR, same SSO path as the web app. IDs map to `<id>-be.glean.com`; tokens live in `~/.gleancode/auth.json`. See [docs/SSO_OAUTH.md](docs/SSO_OAUTH.md) |
 | Secure ref | `/login --token token.secure.client` | Config stores the reference name; the real secret resolves from `$GLEAN_CLIENT_TOKEN` at request time. See [docs/SECURE_TOKENS.md](docs/SECURE_TOKENS.md) |
 | Literal token | `/login --token <bearer_token>` | Written to `~/.gleancode/config.json` with `0o600` perms, masked to `***1234` everywhere it displays |
 
@@ -220,11 +209,15 @@ Tokens are stripped from the in-memory history buffer and masked on every displa
 
 | Key | Description | Values |
 | --- | --- | --- |
-| `instance` | Glean backend host | e.g. `acme-be.glean.com` |
+| `instance` | Glean backend hostname or instance ID | e.g. `acme-be.glean.com` or `acme` |
 | `api_token` | Client API bearer token | Glean-issued token, or a secure ref like `token.secure.client` |
 | `indexing_token` | Indexing API token | Glean-issued token, or `token.secure.indexing` |
 | `act_as` | Impersonate a user via `X-Glean-ActAs` | Email address |
 | `base_url` | Override the computed base URL | Full URL |
+| `oauth_client_id` | Static OAuth client ID, or a DCR-generated ID | Optional; DCR is used when unset |
+| `oauth_client_instance` | Instance bound to a DCR-generated client ID | Managed automatically |
+| `oauth_scopes` | Space-separated OAuth scopes | Optional; defaults to Client API scopes |
+| `redirect_port` | Fixed localhost callback port | Optional |
 | `mode` | API mode | `auto` (default), `live`, `mock` |
 | `theme` | Terminal colour theme | `glean` (default), `mono`, `neon` |
 | `default_page_size` | Default result count for search and entities | Integer, default `10` |

@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import urllib.parse
 from dataclasses import dataclass, asdict, field
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -20,6 +22,35 @@ SECURE_REFS: Dict[str, str] = {
     "token.secure.client":   "GLEAN_CLIENT_TOKEN",
     "token.secure.indexing": "GLEAN_INDEXING_TOKEN",
 }
+
+_INSTANCE_ID_SUFFIX = "-be.glean.com"
+
+
+def normalize_instance_host(value: Optional[str]) -> Optional[str]:
+    """Return a backend hostname from a hostname, URL, or Glean instance ID.
+
+    Glean instance IDs such as ``acme`` map to ``acme-be.glean.com``. Full
+    hostnames and URLs are preserved as hostnames, which keeps existing custom
+    tenant and development configurations working.
+    """
+    if not value:
+        return None
+    raw = str(value).strip()
+    if not raw:
+        return None
+    try:
+        parsed = urllib.parse.urlsplit(raw if "://" in raw else f"//{raw}")
+    except ValueError:
+        return None
+    host = parsed.hostname
+    if not host or any(char.isspace() for char in host):
+        return None
+    if "." not in host:
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9-]*", host):
+            return None
+        suffix = ".glean.com" if host.endswith("-be") else _INSTANCE_ID_SUFFIX
+        host = f"{host}{suffix}"
+    return host
 
 
 def is_secure_ref(value: Optional[str]) -> bool:
@@ -54,6 +85,7 @@ class Config:
     # it is filled in automatically on first `/auth login`. The tokens
     # themselves are NEVER stored here; they live in ~/.gleancode/auth.json.
     oauth_client_id: Optional[str] = None
+    oauth_client_instance: Optional[str] = None  # instance bound to a dynamically registered client
     oauth_scopes: Optional[str] = None            # space-separated; falls back to a default set
     redirect_port: Optional[int] = None           # fixed localhost callback port (optional)
     oauth_authorize_url: Optional[str] = None      # override; else discovered from the tenant
@@ -85,32 +117,19 @@ class Config:
     def effective_base_url(self) -> Optional[str]:
         if self.base_url:
             return self.base_url.rstrip("/")
-        if self.instance:
-            # instance is now stored as a full host, never a bare subdomain
-            host = self.instance.strip().rstrip("/")
-            if "://" in host:
-                host = host.split("://", 1)[1]
-            host = host.split("/", 1)[0]
+        if host := normalize_instance_host(self.instance):
             return f"https://{host}/rest/api/v1"
         return None
 
     @property
     def effective_indexing_base_url(self) -> Optional[str]:
-        if self.instance:
-            host = self.instance.strip().rstrip("/")
-            if "://" in host:
-                host = host.split("://", 1)[1]
-            host = host.split("/", 1)[0]
+        if host := normalize_instance_host(self.instance):
             return f"https://{host}/api/index/v1"
         return None
 
     @property
     def effective_metadata_base_url(self) -> Optional[str]:
-        if self.instance:
-            host = self.instance.strip().rstrip("/")
-            if "://" in host:
-                host = host.split("://", 1)[1]
-            host = host.split("/", 1)[0]
+        if host := normalize_instance_host(self.instance):
             return f"https://{host}/rest/api/index"
         return None
 

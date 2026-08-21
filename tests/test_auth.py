@@ -97,6 +97,25 @@ class TestTokenStoreRoundTrip(unittest.TestCase):
         self.assertIsNone(token_store.load_tokens())
 
 
+class TestDynamicClientRegistration(unittest.TestCase):
+    def test_registers_public_pkce_client(self):
+        with mock.patch.object(
+            oauth, "_http_post_json", return_value={"client_id": "dcr-client"}
+        ) as post:
+            client_id = oauth.register_dynamic_client(
+                "https://acme-be.glean.com/register",
+                "http://127.0.0.1:33389/callback",
+                "SEARCH CHAT",
+            )
+
+        self.assertEqual(client_id, "dcr-client")
+        payload = post.call_args.args[1]
+        self.assertEqual(payload["client_name"], "Glean Code CLI")
+        self.assertEqual(payload["redirect_uris"], ["http://127.0.0.1:33389/callback"])
+        self.assertEqual(payload["token_endpoint_auth_method"], "none")
+        self.assertEqual(payload["grant_types"], ["authorization_code", "refresh_token"])
+
+
 class TestAuthorizeUrl(unittest.TestCase):
     def test_required_params_present(self):
         url = oauth.build_authorize_url(
@@ -159,6 +178,39 @@ class TestLoginIntegration(unittest.TestCase):
         loaded = token_store.load_tokens()
         self.assertEqual(loaded.access_token, "AT")
         self.assertEqual(loaded.refresh_token, "RT")
+
+    def test_login_registers_client_with_dcr_when_no_client_id_is_configured(self):
+        cfg = Config(instance="acme")
+        fixed_state = "fixed-state-dcr"
+
+        with mock.patch.object(
+            oauth,
+            "discover_endpoints",
+            return_value=oauth.Endpoints(
+                "https://a/authorize", "https://a/token", "https://a/register"
+            ),
+        ) as discover, mock.patch(
+            "glean_code.auth.manager._pkce.generate_state", return_value=fixed_state
+        ), mock.patch.object(
+            oauth, "register_dynamic_client", return_value="dcr-client"
+        ) as register, mock.patch.object(
+            oauth,
+            "exchange_code_for_tokens",
+            return_value={"access_token": "AT", "expires_in": 3600},
+        ), mock.patch(
+            "glean_code.auth.manager.start_callback_server",
+            side_effect=lambda port: _FakeCallback("thecode", fixed_state),
+        ), mock.patch.object(cfg, "save"):
+            status = AuthManager(cfg).login(open_browser=False)
+
+        self.assertTrue(status.authenticated)
+        discover.assert_called_once_with("https://acme-be.glean.com")
+        register.assert_called_once_with(
+            "https://a/register",
+            "http://127.0.0.1:33389/callback",
+            "SEARCH CHAT DOCUMENTS TOOLS ENTITIES offline_access",
+        )
+        self.assertEqual(cfg.oauth_client_id, "dcr-client")
 
     def test_state_mismatch_raises(self):
         cfg = Config(instance="acme-be.glean.com", oauth_client_id="cid")

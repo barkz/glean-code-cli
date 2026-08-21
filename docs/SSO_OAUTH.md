@@ -5,17 +5,21 @@ The CLI can sign in the same way as the Glean web app: **OAuth 2.1 authorization
 ## Usage
 
 ```text
-/auth login --instance acme-be.glean.com
+/login acme
 /auth status
 /search "quarterly planning"
 /auth logout
 ```
 
-`/auth login` flags:
+The short form accepts a Glean instance ID (`acme`) or a backend hostname
+(`acme-be.glean.com`). An ID resolves to `https://<id>-be.glean.com`.
+`/auth login` remains available as the explicit OAuth command.
+
+`/login` OAuth flags:
 
 | Flag | Purpose |
 | --- | --- |
-| `--instance <host>` | Glean backend host (saved in config) |
+| `--instance <host-or-id>` | Glean backend hostname or instance ID (saved in config) |
 | `--client-id <id>` | Static OAuth client id (optional if the tenant supports DCR) |
 | `--port <n>` | Fixed localhost callback port for redirect URI allowlisting |
 | `--no-browser` | Print the authorize URL instead of opening a browser |
@@ -30,14 +34,14 @@ The CLI can sign in the same way as the Glean web app: **OAuth 2.1 authorization
 
 | Location | Content |
 | --- | --- |
-| `~/.gleancode/config.json` | `oauth_client_id`, `oauth_scopes`, `redirect_port`, optional `oauth_*_url` overrides — never the access/refresh tokens |
+| `~/.gleancode/config.json` | `oauth_client_id`, DCR instance binding, `oauth_scopes`, `redirect_port`, optional `oauth_*_url` overrides — never the access/refresh tokens |
 | `~/.gleancode/auth.json` | OAuth tokens only (0600, written atomically) |
 
 ## Scope errors (e.g. “not allowed to request scope 'AGENT'”)
 
 OAuth clients are often restricted to a fixed set of scopes. If authorization fails with an invalid / disallowed scope:
 
-1. **Use a smaller scope string** in config, then run `/auth login` again (you may need `/auth logout` first if a half-login left state around):
+1. **Use a smaller scope string** in config, then run `/login <instance-id>` again (you may need `/auth logout` first if a half-login left state around):
 
    ```text
    /config set oauth_scopes "SEARCH CHAT DOCUMENTS TOOLS ENTITIES offline_access"

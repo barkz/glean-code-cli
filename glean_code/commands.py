@@ -21,7 +21,13 @@ from typing import Any, Callable, Dict, List, Optional, Tuple  # noqa: F401
 from . import ui
 from . import _indexing_walk as _walk
 from .client import GleanClient, GleanError
-from .config import Config, SECURE_REFS, is_secure_ref, resolve_secure
+from .config import (
+    Config,
+    SECURE_REFS,
+    is_secure_ref,
+    normalize_instance_host,
+    resolve_secure,
+)
 from .help_docs import DOCS, COMMAND_GROUPS
 from .scaffold import TEMPLATES, write_scaffold, default_dir as _scaffold_default_dir
 
@@ -319,42 +325,43 @@ def cmd_open(s: Session, pos, flags):
 
 @register("login")
 def cmd_login(s: Session, pos, flags):
-    instance = flags.get("instance")
-    token    = flags.get("token")
-    act_as   = flags.get("act-as") or flags.get("act_as")
-    if not instance or not token:
-        ui.print_err("Usage: /login --instance <host-or-url> --token <token>")
-        ui.print_info("Enter the full host, e.g. instance_name-be.glean.com or "
-                      "https://instance_name-be.glean.com. No auto-append.")
+    """Log in with OAuth, or preserve the legacy API-token login syntax."""
+    instance = flags.get("instance") or (pos[0] if pos else None)
+    token = flags.get("token")
+
+    if token is None or token is True:
+        if not instance:
+            ui.print_err("Usage: /login <hostname-or-instance-id> [--no-browser]")
+            ui.print_info("Example: /login acme or /login acme-be.glean.com")
+            return
+        # Import lazily so commands remain usable in tests and in deployments
+        # that only need the token-based path.
+        from .auth_commands import cmd_auth
+
+        oauth_flags = dict(flags)
+        oauth_flags["instance"] = instance
+        cmd_auth(s, ["login"], oauth_flags)
         return
 
-    raw = str(instance).strip().rstrip("/")
-
-    # Accept either a full URL or a bare host. No magic suffixes.
-    if "://" in raw:
-        scheme_host = raw.split("://", 1)
-        scheme = scheme_host[0]
-        rest   = scheme_host[1]
-    else:
-        scheme = "https"
-        rest   = raw
-
-    host_and_path = rest.split("/", 1)
-    host = host_and_path[0]
-    path = host_and_path[1] if len(host_and_path) > 1 else ""
-
-    if not host or "." not in host:
-        ui.print_err(f"That does not look like a hostname: '{raw}'")
-        ui.print_info("Expected something like instance_name-be.glean.com")
+    act_as = flags.get("act-as") or flags.get("act_as")
+    raw = str(instance).strip() if instance else ""
+    host = normalize_instance_host(raw)
+    if not host:
+        ui.print_err(f"That does not look like a Glean hostname or instance ID: '{raw}'")
+        ui.print_info("Expected something like acme, acme-be, or acme-be.glean.com")
         return
 
-    if "/rest/api/" in path:
-        base_url = f"{scheme}://{host}/{path}".rstrip("/")
-    else:
-        base_url = f"{scheme}://{host}/rest/api/v1"
+    parsed = urllib.parse.urlsplit(raw if "://" in raw else f"//{raw}")
+    scheme = parsed.scheme or "https"
+    path = parsed.path.lstrip("/")
+    base_url = (
+        f"{scheme}://{host}/{path}".rstrip("/")
+        if "/rest/api/" in path
+        else f"{scheme}://{host}/rest/api/v1"
+    )
 
-    s.config.instance  = host            # store the literal host
-    s.config.base_url  = base_url
+    s.config.instance = host
+    s.config.base_url = base_url
     s.config.api_token = str(token)
     if act_as:
         s.config.act_as = str(act_as)
@@ -368,6 +375,9 @@ def cmd_login(s: Session, pos, flags):
 
 @register("logout")
 def cmd_logout(s: Session, pos, flags):
+    from .auth import AuthManager
+
+    AuthManager(s.config).logout()
     s.config.api_token = None
     s.config.act_as = None
     s.config.save()

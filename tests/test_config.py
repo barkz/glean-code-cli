@@ -9,7 +9,7 @@ from unittest.mock import patch
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from glean_code.config import Config
+from glean_code.config import Config, normalize_instance_host
 
 
 class TestConfigDefaults(unittest.TestCase):
@@ -134,6 +134,23 @@ class TestConfigSave(unittest.TestCase):
         self.assertEqual(loaded.default_page_size, 5)
 
 
+class TestInstanceNormalization(unittest.TestCase):
+    def test_instance_id_maps_to_backend_host(self):
+        self.assertEqual(normalize_instance_host("acme"), "acme-be.glean.com")
+
+    def test_backend_shorthand_maps_to_glean_host(self):
+        self.assertEqual(normalize_instance_host("acme-be"), "acme-be.glean.com")
+
+    def test_hostname_and_url_are_reduced_to_host(self):
+        self.assertEqual(
+            normalize_instance_host("https://acme-be.glean.com/rest/api/v1"),
+            "acme-be.glean.com",
+        )
+
+    def test_invalid_instance_is_rejected(self):
+        self.assertIsNone(normalize_instance_host("not a host"))
+
+
 class TestConfigEffectiveBaseUrl(unittest.TestCase):
     def test_uses_base_url_when_set(self):
         c = Config(base_url="https://custom.example.com/api")
@@ -145,6 +162,10 @@ class TestConfigEffectiveBaseUrl(unittest.TestCase):
 
     def test_computes_from_bare_host(self):
         c = Config(instance="acme-be.glean.com")
+        self.assertEqual(c.effective_base_url, "https://acme-be.glean.com/rest/api/v1")
+
+    def test_computes_from_instance_id(self):
+        c = Config(instance="acme")
         self.assertEqual(c.effective_base_url, "https://acme-be.glean.com/rest/api/v1")
 
     def test_computes_from_https_url(self):
