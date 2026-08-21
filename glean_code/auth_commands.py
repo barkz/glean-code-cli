@@ -14,23 +14,25 @@ from __future__ import annotations
 from . import ui
 from .commands import register
 from .auth import AuthManager, AuthError
+from .config import normalize_instance_host
 
 try:
     # Make `/help auth` and tab-completion aware of the new command.
     from .help_docs import DOCS
     DOCS["auth"] = {
         "summary": "Sign in to Glean via your browser/SSO using OAuth (Authorization Code + PKCE).",
-        "usage": "/auth <login|status|logout> [--instance <host>] [--client-id <id>] [--port <n>] [--no-browser]",
+        "usage": "/auth <login|status|logout> [<hostname-or-instance-id>] [--instance <host>] [--client-id <id>] [--port <n>] [--no-browser]",
         "params": [
             ("login", "Open the browser and sign in through Glean -> your company SSO."),
             ("status", "Show authentication state, instance, and token expiry."),
             ("logout", "Delete the locally stored OAuth tokens."),
-            ("--instance", "Glean backend host, e.g. acme-be.glean.com (stored in config)."),
+            ("--instance", "Glean backend hostname or instance ID, e.g. acme-be.glean.com or acme (stored in config)."),
             ("--client-id", "Static OAuth client id (optional if the tenant supports DCR)."),
             ("--port", "Fixed localhost callback port (for redirect-URI allowlisting)."),
             ("--no-browser", "Print the authorize URL instead of opening a browser."),
         ],
         "examples": [
+            "/auth login acme",
             "/auth login --instance acme-be.glean.com",
             "/auth login --instance acme-be.glean.com --client-id glean-code-cli --port 33389",
             "/auth status",
@@ -42,21 +44,33 @@ except Exception:
     pass
 
 
-def _apply_login_flags(s, flags) -> None:
+def _apply_login_flags(s, flags) -> bool:
     """Persist any connection settings passed on the /auth login line."""
     instance = flags.get("instance")
+    if not instance:
+        instance = flags.get("hostname")
     client_id = flags.get("client-id") or flags.get("client_id")
     port = flags.get("port")
+    act_as = flags.get("act-as") or flags.get("act_as")
     changed = False
     if instance:
-        raw = str(instance).strip().rstrip("/")
-        if "://" in raw:
-            raw = raw.split("://", 1)[1]
-        raw = raw.split("/", 1)[0]
+        raw = normalize_instance_host(str(instance))
+        if not raw:
+            ui.print_err(f"That does not look like a Glean hostname or instance ID: '{instance}'")
+            return False
+        previous = normalize_instance_host(s.config.instance)
+        if previous != raw and getattr(s.config, "oauth_client_instance", None) == previous:
+            s.config.oauth_client_id = None
+            s.config.oauth_client_instance = None
         s.config.instance = raw
+        s.config.base_url = None
+        changed = True
+    if act_as and act_as is not True:
+        s.config.act_as = str(act_as)
         changed = True
     if client_id and client_id is not True:
         s.config.oauth_client_id = str(client_id)
+        s.config.oauth_client_instance = None
         changed = True
     if port and port is not True:
         try:
@@ -66,6 +80,7 @@ def _apply_login_flags(s, flags) -> None:
             ui.print_err("--port must be an integer")
     if changed:
         s.config.save()
+    return True
 
 
 def _print_status(s) -> None:
@@ -83,7 +98,7 @@ def _print_status(s) -> None:
         rows = [
             ("state", ui.style("Not logged in", ui.C.YELLOW)),
             ("instance", status.server_url or ui.style("(unset)", ui.C.GREY)),
-            ("hint", "Run /auth login --instance <host>"),
+            ("hint", "Run /login <hostname-or-instance-id>"),
         ]
     print(ui.kv_table(rows))
     print(ui.rule())
@@ -104,10 +119,14 @@ def cmd_auth(s, pos, flags):
         return
 
     if sub == "login":
-        _apply_login_flags(s, flags)
+        login_flags = dict(flags)
+        if len(pos) > 1 and not login_flags.get("instance"):
+            login_flags["instance"] = pos[1]
+        if not _apply_login_flags(s, login_flags):
+            return
         if not s.config.instance:
-            ui.print_err("No instance set. Run: /auth login --instance <host>")
-            ui.print_info("Example: /auth login --instance acme-be.glean.com")
+            ui.print_err("No instance set. Run: /login <hostname-or-instance-id>")
+            ui.print_info("Example: /login acme")
             return
         manager = AuthManager(s.config)
         nb = bool(flags.get("no-browser") or flags.get("no_browser"))

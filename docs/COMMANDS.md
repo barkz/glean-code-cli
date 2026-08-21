@@ -67,26 +67,32 @@ Run a full health check: validates config, tests DNS resolution, TCP connectivit
 
 #### /login
 
-Store a Glean instance host and API token. Writes to `~/.gleancode/config.json` and immediately switches the session to live mode.
+Sign in to Glean with browser OAuth, or store an API token. OAuth uses Authorization Code + PKCE and Dynamic Client Registration when no static client ID is configured.
 
 ```text
-/login --instance <host> --token <token> [--act-as <email>]
+/login <hostname-or-instance-id> [--client-id <id>] [--port <n>] [--no-browser] [--act-as <email>]
 ```
 
 | Parameter | Description |
 | --- | --- |
-| `--instance` | Full Glean backend host, e.g. `acme-be.glean.com`. Include the `-be` suffix — nothing is appended automatically. |
-| `--token` | A Glean Client API token with the required scopes. |
+| `hostname-or-instance-id` | A backend hostname such as `acme-be.glean.com`, or an instance ID such as `acme`. IDs map to `<id>-be.glean.com`. |
+| `--instance` | Alternative named form of the hostname or instance ID. |
+| `--client-id` | Optional static OAuth client ID. DCR is used when omitted. |
+| `--port` | Optional fixed localhost callback port for redirect-URI allowlisting. |
+| `--no-browser` | Print the OAuth authorize URL instead of opening a browser. |
+| `--token` | Legacy API-token login. Supplying it skips OAuth. |
 | `--act-as` | Optional. Email address to impersonate via `X-Glean-ActAs`. |
 
 ```text
+/login acme
+/login acme-be.glean.com
+/login --instance acme-be.glean.com --no-browser
 /login --instance acme-be.glean.com --token glean_tok_xxx
-/login --instance acme-be.glean.com --token glean_tok_xxx --act-as jane@acme.com
 ```
 
-**Output** — Confirms credentials saved and shows the resolved base URL.
+**Output** — OAuth opens the browser and waits for the localhost callback, then stores OAuth tokens in `~/.gleancode/auth.json`. Token login stores the API token in `~/.gleancode/config.json`.
 
-**Endpoint** — `(local, affects Authorization header)`
+**Endpoint** — `(local, OAuth Authorization Code + PKCE or Authorization header)`
 
 ---
 
@@ -104,7 +110,7 @@ Clear stored credentials and revert to mock mode.
 
 **Output** — Confirms credentials removed.
 
-**Mock mode** — This is what `/logout` reverts *to*: with no token, searches answer from the [mock corpus](MOCK_CORPUS.md). OAuth tokens from `/auth login` are cleared separately with `/auth logout`.
+**Mock mode** — This is what `/logout` reverts *to*: with no token, searches answer from the [mock corpus](MOCK_CORPUS.md). It clears both API-token and OAuth credentials.
 
 **Endpoint** — `(local)`
 

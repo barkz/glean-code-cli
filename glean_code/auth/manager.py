@@ -20,6 +20,7 @@ from typing import Callable, Optional
 from . import oauth
 from . import pkce as _pkce
 from . import token_store
+from ..config import normalize_instance_host
 from .callback_server import start_callback_server
 
 # Default scopes for Client API use. `AGENT` is omitted: many OAuth clients are
@@ -51,15 +52,8 @@ def _server_root_from_instance(instance: Optional[str]) -> Optional[str]:
     Mirrors Config.effective_base_url's host handling, but returns just the
     root (no /rest/api/v1), since OAuth metadata lives at the host root.
     """
-    if not instance:
-        return None
-    host = instance.strip().rstrip("/")
-    if "://" in host:
-        host = host.split("://", 1)[1]
-    host = host.split("/", 1)[0]
-    if not host:
-        return None
-    return f"https://{host}"
+    host = normalize_instance_host(instance)
+    return f"https://{host}" if host else None
 
 
 def _iso(ts: Optional[float]) -> Optional[str]:
@@ -91,7 +85,7 @@ class AuthManager:
         server_root = _server_root_from_instance(self.config.instance)
         if not server_root:
             raise AuthError(
-                "No instance configured. Run: /auth login --instance <host>"
+                "No instance configured. Run: /login <hostname-or-instance-id>"
             )
 
         scopes = getattr(self.config, "oauth_scopes", None) or DEFAULT_SCOPES
@@ -198,7 +192,9 @@ class AuthManager:
         try:
             endpoints = self._resolve_endpoints(server_root)
             client_id = getattr(self.config, "oauth_client_id", None)
-            if not client_id:
+            client_instance = getattr(self.config, "oauth_client_instance", None)
+            current_instance = normalize_instance_host(self.config.instance)
+            if not client_id or (client_instance and client_instance != current_instance):
                 return None
             scopes = getattr(self.config, "oauth_scopes", None) or DEFAULT_SCOPES
             payload = oauth.refresh_tokens(
@@ -248,8 +244,12 @@ class AuthManager:
 
     def _resolve_client_id(self, endpoints: oauth.Endpoints, redirect_uri: str, scopes: str) -> str:
         client_id = getattr(self.config, "oauth_client_id", None)
-        if client_id:
+        client_instance = getattr(self.config, "oauth_client_instance", None)
+        current_instance = normalize_instance_host(self.config.instance)
+        if client_id and (not client_instance or client_instance == current_instance):
             return client_id
+        if client_instance and client_instance != current_instance:
+            client_id = None
         if not endpoints.registration_endpoint:
             raise AuthError(
                 "No oauth_client_id configured and the tenant did not advertise a "
@@ -262,6 +262,7 @@ class AuthManager:
         # Persist the dynamically registered client so future logins reuse it.
         try:
             self.config.oauth_client_id = client_id
+            self.config.oauth_client_instance = normalize_instance_host(self.config.instance)
             self.config.save()
         except Exception:
             pass

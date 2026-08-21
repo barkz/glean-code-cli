@@ -75,22 +75,24 @@ DOCS: Dict[str, CommandDoc] = {
         "endpoint": "POST /chat (Glean Assistant is used as the planner; output is parsed locally)",
     },
     "login": {
-        "summary": "Store a Glean host and API token for live calls.",
-        "usage": "/login --instance <host-or-url> --token <token> [--act-as <email>]",
+        "summary": "Sign in to Glean with browser OAuth, or store an API token for live calls.",
+        "usage": "/login <hostname-or-instance-id> [--client-id <id>] [--port <n>] [--no-browser] [--act-as <email>]",
         "params": [
-            ("--instance", "The full Glean host, e.g. instance_name-be.glean.com, "
-                            "or a full URL like https://instance_name-be.glean.com. "
-                            "No suffix is auto-appended. You must include -be "
-                            "(or whatever your tenant uses) yourself."),
-            ("--token", "A Glean API token with Client scopes."),
+            ("hostname-or-instance-id", "A Glean backend hostname such as acme-be.glean.com, or an instance ID such as acme. IDs map to <id>-be.glean.com."),
+            ("--instance", "Alternative named form of the hostname or instance ID."),
+            ("--client-id", "Optional static OAuth client ID. DCR is used when omitted."),
+            ("--port", "Optional fixed localhost callback port for redirect-URI allowlisting."),
+            ("--no-browser", "Print the OAuth authorize URL instead of opening a browser."),
+            ("--token", "Legacy API-token login. When provided, OAuth is not started."),
             ("--act-as", "Optional user email to impersonate via X-Glean-ActAs."),
         ],
         "examples": [
-            "/login --instance instance_name-be.glean.com --token glean_tok_xxx",
-            "/login --instance https://instance_name-be.glean.com --token glean_tok_xxx",
-            "/login --instance instance_name-be.glean.com --token glean_tok_xxx --act-as jane@example.com",
+            "/login acme",
+            "/login acme-be.glean.com",
+            "/login --instance acme-be.glean.com --no-browser",
+            "/login --instance acme-be.glean.com --token glean_tok_xxx",
         ],
-        "endpoint": "(local, affects Authorization header)",
+        "endpoint": "(local, OAuth Authorization Code + PKCE or Authorization header)",
     },
     "logout": {
         "summary": "Remove stored credentials. Falls back to mock mode.",
@@ -104,7 +106,7 @@ DOCS: Dict[str, CommandDoc] = {
         "usage": "/config [get <key> | set <key> <value> | list]",
         "params": [
             ("get", "Print the value of a single key."),
-            ("set", "Set a key. Valid keys: instance, api_token, act_as, base_url, mode, theme, default_page_size, mock_corpus_path."),
+            ("set", "Set a key. Valid keys include instance, api_token, act_as, base_url, oauth_client_id, oauth_client_instance, oauth_scopes, redirect_port, mode, theme, default_page_size, mock_corpus_path."),
             ("list", "Print the full config."),
         ],
         "examples": [
