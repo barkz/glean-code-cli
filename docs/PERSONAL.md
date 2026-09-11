@@ -1,5 +1,9 @@
 # Glean Personal
 
+> Looking for step-by-step instructions? **[How to use local indexing](LOCAL_INDEXING.md)**
+> is the task-by-task guide. This page is the reference: what it is, how it works
+> internally, and why it is scoped the way it is.
+
 A portable, local content index. Point it at folders on your machine; their
 contents become searchable through the same `/search` and `/chat` surfaces the
 REPL already has, and through MCP tools an external agent can call.

@@ -331,7 +331,7 @@ Each document is tagged with its datasource in a consistent colour, so a source 
 
 #### /personal
 
-Glean Personal: index local folders into a portable SQLite database, then search and chat against them with no network, no token, and no server. Full guide: [docs/PERSONAL.md](PERSONAL.md).
+Glean Personal: index local folders into a portable SQLite database, then search and chat against them with no network, no token, and no server. Step-by-step guide: [docs/LOCAL_INDEXING.md](LOCAL_INDEXING.md). Reference and design notes: [docs/PERSONAL.md](PERSONAL.md).
 
 ```text
 /personal <status|index|search|sources|show|related|link|purge> [folder|query|doc] [--label <name>] [--include <globs>] [--exclude <globs>] [--max-bytes <n>] [--reindex] [--source <label>] [--limit <n>] [--min-score <f>] [--meta]

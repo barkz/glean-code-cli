@@ -293,7 +293,8 @@ Never as a percentage. bm25 is corpus-relative — the same code scores 25.41 on
 
 Local answers are always labelled `[LOCAL INDEX]`: the content is real, but its scope is whatever folders you indexed, not organisation-wide Glean. `/chat` in local mode returns matching passages verbatim and generates no prose — the REPL has no model in-process, and inventing an answer would launder a guess. An agent reading the same index through the `local_search` / `local_fetch` / `local_sources` / `local_related` MCP tools brings its own model.
 
-Full guide: **[docs/PERSONAL.md](docs/PERSONAL.md)**.
+How to use it, step by step: **[docs/LOCAL_INDEXING.md](docs/LOCAL_INDEXING.md)**.
+Reference and design notes: **[docs/PERSONAL.md](docs/PERSONAL.md)**.
 
 ## Project layout
 
@@ -361,7 +362,8 @@ export PYTHONPYCACHEPREFIX="$HOME/.cache/python"
 | [docs/SECURE_TOKENS.md](docs/SECURE_TOKENS.md) | Secure refs, masking matrix, mock-mode fallback |
 | [docs/MCP.md](docs/MCP.md) | MCP server setup for Claude Code, Claude Desktop, Cursor |
 | [docs/FLOW_MAPPER.md](docs/FLOW_MAPPER.md) | `/flow` — capturing investigations, linking them, and the retention questions |
-| [docs/PERSONAL.md](docs/PERSONAL.md) | `/personal` — the local content index: formats, chunking, the graph, and why there is no bundled model |
+| [docs/LOCAL_INDEXING.md](docs/LOCAL_INDEXING.md) | **How to use local indexing** — a task-by-task guide: index a folder, search it, keep it current, troubleshoot |
+| [docs/PERSONAL.md](docs/PERSONAL.md) | `/personal` reference — formats, chunking, the graph, and why there is no bundled model |
 | [docs/REST_PATHS.md](docs/REST_PATHS.md) | Every REST path this client targets, and how to retarget them |
 | [docs/TESTING.md](docs/TESTING.md) | Test-suite development notes |
 | [SUPPORT.md](SUPPORT.md) | Best-effort support expectations, triage order, how to file a good bug report |

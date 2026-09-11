@@ -24,7 +24,8 @@ For what Glean Code is and how to run it, see the [README](README.md).
   thousands of near-threshold links. An FTS5 capability probe at connect time falls
   back to a plain table and a Python scorer, so an interpreter without FTS5 degrades in
   ranking quality rather than failing. No server, no daemon, no network, no credentials.
-  Full guide: [docs/PERSONAL.md](docs/PERSONAL.md).
+  How-to guide: [docs/LOCAL_INDEXING.md](docs/LOCAL_INDEXING.md); reference and design
+  notes: [docs/PERSONAL.md](docs/PERSONAL.md).
 - **`/personal search --explain`** — ranking evidence per result: the section that matched,
   how many of the document's passages matched, which query terms hit and which missed, the
   raw bm25 score with a bar relative to the top hit, and whether results are tied. Terms are
