@@ -1,4 +1,4 @@
-"""Tests for the 4 MCP tool functions in glean_mcp.py.
+"""Tests for the MCP tool functions in glean_mcp.py.
 
 The mcp package may or may not be installed.  We mock it so the module
 imports cleanly regardless, then test the tool logic directly.
@@ -409,6 +409,148 @@ class TestMcpRunAgent(unittest.TestCase):
         args, _ = self.mock_client.agent_run.call_args
         self.assertEqual(args[0], "agt_research")
         self.assertEqual(args[1], "write a brief")
+
+
+# ---------------------------------------------------------------------------
+# Glean Personal tools
+#
+# These read the local index directly rather than the Glean client, so there is
+# nothing to mock but the database path — which is exactly the property worth
+# asserting: no token, no instance, no network.
+# ---------------------------------------------------------------------------
+
+
+class TestMcpLocalTools(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        from glean_code import personal
+
+        self.personal = personal
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        root = Path(self._tmp.name)
+        self.corpus = root / "corpus"
+        self.corpus.mkdir()
+        for name, body in {
+            "comp.md":     "# Compensation\n\nSalary bands for FY27. "
+                           "Band 4 tops out at 120k.\n",
+            "offsite.md":  "# Offsite\n\nThe offsite covers FY27 salary bands "
+                           "and Band 4.\n",
+            "coffee.md":   "# Coffee\n\nThe espresso machine needs descaling "
+                           "weekly.\n",
+            "kitchen.md":  "# Kitchen\n\nEspresso machine lives in the kitchen. "
+                           "Descaling weekly.\n",
+            "travel.md":   "# Travel\n\nBook flights through the portal. "
+                           "Receipts within 30 days.\n",
+        }.items():
+            (self.corpus / name).write_text(body)
+        self.db = root / "personal.db"
+        patch_db = patch.object(personal, "DB_PATH", self.db)
+        patch_db.start()
+        self.addCleanup(patch_db.stop)
+
+    def index(self):
+        self.personal.index_source(str(self.corpus), label="work", db=self.db)
+
+    # -- local_search --------------------------------------------------------
+
+    def test_search_returns_ranked_passages_with_ids(self):
+        self.index()
+        out = glean_mcp.local_search("salary bands")
+        self.assertIn("work-comp", out)
+        self.assertIn("Salary bands", out)
+
+    def test_search_output_carries_the_local_banner(self):
+        self.index()
+        self.assertIn("[LOCAL INDEX]", glean_mcp.local_search("salary"))
+
+    def test_search_honours_the_source_filter(self):
+        self.index()
+        self.assertIn("No local documents match",
+                      glean_mcp.local_search("salary", source="elsewhere"))
+
+    def test_search_respects_limit(self):
+        self.index()
+        out = glean_mcp.local_search("band espresso portal", limit=1)
+        self.assertIn("1 local result(s)", out)
+
+    def test_search_with_no_index_names_the_fix(self):
+        out = glean_mcp.local_search("anything")
+        self.assertIn("/personal index", out)
+        self.assertIn("[LOCAL INDEX]", out)
+
+    # -- local_fetch ---------------------------------------------------------
+
+    def test_fetch_returns_the_whole_document(self):
+        self.index()
+        out = glean_mcp.local_fetch("work-comp")
+        self.assertIn("Band 4 tops out at 120k", out)
+        self.assertIn("[LOCAL INDEX]", out)
+
+    def test_fetch_accepts_a_filename_fragment(self):
+        self.index()
+        self.assertIn("work-offsite", glean_mcp.local_fetch("offsite"))
+
+    def test_fetch_flags_truncation(self):
+        self.index()
+        self.assertIn("truncated", glean_mcp.local_fetch("work-comp", max_chars=10))
+
+    def test_fetch_of_an_unknown_document_says_so(self):
+        self.index()
+        self.assertIn("No indexed local document", glean_mcp.local_fetch("nope"))
+
+    # -- local_sources -------------------------------------------------------
+
+    def test_sources_lists_indexed_folders(self):
+        self.index()
+        out = glean_mcp.local_sources()
+        self.assertIn("work", out)
+        self.assertIn(str(self.corpus), out)
+
+    def test_sources_with_no_index_names_the_fix(self):
+        self.assertIn("/personal index", glean_mcp.local_sources())
+
+    # -- local_related -------------------------------------------------------
+
+    def test_related_returns_neighbours_with_evidence(self):
+        self.index()
+        self.personal.link_documents(db=self.db)   # the shipped default
+        out = glean_mcp.local_related("work-comp")
+        self.assertIn("work-offsite", out)
+        self.assertIn("shares:", out)
+
+    def test_related_without_a_graph_names_the_fix(self):
+        self.index()
+        self.assertIn("/personal link", glean_mcp.local_related("work-comp"))
+
+    def test_related_on_an_unknown_document_reports_it(self):
+        self.index()
+        self.assertIn("no indexed document matching",
+                      glean_mcp.local_related("nope").lower())
+
+    # -- isolation -----------------------------------------------------------
+
+    def test_local_tools_never_call_the_glean_client(self):
+        self.index()
+        with patch.object(glean_mcp, "_client") as client:
+            glean_mcp.local_search("salary")
+            glean_mcp.local_fetch("work-comp")
+            glean_mcp.local_sources()
+            client.assert_not_called()
+            self.assertFalse(client.method_calls)
+
+    def test_local_tools_ignore_glean_mock(self):
+        # GLEAN_MOCK governs the Glean-backed tools; the local index has no
+        # fictional alternative to serve, so it must be unaffected.
+        self.index()
+        with patch.dict(os.environ, {"GLEAN_MOCK": "1"}):
+            out = glean_mcp.local_search("salary bands")
+        self.assertIn("work-comp", out)
+        self.assertNotIn("[MOCK MODE]", out)
+
+    def test_a_broken_database_returns_an_error_not_a_traceback(self):
+        self.db.write_bytes(b"this is not a sqlite database")
+        self.assertIn("Error", glean_mcp.local_search("anything"))
 
 
 if __name__ == "__main__":

@@ -6,6 +6,13 @@ Glean Code exposes 32 of the 37 documented Indexing API endpoints — read/debug
 /config set indexing_token <token-or-secure-ref>
 ```
 
+> [!NOTE]
+> **The Indexing API is not `/personal index`.** They share a verb and do opposite things.
+> The Indexing API *pushes* content into your Glean tenant so the whole organisation can find
+> it, and needs an indexing token. [`/personal index`](PERSONAL.md) *pulls* local files into a
+> private SQLite index on your own machine, and needs no credentials at all. In `local` mode
+> every Indexing-API command refuses with a message pointing at the other one.
+
 The token can be a literal value or the secure reference `token.secure.indexing` (resolved from `$GLEAN_INDEXING_TOKEN` at request time — see [Secure tokens](SECURE_TOKENS.md)). Get a real token from your Glean admin UI (workspace settings → API tokens → Indexing).
 
 ## Read & debug

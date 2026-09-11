@@ -179,20 +179,24 @@ View or update individual configuration keys. Changes are persisted to `~/.glean
 Quickly switch the API mode without editing config.
 
 ```text
-/mode <live|mock|auto>
+/mode <live|mock|local|auto>
 ```
 
 | Value | Description |
 | --- | --- |
 | `live` | Force all API calls to the real Glean backend. |
 | `mock` | Force all calls to return local fake data (no network). |
+| `local` | Answer `/search` and `/chat` from your own indexed folders. See [/personal](#personal) and [docs/PERSONAL.md](PERSONAL.md). |
 | `auto` | Use live if credentials are present, otherwise fall back to mock. |
 
 ```text
 /mode auto
 /mode mock
+/mode local
 /mode live
 ```
+
+Only `auto` is resolved from credentials. `local` is taken at its word, so a local index keeps answering even once a live token is configured — switch back with `/mode auto` when you want the tenant again.
 
 **Output** — Confirms the new mode.
 
@@ -322,6 +326,81 @@ Each document is tagged with its datasource in a consistent colour, so a source 
 **Mock mode** — the built-in corpus is what this feature was tuned against: seven identifier clusters plus a QBR that references an incident in prose with no ticket number, which is the link worth finding.
 
 **Endpoint** — `(local — ~/.gleancode/flow.db; enrich calls /getdocuments or /summarize)`
+
+---
+
+#### /personal
+
+Glean Personal: index local folders into a portable SQLite database, then search and chat against them with no network, no token, and no server. Full guide: [docs/PERSONAL.md](PERSONAL.md).
+
+```text
+/personal <status|index|search|sources|show|related|link|purge> [folder|query|doc] [--label <name>] [--include <globs>] [--exclude <globs>] [--max-bytes <n>] [--reindex] [--source <label>] [--limit <n>] [--min-score <f>] [--meta]
+```
+
+| Subcommand | Description |
+| --- | --- |
+| `status` | Database size, document and chunk counts, and which text index is in use. The default when no subcommand is given. |
+| `index` | Walk a folder and index its files. Incremental: unchanged files are skipped on a content hash. |
+| `search` | Full-text search across everything indexed. |
+| `sources` | List indexed folders with their counts and last-indexed time. |
+| `show` | Print one document's metadata, sections, and extracted text. |
+| `related` | Documents connected to this one in the content graph. |
+| `link` | Build the content graph connecting related documents. Run after indexing. |
+| `purge` | Delete indexed content. Confirms first. Files on disk are never touched. |
+
+| Flag | Description |
+| --- | --- |
+| `--label` | `index`: name for this folder, used as the datasource in results. Defaults to the folder name. |
+| `--include` | `index`: comma-separated globs to index. Defaults to every supported type. |
+| `--exclude` | `index`: comma-separated globs to skip, on top of the built-in list. |
+| `--max-bytes` | `index`: skip files larger than this. Default 5 MB. |
+| `--reindex` | `index`: re-read every file, ignoring the content-hash shortcut. |
+| `--source` | `search`: restrict to one folder's label. |
+| `--explain` | `search`: show why each result ranked where it did — the matching section, how many passages matched, which query terms hit and which missed, the bm25 score, and whether results are tied. |
+| `--limit` | `search`/`related`: how many results. Defaults to `default_page_size`. |
+| `--min-score` | `link`: strength threshold, 0–1. Default 0.3. Higher is stricter. |
+| `--top-k` | `link`: neighbours kept per document. Default 10. `0` keeps every link above the threshold, which on a large folder is a lot. |
+| `--meta` | `show`: print metadata and sections only, not the document text. |
+
+```text
+/personal index ~/Documents
+/personal index ~/notes --label notes --include '*.md,*.txt'
+/personal search "salary bands"
+/personal search "q3 roadmap" --source notes --limit 5
+/personal search "salary bands" --explain
+/personal show roadmap
+/personal link --min-score 0.4
+/personal link --top-k 5
+/personal related roadmap
+/personal purge notes
+```
+
+**Output** — `index` prints a report with added/updated/unchanged/removed counts and any skip reasons; `search` renders Glean-shaped results; `status` and `sources` print tables.
+
+**Supported file types.** `.txt`, `.md`, `.markdown`, `.html`, `.htm`, `.json`, plus `.docx`, `.xlsx` and `.pptx` — those three are ZIP archives of XML, so the stdlib reads them at zero dependency cost. PDF and legacy binary `.doc`/`.xls`/`.ppt` are out of scope: neither is reachable from the stdlib, and shelling out to an external converter would make results depend on what happens to be installed. Unsupported files appear in the skip list with a reason.
+
+**`--explain` answers "why is this here?"** Queries are ORed and ranked by bm25, so a
+document can appear because it matched one term out of three. `--explain` names the terms
+that hit and the ones that missed, which is usually the whole explanation:
+
+```text
+1. SCHEDULING
+   › Scheduling the archive  ·  2 of 4 passages matched
+   › matched: weekly   missed: descaling, espresso
+   › bm25 11.96  ████████
+```
+
+Scores are shown as raw bm25 with a bar relative to the top hit, never as a percentage.
+bm25 is corpus-relative and has no absolute meaning — the same code scores 25.41 on one
+index and 3.5e-06 on another — so "98% relevant" would manufacture a confidence that was
+never computed. Results within 1% of each other are reported as tied, because the ordering
+between them is arbitrary and worth knowing about.
+
+**Local results are labelled, always.** Every surface prefixes local answers with `[LOCAL INDEX]`. The content is real, but it is not organisation-wide Glean — its scope is whatever folders you indexed, and a consumer cannot otherwise tell which index answered.
+
+**`/chat` in local mode is extractive.** It returns the matching passages verbatim with citations and generates no prose, because the REPL has no model in-process. An agent reading the same index over MCP has a model of its own — see [docs/MCP.md](MCP.md#glean-personal-tools).
+
+**Endpoint** — `(local — ~/.gleancode/personal.db; no network calls at all)`
 
 ---
 

@@ -118,12 +118,59 @@ DOCS: Dict[str, CommandDoc] = {
         "endpoint": "(local, ~/.gleancode/config.json)",
     },
     "mode": {
-        "summary": "Switch between live, mock and auto mode.",
-        "usage": "/mode <live|mock|auto>",
+        "summary": "Switch between live, mock, local and auto mode.",
+        "usage": "/mode <live|mock|local|auto>",
         "params": [("value", "live forces real API calls. mock serves the built-in Acme corpus "
-                             "(gdrive, confluence, jira, github, slack) offline. auto picks based on credentials.")],
-        "examples": ["/mode auto", "/mode mock", "/mode live"],
+                             "(gdrive, confluence, jira, github, slack) offline. local answers "
+                             "/search and /chat from your own indexed folders (see /personal). "
+                             "auto picks live or mock based on credentials.")],
+        "examples": ["/mode auto", "/mode mock", "/mode local", "/mode live"],
         "endpoint": "(local)",
+    },
+    "personal": {
+        "summary": "Glean Personal: index local folders and search or chat against them offline.",
+        "usage": "/personal <status|index|search|sources|show|related|link|purge> "
+                 "[folder|query|doc] [--label <name>] [--include <globs>] [--exclude <globs>] "
+                 "[--max-bytes <n>] [--reindex] [--source <label>] [--limit <n>] "
+                 "[--explain] [--min-score <f>] [--top-k <n>] [--meta]",
+        "params": [
+            ("status",   "Database size, document and chunk counts, which text index is in use."),
+            ("index",    "Walk a folder and index its files. Incremental: unchanged files are skipped."),
+            ("search",   "Full-text search across everything indexed."),
+            ("sources",  "List indexed folders with their counts and last-indexed time."),
+            ("show",     "Print one document's metadata, sections, and extracted text."),
+            ("related",  "Documents connected to this one in the content graph."),
+            ("link",     "Build the content graph connecting related documents. Run after indexing."),
+            ("purge",    "Delete indexed content. Confirms first. Files on disk are never touched."),
+            ("--label",  "index: name for this folder, used as the datasource in results. "
+                         "Defaults to the folder name."),
+            ("--include", "index: comma-separated globs to index. Defaults to every supported type."),
+            ("--exclude", "index: comma-separated globs to skip, on top of the built-in list."),
+            ("--max-bytes", "index: skip files larger than this. Default 5 MB."),
+            ("--reindex", "index: re-read every file, ignoring the content-hash shortcut."),
+            ("--source", "search: restrict to one folder's label."),
+            ("--explain", "search: show why each result ranked where it did \u2014 the section "
+                          "that matched, how many passages, which query terms hit and which "
+                          "missed, the bm25 score, and whether results are tied."),
+            ("--limit",  "search/related: how many results. Defaults to default_page_size."),
+            ("--min-score", "link: strength threshold, 0-1. Default 0.3. Higher is stricter."),
+            ("--top-k",  "link: neighbours kept per document. Default 10. 0 keeps every "
+                         "link above the threshold, which on a large folder is a lot."),
+            ("--meta",   "show: print metadata and sections only, not the document text."),
+        ],
+        "examples": [
+            "/personal index ~/Documents",
+            "/personal index ~/notes --label notes --include '*.md,*.txt'",
+            "/personal search \"salary bands\"",
+            "/personal search \"q3 roadmap\" --source notes --limit 5",
+            "/personal search \"salary bands\" --explain",
+            "/personal show roadmap",
+            "/personal link --min-score 0.4",
+            "/personal link --top-k 5",
+            "/personal related roadmap",
+            "/personal purge notes",
+        ],
+        "endpoint": "(local \u2014 ~/.gleancode/personal.db; no network calls at all)",
     },
     "mcp": {
         "summary": "Inspect, configure, and run the bundled MCP server.",
@@ -1057,6 +1104,7 @@ DOCS: Dict[str, CommandDoc] = {
 
 COMMAND_GROUPS: List[Tuple[str, List[str]]] = [
     ("Shell",          ["help", "status", "doctor", "login", "auth", "logout", "open", "ask", "config", "mode", "mcp", "flow", "history", "clear", "exit"]),
+    ("Glean Personal", ["personal"]),
     ("Chat & Search",  ["chat", "search", "datasources.list", "datasources.status", "autocomplete", "recommendations", "feedback"]),
     ("Agents & Tools", ["agents.list", "agents.run", "tools.list", "tools.call"]),
     ("Docs & People",  ["docs.get", "docs.permissions", "entities.list", "people.get"]),

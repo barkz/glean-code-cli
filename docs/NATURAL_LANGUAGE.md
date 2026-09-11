@@ -70,6 +70,22 @@ Only writes, deletes, and auth-changing commands trigger the `Run all? [y/N]` ga
 
 The full destructive set lives in `_NL_DESTRUCTIVE` in [glean_code/commands.py](../glean_code/commands.py). Add to it whenever new mutating commands ship.
 
+**Commands that take their verb positionally** — `/config set`, `/personal purge`, `/flow purge` — cannot be gated by name alone, since `/config list` and `/config set` are the same command to the dispatcher. These live in `_NL_DESTRUCTIVE_SUBS`, keyed by command name with the sub-verbs that mutate:
+
+```python
+_NL_DESTRUCTIVE_SUBS = {
+    "config":   ("set",),
+    "personal": ("index", "purge", "link"),
+    "flow":     ("purge", "enrich", "link"),
+}
+```
+
+`/personal index` is included because a planner-proposed crawl of an unexpected folder is worth confirming, even though it only writes to a local database.
+
+## Local mode behaviour
+
+In `local` mode the planner behaves as it does in mock mode — it pattern-matches locally rather than calling Glean, because `/chat` resolves to the personal index, which has no model and cannot plan. The steps it emits still dispatch normally, so `/personal search` and `/search` answer from your indexed folders.
+
 ## Mock mode behaviour
 
 The natural-language planner works without a live Glean token. In mock mode the CLI does **not** call `/chat`; instead it pattern-matches your prompt locally against a small set of intents — login, search, chat, datasources, status — and emits a canned plan. You'll see:
@@ -107,7 +123,7 @@ If the model ignores the instruction and emits a real token anyway, that token w
 ## How to extend it
 
 - **Add a new command to the catalogue.** Just register it via `@register("name")` and add an entry to `DOCS`. The catalogue builder picks it up automatically.
-- **Mark a new command as destructive.** Add its name to `_NL_DESTRUCTIVE` in [glean_code/commands.py](../glean_code/commands.py).
+- **Mark a new command as destructive.** Add its name to `_NL_DESTRUCTIVE` in [glean_code/commands.py](../glean_code/commands.py) — or, if it takes its verb positionally, add the mutating sub-verbs to `_NL_DESTRUCTIVE_SUBS`.
 - **Tweak the system prompt.** `_PLANNER_SYSTEM_PROMPT` is a single string at the top of the planner section in `commands.py`. Iterating on it is the cheapest way to improve plan quality.
 - **Replace Glean Chat with another model.** The contract is "send a string, get a string back, expect a JSON array somewhere in it." Swap `s.client.chat(...)` for any other implementation that fits.
 

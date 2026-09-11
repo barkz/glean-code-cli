@@ -119,7 +119,7 @@ def title_text(
     if style_name == "off":
         return ""
 
-    label = mode if mode in ("live", "mock") else "auto"
+    label = mode if mode in ("live", "mock", "local") else "auto"
     if mode == "auto":
         label = "live" if has_token else "mock"
 
@@ -288,8 +288,11 @@ def print_ok(msg: str) -> None:
     print(style("✔ " + msg, C.GREEN))
 
 
+_PROMPT_DOT = {"live": C.GREEN, "local": C.PURPLE, "mock": C.YELLOW}
+
+
 def prompt_str(mode: str) -> str:
-    dot = style("●", C.GREEN if mode == "live" else C.YELLOW)
+    dot = style("●", _PROMPT_DOT.get(mode, C.YELLOW))
     label = style("glean", C.BLUE, C.BOLD) + style("-code", C.CYAN, C.BOLD)
     arrow = style("›", C.GREY)
     return f"{dot} {label} {arrow} "
@@ -315,6 +318,8 @@ def status_bar(
         segs.append(("28",  "255", " ● LIVE "))
     elif mode == "mock":
         segs.append(("136", "0",   " ● MOCK "))
+    elif mode == "local":
+        segs.append(("55",  "255", " ● LOCAL "))
     else:
         segs.append(("241", "255", " ● AUTO "))
 

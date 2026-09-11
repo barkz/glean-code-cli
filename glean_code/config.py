@@ -25,6 +25,13 @@ SECURE_REFS: Dict[str, str] = {
 
 _INSTANCE_ID_SUFFIX = "-be.glean.com"
 
+# Where a command's data comes from.
+#   auto   live when a token and instance are present, else mock
+#   live   the configured Glean tenant
+#   mock   the built-in fictional corpus
+#   local  the personal index in ~/.gleancode/personal.db (see personal.py)
+MODES = ("auto", "live", "mock", "local")
+
 
 def normalize_instance_host(value: Optional[str]) -> Optional[str]:
     """Return a backend hostname from a hostname, URL, or Glean instance ID.
@@ -73,7 +80,7 @@ class Config:
     indexing_token: Optional[str] = None      # Glean Indexing API token (literal or secure ref)
     act_as: Optional[str] = None              # Optional email to impersonate
     base_url: Optional[str] = None            # Overrides the computed base URL
-    mode: str = "auto"                        # auto | live | mock
+    mode: str = "auto"                        # see MODES
     theme: str = "glean"                      # glean | mono | neon
     default_page_size: int = 10
     mock_corpus_path: Optional[str] = None    # JSON file backing mock mode; falls back to the built-in corpus
@@ -161,8 +168,8 @@ class Config:
 
     @property
     def effective_mode(self) -> str:
-        if self.mode == "live":
-            return "live"
-        if self.mode == "mock":
-            return "mock"
+        # Only "auto" is resolved; every other mode is taken at its word, so a
+        # local index keeps serving even once a live token is configured.
+        if self.mode in ("live", "mock", "local"):
+            return self.mode
         return "live" if self.is_live_ready else "mock"

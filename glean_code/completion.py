@@ -19,7 +19,7 @@ except ImportError:
     _HAS_READLINE = False
 
 _FLAG_VALUES: Dict[str, List[str]] = {
-    "mode":   ["live", "mock", "auto"],
+    "mode":   ["live", "mock", "auto", "local"],
     "kind":   ["PEOPLE", "TEAM", "GROUP"],
 }
 
@@ -28,6 +28,7 @@ _CONFIG_KEYS = [
     "oauth_client_id", "oauth_client_instance", "oauth_scopes", "redirect_port",
     "oauth_authorize_url", "oauth_token_url", "oauth_registration_url",
     "mode", "theme", "default_page_size", "mock_corpus_path",
+    "flow_capture", "window_title",
 ]
 
 _CONFIG_SUBCMDS = ["get", "set", "list"]
@@ -36,6 +37,9 @@ _MCP_SUBCMDS = ["status", "config", "start", "stop"]
 _MCP_CLIENTS = ["claude-code", "claude-desktop", "cursor"]
 
 _FLOW_SUBCMDS = ["status", "enrich", "link", "show", "timeline", "purge"]
+
+_PERSONAL_SUBCMDS = ["status", "index", "search", "sources", "show",
+                     "related", "link", "purge"]
 
 
 class _Completer:
@@ -129,6 +133,18 @@ class _Completer:
             if len(tokens) == 1 or (len(tokens) == 2 and not ends_with_space):
                 partial = "" if ends_with_space else tokens[-1]
                 return [s for s in _FLOW_SUBCMDS if s.startswith(partial)]
+
+        # ── /personal subcommands ────────────────────────────────────────
+        if cmd == "personal":
+            if len(tokens) == 1 or (len(tokens) == 2 and not ends_with_space):
+                partial = "" if ends_with_space else tokens[-1]
+                return [s for s in _PERSONAL_SUBCMDS if s.startswith(partial)]
+
+        # ── /mode <value-tab> ────────────────────────────────────────────
+        if cmd == "mode":
+            if len(tokens) == 1 or (len(tokens) == 2 and not ends_with_space):
+                partial = "" if ends_with_space else tokens[-1]
+                return [v for v in _FLAG_VALUES["mode"] if v.startswith(partial)]
 
         # ── /help <command-tab> ──────────────────────────────────────────
         if cmd == "help":

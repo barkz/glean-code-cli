@@ -88,7 +88,7 @@ Capture is governed by one config key:
 
 | `flow_capture` | Behaviour |
 | --- | --- |
-| `mock` | **Default.** Records only mock-mode traffic. Real tenant content never touches the database. |
+| `mock` | **Default.** Records only mock-mode traffic. Real tenant content never touches the database. Local-mode traffic is not recorded either — the personal index already holds that content, and capturing it again would duplicate your own files into a second database. |
 | `on` | Records both modes. |
 | `off` | Records nothing. |
 
@@ -295,7 +295,9 @@ What the implementation does about it:
 
 - The database is created `0600`, matching `config.json` and `auth.json`.
 - Capture defaults to mock, so real content is never recorded by accident.
-- Rows are partitioned by instance, mode, and `act_as`. An impersonated view is someone else's
+- Rows are partitioned by instance, mode, and `act_as` — `local` is a mode like any other, so
+  personal-index traffic (when capture is set to `on`) can never link to mock or tenant rows.
+  An impersonated view is someone else's
   view of the tenant; linking across those would build connections no single person is entitled
   to see, so it can't happen.
 - `/flow purge --older-than <days>` exists for retention.

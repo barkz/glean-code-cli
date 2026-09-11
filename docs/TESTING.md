@@ -2,7 +2,7 @@
 
 Notes on the test suite added during development of glean-code-cli. See [Running tests](../README.md#running-tests) for the user-facing instructions on how to run the tests.
 
-All 834 tests pass. Here's what was added across the development passes:
+All 1,036 tests pass. Here's what was added across the development passes:
 
 `tests/test_commands_extended.py` (155 new tests) — covers all previously untested commands:
 
@@ -93,3 +93,38 @@ Every test redirects the state and log paths at a temp directory, so `~/.gleanco
 - Datasource colours — known sources each get a distinct colour, lookup ignores case and padding, and an unknown source falls back to grey rather than borrowing a familiar source's colour
 
 The module patches out the mock client's simulated 0.25s network latency; without that these 58 tests take 31 seconds instead of 2.
+
+`tests/test_extract.py` (23 new tests) — covers local text extraction:
+
+- Registry — `INCLUDE_PATTERNS` is derived from `SUPPORTED_EXTS`, so the walker's globs cannot drift from what the extractor actually handles; an unsupported extension raises with the supported list in the message
+- Normalisation — spaces and tabs collapse but paragraph breaks survive, because chunking splits on them; line endings normalise; an oversized document is truncated with a visible marker
+- HTML — tags are stripped, `<script>` and `<style>` bodies are dropped rather than indexed, and `<title>` becomes the document title
+- JSON — flattened to `key.path: value` lines so both halves are searchable; invalid JSON is indexed verbatim rather than discarded, since JSONL and truncated exports are still worth finding
+- Office — every fixture is built with `zipfile` rather than committed as a binary, which keeps the repo text-only and documents exactly which parts of each format the extractor depends on. Word runs join within a paragraph and paragraphs stay separate; Excel reads shared strings, inline strings and sheet names; PowerPoint orders `slide2` before `slide10`, which lexicographic sorting would get wrong
+- Failure modes — a file that is not a zip, malformed XML inside a valid zip, a missing `word/document.xml`, an out-of-range shared-string index, and an archive declaring more uncompressed content than the limit allows. Each raises `ExtractError` with a reason rather than crashing an index run
+
+`tests/test_personal.py` (153 tests) — covers Glean Personal:
+
+- Schema — tables, `meta` versioning, `0600` permissions, and idempotent reopening
+- FTS5 fallback — a forced-broken FTS5 schema exercises the plain-table path end to end: indexing, search and fetch all still work, and an existing database keeps the store it was built with even once FTS5 is available again, because switching would orphan every chunk
+- Chunking — headings split sections, a heading with no body is still indexed, paragraphs pack up to the limit, and only an oversized paragraph falls through to sentence windowing with overlap. A single sentence longer than the limit is still cut
+- Query building — bare terms become quoted prefix matches and a `"quoted span"` stays a phrase, so a stray `NEAR`, `OR`, `*` or `-x:y` in user text is data rather than FTS5 syntax
+- Incremental indexing — a second run changes nothing; an edited file is re-read and its neighbours are not; a file touched but not changed is skipped on its content hash; `--reindex` forces a re-read; a deleted file leaves the index; filters persist across runs so a later bare re-index repeats them
+- Skip reasons — oversized files, empty files, and a corrupt `.docx` are reported rather than crashing the run, and unsupported extensions are never matched in the first place
+- Doc ids — two paths that slug to the same string are disambiguated
+- Search — one row per document rather than per chunk, source filtering, limits, snippets forced to a single line (structured formats carry no sentence enders and would otherwise emit a whole multi-line chunk into an aligned layout)
+- Content graph — related documents link and unrelated ones do not, evidence is stored and returned, a higher threshold yields fewer links, and re-linking replaces rather than accumulates
+- Glean shapes — `/search`, `/chat`, `/autocomplete` and `/getdocuments` responses match the Client API's shapes, which is what lets every existing renderer draw them unchanged
+- Local mode — routing, an explicit error for endpoints a folder of files cannot honestly answer, the Indexing API explaining itself *before* asking for a token it will never need, and an assertion that `urlopen` is never reached
+- Commands — every `/personal` subcommand, bad flag values, the purge confirmation prompt in both directions, and `/mode local` on a populated and an empty index
+- Graph scale — near-duplicate documents must link at full strength, and phrase pruning must be symmetric across documents. Both are regressions with a measured origin: a per-document rank cut left two real 20 KB decks that shared 1,495 phrases sharing none, scoring the strongest link in the corpus at 0.0. The symmetry test was verified to fail against the broken implementation before being kept
+- `--explain` — matched and missed terms (including the porter-stemmed plural/singular case the re-derivation has to cover), passage counts as a real fraction of the document, tie grouping, score-ratio ordering, bar clamping at every ratio, sparse payloads, empty result sets, and that the default result carries **no** `explain` key so the Client API shape stays byte-compatible
+- Mode plumbing — indexing commands explain local mode rather than asking for a token that would not help, `--dry-run` still works with no credentials in any mode, and `/ask` falls back to the local pattern-matcher instead of advising `/login` from inside local mode
+
+`tests/test_mcp.py` (56 tests, +17 for Glean Personal) — covers the four local MCP tools:
+
+- Each tool's output carries the `[LOCAL INDEX]` banner, and an empty index names the command that fixes it
+- The local tools never call the Glean client and are unaffected by `GLEAN_MOCK`, which governs the Glean-backed tools only — the local index has no fictional alternative to serve
+- A corrupt database returns an error string rather than a traceback
+
+The linking fixture deliberately uses five documents rather than two. With two, every shared phrase appears in every document, so IDF cannot distinguish "topically shared" from "common vocabulary" and nothing can score above the threshold — a property of IDF at that scale, not a bug worth distorting the scoring to hide.

@@ -10,6 +10,41 @@ For what Glean Code is and how to run it, see the [README](README.md).
 
 ### Added
 
+- **Glean Personal (`/personal`)** — a portable local content index. `/personal index
+  <folder>` walks a directory and indexes it into `~/.gleancode/personal.db` (`0600`):
+  `.txt`, `.md`, `.markdown`, `.html`, `.json`, plus `.docx`, `.xlsx` and `.pptx`, which are
+  ZIP archives of XML and so are readable with `zipfile` + `xml.etree` at zero dependency
+  cost. Text is chunked on headings and paragraph boundaries (overlapping only where a cut
+  falls inside a paragraph), stored in SQLite FTS5, and ranked with `bm25()` weighted
+  title > heading > body. Re-indexing is incremental on a SHA-256 content hash, and removes
+  documents that have left the disk or fallen outside the filters. A phrase graph
+  (`/personal link`, `/personal related`) connects documents that discuss the same things
+  and stores the shared phrases as evidence, keeping each document's strongest `--top-k`
+  neighbours (default 10) so a large folder yields a navigable graph rather than tens of
+  thousands of near-threshold links. An FTS5 capability probe at connect time falls
+  back to a plain table and a Python scorer, so an interpreter without FTS5 degrades in
+  ranking quality rather than failing. No server, no daemon, no network, no credentials.
+  Full guide: [docs/PERSONAL.md](docs/PERSONAL.md).
+- **`/personal search --explain`** — ranking evidence per result: the section that matched,
+  how many of the document's passages matched, which query terms hit and which missed, the
+  raw bm25 score with a bar relative to the top hit, and whether results are tied. Terms are
+  ORed, so "matched one of three terms" is usually the whole explanation for a surprising
+  hit. Scores are never shown as a percentage: bm25 is corpus-relative — the same code scores
+  25.41 on one index and 3.5e-06 on another — so a "98% relevant" figure would manufacture a
+  confidence that was never computed, and would render a genuine tie as "100%, 100%, 98%".
+  The flag is `/personal search` only; plain `/search` in local mode stays byte-compatible
+  with the Client API shape.
+- **`local` mode** — a fourth value for `mode`, alongside `auto`, `live` and `mock`.
+  `/mode local` routes `/search`, `/chat`, `/autocomplete` and `/getdocuments` through the
+  personal index, using the Client API's own response shapes so every existing renderer
+  draws them unchanged. Endpoints with no local counterpart raise an error naming what
+  local mode does cover, rather than returning a plausible-looking stub. Unlike `auto`,
+  `local` is never resolved away by the presence of credentials.
+- **Four MCP tools for the local index** — `local_search`, `local_fetch`, `local_sources`
+  and `local_related` in `glean_mcp.py`. They need no token, never touch the network, and
+  are unaffected by `GLEAN_MOCK`. Every response carries a `[LOCAL INDEX]` banner: the
+  content is real but its scope is only the folders the user indexed, and an agent cannot
+  otherwise tell which index answered.
 - **Visual Studio Code extension** — a native extension bringing the full REPL (slash
   commands, status bar, mock/live switching, secure-token storage) into the editor
   sidebar. In progress.
