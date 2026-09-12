@@ -23,6 +23,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple  # noqa: F401
 from . import ui
 from . import _indexing_walk as _walk
 from . import flow as _flow
+from . import graph as _graph
 from . import mcp_control as _mcp
 from . import personal as _personal
 from .client import GleanClient, GleanError
@@ -794,6 +795,66 @@ def cmd_search(s: Session, pos, flags):
     print(ui.rule(f"search: {query}"))
     print(_render_search(resp))
     print(ui.rule())
+
+
+@register("graph")
+def cmd_graph(s: Session, pos, flags):
+    """Knowledge graph over a query's result set: documents, authors, sources."""
+    if not pos:
+        ui.print_err('Usage: /graph <query> [--html out.html]')
+        return
+    query = " ".join(pos)
+    page_size = int(flags.get("page-size") or flags.get("page_size") or 25)
+    datasource = flags.get("datasource")
+    min_shared = int(flags.get("min-shared") or flags.get("min_shared") or
+                     _graph.DEFAULT_MIN_SHARED)
+    with_terms = not (flags.get("no-terms") or flags.get("no_terms"))
+
+    try:
+        resp = s.client.search(query, page_size=page_size, datasource=datasource)
+    except GleanError as e:
+        ui.print_err(str(e))
+        return
+
+    results = resp.get("results", [])
+    # The banner belongs to the response, exactly as in /search: a graph drawn
+    # from the personal index must not read as one drawn from Glean.
+    if resp.get("localIndex"):
+        print(ui.style(_personal.LOCAL_BANNER, ui.C.YELLOW))
+        print()
+    if not results:
+        ui.print_info("No results for that query, so there is nothing to graph.")
+        return
+
+    mode = s.config.effective_mode
+    source = {"mock": "mock corpus", "local": "personal index"}.get(
+        mode, s.config.instance or "live")
+    built = _graph.build(results, query=query, source_label=source,
+                         min_shared=min_shared, with_terms=with_terms)
+    summary = _graph.summarize(built)
+
+    print(ui.rule(f"graph: {query}"))
+    print(ui.style(f"  {source}", ui.C.GREY))
+    print()
+    print(_graph.render_terminal(built, summary, ui.term_width()))
+    print(ui.rule())
+
+    if mode == "local":
+        ui.print_info("Local files carry no author, so this graph has no people in it.")
+
+    out = flags.get("html")
+    if out:
+        if out is True:
+            ui.print_err("--html needs a path: /graph <query> --html graph.html")
+            return
+        try:
+            written = _graph.write_html(Path(str(out)), built)
+        except OSError as e:
+            ui.print_err(f"Could not write {out}: {e}")
+            return
+        ui.print_ok(f"Wrote {written}  ({summary['nodes']} nodes, {summary['edges']} edges)")
+    else:
+        ui.print_info("Add --html graph.html for the interactive view.")
 
 
 @register("datasources.list")
