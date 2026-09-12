@@ -164,10 +164,14 @@
   p.banner { display: block; margin: 0 auto 26px; max-width: 640px; max-inline-size: 100%; }
   p.banner img { display: block; width: 100%; }
 
-  p.badges { margin: 1.5em 0 0; gap: 7px; }
+  /* line-height: 0 matters -- two of these badges are wrapped in links, and
+     an inline image inside an <a> carries line-box leading, which made those
+     flex items 37.5px tall against the bare images' 28px */
+  p.badges { margin: 1.5em 0 0; gap: 7px; line-height: 0; }
+  p.badges a { display: flex; flex: 0 0 auto; }
   /* shields.io renders for-the-badge at 28px tall; pin it so every badge in
      the row matches exactly, and keep flex out of their sizing */
-  p.badges img { height: 28px; width: auto; flex: 0 0 auto; }
+  p.badges img { display: block; height: 28px; width: auto; flex: 0 0 auto; }
 
   /* screenshots get a terminal frame rather than a bare border */
   p.shot {

@@ -290,10 +290,16 @@ class TestTemplate(unittest.TestCase):
     def setUp(self):
         self.css = (REPO_ROOT / ".github" / "pages" / "template.html").read_text()
 
+    def _rule(self, selector):
+        body = self.css[self.css.index(selector) + len(selector):]
+        return body[:body.index("}")]
+
     def test_badge_height_is_pinned(self):
         # Without an explicit height the flex line stretched the badges and the
         # widest one, clamped by the space left, stayed shorter than the rest.
-        self.assertIn("p.badges img { height: 28px; width: auto; flex: 0 0 auto; }", self.css)
+        rule = self._rule("p.badges img {")
+        for decl in ("display: block", "height: 28px", "width: auto", "flex: 0 0 auto"):
+            self.assertIn(decl, rule)
 
     def test_tagline_is_set_in_the_mono_face(self):
         rule = self.css[self.css.index('[align="center"] .banner + p {'):]
@@ -308,9 +314,17 @@ class TestTemplate(unittest.TestCase):
             rule = self.css[self.css.index(selector):]
             self.assertIn("font-family: var(--mono)", rule[:rule.index("}")], selector)
 
+    def test_badge_links_are_not_leaded(self):
+        # Two badges are wrapped in links. An inline image inside an <a> carries
+        # line-box leading, which made those flex items 37.5px tall against the
+        # bare images' 28px -- the row's cross size, and the misalignment.
+        self.assertIn("line-height: 0", self._rule("p.badges {"))
+        anchor = self._rule("p.badges a {")
+        self.assertIn("display: flex", anchor)
+        self.assertIn("flex: 0 0 auto", anchor)
+
     def test_image_rows_do_not_stretch_their_items(self):
-        row = self.css[self.css.index("p.imgrow {"):]
-        self.assertIn("align-items: center", row[:row.index("}")])
+        self.assertIn("align-items: center", self._rule("p.imgrow {"))
 
 
 class TestIcons(unittest.TestCase):
