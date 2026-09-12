@@ -140,12 +140,20 @@
   [align="center"] .banner + p { font-family: var(--sans); font-size: 1.12rem; font-weight: 600; color: var(--ink); max-width: 42ch; }
 
   /* ---- image paragraphs: badges, screenshots, diagrams ---- */
-  p.imgrow { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-width: none; }
+  p.imgrow {
+    display: flex; flex-wrap: wrap; gap: 8px; justify-content: center;
+    /* never stretch: a flex line would resize replaced elements, and the
+       widest one then hits a width clamp and ends up shorter than the rest */
+    align-items: center; max-width: none;
+  }
 
   p.banner { display: block; margin: 0 auto 26px; max-width: 640px; max-inline-size: 100%; }
   p.banner img { display: block; width: 100%; }
 
   p.badges { margin: 1.5em 0 0; gap: 7px; }
+  /* shields.io renders for-the-badge at 28px tall; pin it so every badge in
+     the row matches exactly, and keep flex out of their sizing */
+  p.badges img { height: 28px; width: auto; flex: 0 0 auto; }
 
   /* screenshots get a terminal frame rather than a bare border */
   p.shot {
