@@ -117,6 +117,16 @@ def is_table_divider(cells):
     return bool(cells) and all(re.fullmatch(r":?-{3,}:?", cell or "") for cell in cells)
 
 
+def is_command_table(body):
+    """True when every row leads with a code span -- a command/effect listing."""
+    if not body:
+        return False
+    return all(
+        len(row) >= 2 and row[0].startswith("`") and row[0].endswith("`") and len(row[0]) > 2
+        for row in body
+    )
+
+
 def render_table(rows):
     """GFM table. An all-empty header row is dropped -- the README uses those
     purely to get a two-column layout, and a blank <thead> is just a gap."""
@@ -125,7 +135,7 @@ def render_table(rows):
         head, body = rows[0], rows[2:]
         if not any(cell for cell in head):
             head = None
-    parts = ['<table>']
+    parts = ['<table class="cmd">' if is_command_table(body) else "<table>"]
     if head:
         parts.append("<thead><tr>%s</tr></thead>" % "".join(
             "<th>%s</th>" % inline(cell) for cell in head))
