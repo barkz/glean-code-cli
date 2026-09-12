@@ -10,20 +10,24 @@ import pathlib
 import sys
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 BUILD_PY = REPO_ROOT / ".github" / "pages" / "build.py"
+BANNER_PY = REPO_ROOT / ".github" / "pages" / "make_banner.py"
+BANNER_SVG = REPO_ROOT / "assets" / "glean-code-banner.svg"
 
 
-def _load_builder():
-    spec = importlib.util.spec_from_file_location("pages_build", BUILD_PY)
+def _load(name, path):
+    spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
-    sys.modules["pages_build"] = module
+    sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
 
 
-build = _load_builder()
+build = _load("pages_build", BUILD_PY)
+make_banner = _load("pages_make_banner", BANNER_PY)
 
 
 class TestInline(unittest.TestCase):
@@ -117,21 +121,36 @@ class TestBlocks(unittest.TestCase):
         self.assertIn("<hr>", build.render("---"))
 
     def test_screenshot_paragraph_is_classified(self):
-        out = build.render("![shot](assets/a.png)")
+        out = build.render("words first\n\n![shot](assets/a.png)")
         self.assertIn('<p class="imgrow shot">', out)
 
-    def test_badge_row_is_classified(self):
+    def test_badge_row_is_classified_even_when_it_leads_the_page(self):
+        # A README that opens with shields must not get them styled as a header.
         out = build.render(
             "![a](https://img.shields.io/badge/a-b)\n![b](https://img.shields.io/badge/c-d)")
         self.assertIn('<p class="imgrow badges">', out)
+        self.assertNotIn("banner", out)
 
     def test_diagram_paragraph_is_classified(self):
-        out = build.render("![flow](assets/request-flow.svg)")
+        out = build.render("words first\n\n![flow](assets/request-flow.svg)")
         self.assertIn('<p class="imgrow diagram">', out)
 
     def test_linked_badge_still_counts_as_a_badge_row(self):
         out = build.render("[![r](https://img.shields.io/badge/r-x)](https://example.com)")
         self.assertIn('<p class="imgrow badges">', out)
+
+    def test_leading_image_is_the_page_header(self):
+        out = build.render("![Glean Code](assets/glean-code-banner.svg)")
+        self.assertIn('<p class="imgrow banner">', out)
+
+    def test_an_image_after_prose_is_not_a_header(self):
+        out = build.render("intro words\n\n![flow](assets/request-flow.svg)")
+        self.assertIn('<p class="imgrow diagram">', out)
+        self.assertNotIn("banner", out)
+
+    def test_an_image_after_a_heading_is_not_a_header(self):
+        out = build.render("## How it works\n\n![flow](assets/x.svg)")
+        self.assertIn('<p class="imgrow diagram">', out)
 
     def test_paragraph_with_text_is_not_flagged(self):
         out = build.render("![a](x.png) and words")
@@ -162,6 +181,17 @@ class TestBuild(unittest.TestCase):
 
     def test_title_falls_back(self):
         self.assertEqual(build.page_title("no heading here"), "Glean Code")
+
+    def test_title_ignores_hash_comments_in_code_fences(self):
+        # The README's quickstart contains a bash "# or" comment; it is not a title.
+        markdown = "```bash\npython3 -m glean_code\n# or\npython3 install.py\n```\n"
+        self.assertEqual(build.page_title(markdown), "Glean Code")
+
+    def test_a_page_led_by_an_image_still_gets_one_h1(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            page = (build.build(out_dir=pathlib.Path(tmp) / "_site") / "index.html").read_text()
+            self.assertIn('<h1 class="sr-only">Glean Code</h1>', page)
+            self.assertEqual(page.count("<h1"), 1)
 
     def test_build_writes_a_site(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -197,6 +227,37 @@ class TestBuild(unittest.TestCase):
             page = (build.build(out_dir=pathlib.Path(tmp) / "_site") / "index.html").read_text()
             self.assertNotIn('href="docs/', page)
             self.assertNotIn('href="LICENSE"', page)
+
+
+class TestBanner(unittest.TestCase):
+    """The header image is generated from glean_code.ui.GLEAN_WORDMARK."""
+
+    def test_committed_svg_matches_the_generator(self):
+        self.assertEqual(
+            make_banner.build_svg(),
+            BANNER_SVG.read_text(encoding="utf-8"),
+            "assets/glean-code-banner.svg is stale -- "
+            "run python3 .github/pages/make_banner.py",
+        )
+
+    def test_every_wordmark_character_is_drawable(self):
+        drawn = set()
+        for line in make_banner.wordmark_lines():
+            drawn.update(line)
+        drawn.discard(" ")
+        for char in drawn:
+            self.assertTrue(make_banner.cell_shapes(char, 0, 0), "no shape for %r" % char)
+
+    def test_svg_is_well_formed_and_carries_the_meta_line(self):
+        svg = make_banner.build_svg()
+        ET.fromstring(svg)
+        self.assertIn("mode: mock", svg)
+        self.assertIn('role="img"', svg)
+
+    def test_banner_is_published_with_the_site(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = build.build(out_dir=pathlib.Path(tmp) / "_site")
+            self.assertTrue((out / "assets" / "glean-code-banner.svg").is_file())
 
 
 if __name__ == "__main__":
