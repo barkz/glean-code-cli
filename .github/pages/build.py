@@ -89,6 +89,22 @@ def is_image_only(markup):
     return re.sub(r"<a [^>]*>|</a>|<img [^>]*>", "", markup).strip() == ""
 
 
+def image_paragraph_class(markup):
+    """Classify an image-only paragraph so the stylesheet can treat each kind
+    differently: badge strips, diagrams and screenshots want nothing alike."""
+    if not is_image_only(markup):
+        return None
+    sources = re.findall(r'<img src="([^"]+)"', markup)
+    if all("shields.io" in src for src in sources):
+        return "badges"
+    if all(src.lower().endswith(".svg") for src in sources):
+        return "diagram"
+    return "shot"
+
+
+_BARE_BREAK = re.compile(r"^(?:<br\s*/?>\s*)+$", re.IGNORECASE)
+
+
 # --------------------------------------------------------------------------
 # block markup
 # --------------------------------------------------------------------------
@@ -143,6 +159,12 @@ def render(markdown):
         stripped = line.strip()
 
         if not stripped:
+            i += 1
+            continue
+
+        # The README uses bare <br> tags to force breathing room on github.com.
+        # The site sets its own rhythm in CSS, so they would only leave holes.
+        if _BARE_BREAK.match(stripped):
             i += 1
             continue
 
@@ -214,7 +236,8 @@ def render(markdown):
             buf.append(lines[i].strip())
             i += 1
         markup = inline(" ".join(buf))
-        css = ' class="imgrow"' if is_image_only(markup) else ""
+        kind = image_paragraph_class(markup)
+        css = ' class="imgrow %s"' % kind if kind else ""
         out.append("<p%s>%s</p>" % (css, markup))
 
     return "\n\n".join(out)

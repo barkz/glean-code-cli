@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 300" width="960" height="300" role="img" aria-label="A command typed in the REPL flows through dispatch to a handler to the client, which answers from the Glean REST API in live mode, the mock corpus in mock mode, or the personal index in local mode.">
+  <style>
+    :root { color-scheme: light dark; }
+    .bg { fill: none; }
+    .box { fill: #ffffff; stroke: #d8d8e4; stroke-width: 1.5; }
+    .sink { fill: #ffffff; stroke-width: 1.5; }
+    .t { font-family: "IBM Plex Sans", -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; fill: #24242e; }
+    .m { font-family: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace; fill: #24242e; }
+    .sub { fill: #76768c; }
+    .wire { stroke: #b4b4c6; stroke-width: 1.5; fill: none; }
+    .tip { fill: #b4b4c6; }
+    .live { stroke: #343ced; }
+    .mock { stroke: #2ea44f; }
+    .local { stroke: #c2820a; }
+    .tag-live { fill: #343ced; }
+    .tag-mock { fill: #2ea44f; }
+    .tag-local { fill: #c2820a; }
+    @media (prefers-color-scheme: dark) {
+      .box { fill: #1a1a24; stroke: #33333f; }
+      .sink { fill: #1a1a24; }
+      .t, .m { fill: #e9e9f1; }
+      .sub { fill: #8f8fa5; }
+      .wire { stroke: #4a4a5c; }
+      .tip { fill: #4a4a5c; }
+      .live { stroke: #8f94ff; }
+      .mock { stroke: #56c96f; }
+      .local { stroke: #e0a93a; }
+      .tag-live { fill: #8f94ff; }
+      .tag-mock { fill: #56c96f; }
+      .tag-local { fill: #e0a93a; }
+    }
+  </style>
+
+  <rect class="bg" width="960" height="300"/>
+
+  <!-- the chain -->
+  <g>
+    <rect class="box" x="8" y="120" width="164" height="60" rx="8"/>
+    <text class="m" x="24" y="146" font-size="14">/search "q2 plan"</text>
+    <text class="t sub" x="24" y="165" font-size="11">you type</text>
+
+    <rect class="box" x="204" y="120" width="150" height="60" rx="8"/>
+    <text class="m" x="220" y="146" font-size="14">dispatch()</text>
+    <text class="t sub" x="220" y="165" font-size="11">commands.py</text>
+
+    <rect class="box" x="386" y="120" width="160" height="60" rx="8"/>
+    <text class="m" x="402" y="146" font-size="14">cmd_search()</text>
+    <text class="t sub" x="402" y="165" font-size="11">a registered handler</text>
+
+    <rect class="box" x="578" y="120" width="170" height="60" rx="8"/>
+    <text class="m" x="594" y="146" font-size="14">_post(path, body)</text>
+    <text class="t sub" x="594" y="165" font-size="11">client.py</text>
+  </g>
+
+  <!-- chain wires -->
+  <g>
+    <path class="wire" d="M172 150 H196"/>
+    <path class="tip" d="M196 145 l10 5 -10 5 z"/>
+    <path class="wire" d="M354 150 H378"/>
+    <path class="tip" d="M378 145 l10 5 -10 5 z"/>
+    <path class="wire" d="M546 150 H570"/>
+    <path class="tip" d="M570 145 l10 5 -10 5 z"/>
+  </g>
+
+  <!-- the one decision: effective_mode -->
+  <text class="m sub" x="762" y="112" font-size="11">effective_mode</text>
+  <g>
+    <path class="wire" d="M748 150 H768 V58 H792"/>
+    <path class="tip" d="M792 53 l10 5 -10 5 z"/>
+    <path class="wire" d="M768 150 H792"/>
+    <path class="tip" d="M792 145 l10 5 -10 5 z"/>
+    <path class="wire" d="M748 150 H768 V242 H792"/>
+    <path class="tip" d="M792 237 l10 5 -10 5 z"/>
+  </g>
+
+  <!-- the three answers -->
+  <g>
+    <rect class="sink live" x="802" y="28" width="150" height="60" rx="8"/>
+    <text class="t" x="818" y="53" font-size="13" font-weight="600">Glean REST API</text>
+    <text class="m tag-live" x="818" y="72" font-size="11">live</text>
+
+    <rect class="sink mock" x="802" y="120" width="150" height="60" rx="8"/>
+    <text class="t" x="818" y="145" font-size="13" font-weight="600">mock corpus</text>
+    <text class="m tag-mock" x="818" y="164" font-size="11">mock · 70 docs</text>
+
+    <rect class="sink local" x="802" y="212" width="150" height="60" rx="8"/>
+    <text class="t" x="818" y="237" font-size="13" font-weight="600">personal index</text>
+    <text class="m tag-local" x="818" y="256" font-size="11">local · your files</text>
+  </g>
+</svg>
