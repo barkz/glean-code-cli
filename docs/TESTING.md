@@ -21,13 +21,13 @@ files, and they outrank the `Glean Code.app` launcher in `Cmd+Space`:
 export PYTHONPYCACHEPREFIX="$HOME/.cache/python"
 ```
 
-1,108 tests covering the client and every mock response, commands and dispatch, config, UI, auth, completion, help docs, the mock corpus, indexing-walk, scaffold, the installer, the MCP server, the flow mapper, the Pages site builder, and Glean Personal (text extraction, the index, the content graph, ranking explanations, local mode, and the local MCP tools).
+1,109 tests covering the client and every mock response, commands and dispatch, config, UI, auth, completion, help docs, the mock corpus, indexing-walk, scaffold, the installer, the MCP server, the flow mapper, the Pages site builder, and Glean Personal (text extraction, the index, the content graph, ranking explanations, local mode, and the local MCP tools).
 
 ## Development notes
 
 Notes on the test suite added during development of glean-code-cli.
 
-All 1,108 tests pass. Here's what was added across the development passes:
+All 1,109 tests pass. Here's what was added across the development passes:
 
 `tests/test_commands_extended.py` (155 new tests) — covers all previously untested commands:
 
