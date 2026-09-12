@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}}</title>
+<meta name="description" content="A terminal-first client for the Glean REST API. Pure Python, zero runtime dependencies, fully usable offline.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    color-scheme: light dark;
+    --ground: #fbfbfd;
+    --surface: #ffffff;
+    --surface-2: #f4f4f9;
+    --ink: #1b1b23;
+    --ink-2: #4c4c5c;
+    --ink-3: #76768c;
+    --rule: #e4e4ee;
+    --rule-soft: #eeeef5;
+    --accent: #343ced;
+    --accent-ink: #343ced;
+    --note-bg: #eff3ff;
+    --note-edge: #4b62d8;
+    --code-bg: #f5f5fa;
+    --term-bg: #14141d;
+    --term-ink: #d9d9e6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #0f0f16;
+      --surface: #15151e;
+      --surface-2: #1b1b26;
+      --ink: #e9e9f1;
+      --ink-2: #adadc0;
+      --ink-3: #7e7e95;
+      --rule: #2a2a38;
+      --rule-soft: #21212c;
+      --accent: #8f94ff;
+      --accent-ink: #a3a7ff;
+      --note-bg: #181b30;
+      --note-edge: #6f7bea;
+      --code-bg: #1a1a24;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-size: 16px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  img { max-width: 100%; }
+
+  /* ---- site chrome ---- */
+  .topbar {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--surface);
+    border-bottom: 1px solid var(--rule);
+  }
+  .topbar-in {
+    max-width: 1040px; margin: 0 auto; padding: 11px 24px;
+    display: flex; align-items: baseline; gap: 18px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px;
+  }
+  .topbar .mark { font-weight: 500; color: var(--ink); }
+  .topbar .mark span { color: var(--accent-ink); }
+  .topbar nav { margin-left: auto; display: flex; gap: 16px; }
+  .topbar a { color: var(--ink-3); text-decoration: none; }
+  .topbar a:hover { color: var(--accent-ink); }
+  .topbar a:focus-visible, .doc a:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px;
+  }
+
+  main { max-width: 1040px; margin: 0 auto; padding: 44px 24px 96px; }
+  .doc {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 44px clamp(20px, 5vw, 56px) 56px;
+  }
+
+  /* ---- prose ---- */
+  .doc > *:first-child { margin-top: 0; }
+  h1, h2, h3 { font-weight: 600; letter-spacing: -0.015em; line-height: 1.25; text-wrap: balance; }
+  h1 { font-size: 2.35rem; margin: 0 0 .3em; }
+  h2 { font-size: 1.45rem; margin: 2.4em 0 .9em; padding-bottom: .3em; border-bottom: 1px solid var(--rule); }
+  h3 { font-size: 1.06rem; margin: 1.6em 0 .45em; }
+  td h3:first-child { margin-top: 0; }
+  p { margin: 0 0 1em; max-width: 68ch; }
+  a { color: var(--accent-ink); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  strong { font-weight: 600; color: var(--ink); }
+  hr { border: 0; border-top: 1px solid var(--rule); margin: 2.6em 0; }
+
+  /* centred blocks come from the README's own <div align="center"> */
+  [align="center"] { text-align: center; }
+  [align="center"] p { margin-left: auto; margin-right: auto; }
+  [align="center"] h1 + p { font-size: 1.12rem; font-weight: 600; }
+  [align="center"] p { max-width: 62ch; color: var(--ink-2); }
+  [align="center"] h1 { color: var(--ink); }
+
+  /* badge rows and screenshots */
+  p.imgrow {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    justify-content: center; align-items: center;
+    max-width: none;
+  }
+  .imgrow img:not([src*="shields.io"]) {
+    border: 1px solid var(--rule); border-radius: 6px; display: block;
+  }
+
+  /* ---- code ---- */
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .875em; background: var(--code-bg);
+    padding: .16em .38em; border-radius: 4px;
+  }
+  pre {
+    background: var(--term-bg); color: var(--term-ink);
+    border-radius: 8px; padding: 16px 18px; margin: 0 0 1.2em;
+    overflow-x: auto;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 12.6px; line-height: 1.85;
+  }
+  pre code { background: none; padding: 0; font-size: inherit; color: inherit; }
+
+  /* ---- tables ---- */
+  .doc table {
+    width: 100%; border-collapse: collapse; margin: 0 0 1.4em;
+    border: 1px solid var(--rule); border-radius: 6px; overflow: hidden;
+  }
+  .doc th, .doc td { text-align: left; padding: 14px 16px; vertical-align: top; }
+  .doc thead th { background: var(--surface-2); font-weight: 600; border-bottom: 1px solid var(--rule); }
+  .doc tbody tr + tr td { border-top: 1px solid var(--rule-soft); }
+  .doc td:first-child { font-weight: 600; }
+  .doc td:first-child:not(:only-child):not([width]) { width: 30%; }
+  .doc td p { color: var(--ink-2); max-width: 58ch; }
+  .doc td:only-child, .doc td p:last-child { margin-bottom: 0; }
+  /* the README's two-column feature table is layout, not data */
+  .doc td[width="50%"] { width: 50%; font-weight: 400; }
+  .doc td[width="50%"] p { color: var(--ink-2); }
+  .table-scroll { overflow-x: auto; }
+
+  /* ---- alerts ---- */
+  .alert {
+    background: var(--note-bg); border-left: 3px solid var(--note-edge);
+    border-radius: 0 6px 6px 0; padding: 14px 20px; margin: 1.6em 0;
+  }
+  .alert-label {
+    font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 600;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--note-edge);
+    margin: 0 0 .4em;
+  }
+  .alert p:last-child { margin-bottom: 0; color: var(--ink-2); }
+
+  footer {
+    max-width: 1040px; margin: 0 auto; padding: 0 24px 56px;
+    font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--ink-3);
+    text-align: center;
+  }
+  footer a { color: var(--ink-3); }
+
+  @media (max-width: 700px) {
+    .doc td, .doc th { display: block; width: auto !important; }
+    .doc td:first-child { padding-bottom: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-in">
+    <span class="mark">glean<span>_</span>code</span>
+    <nav>
+      <a href="#documentation">Docs</a>
+      <a href="{{REPO_URL}}/releases">Releases</a>
+      <a href="{{REPO_URL}}">GitHub</a>
+    </nav>
+  </div>
+</div>
+
+<main>
+  <article class="doc">
+{{CONTENT}}
+  </article>
+</main>
+
+<footer>
+  Built from <a href="{{REPO_URL}}/blob/main/README.md">README.md</a> on every push to main.
+</footer>
+
+</body>
+</html>
