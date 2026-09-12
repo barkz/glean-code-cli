@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="glean_code_cli">
+  <rect width="32" height="32" rx="7" fill="#1b1b23"/>
+  <path d="M10 10 L17 16 L10 22" fill="none" stroke="#1cc8f0" stroke-width="3.2" stroke-linecap="square" stroke-linejoin="miter"/>
+  <rect x="18.6" y="20.4" width="7.4" height="2.6" fill="#1cc8f0"/>
+</svg>

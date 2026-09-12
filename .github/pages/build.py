@@ -25,6 +25,9 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 HERE = pathlib.Path(__file__).resolve().parent
 
 REPO_URL = "https://github.com/barkz/glean-code-cli"
+# What the browser tab says. Deliberately the command you type, not the prose
+# title -- the hidden <h1> below still carries the product name.
+SITE_TITLE = "glean_code_cli"
 BLOB_URL = REPO_URL + "/blob/main/"
 
 # Directories copied next to index.html so relative image paths keep working.
@@ -286,14 +289,14 @@ def build(out_dir=None, root=None):
     markdown = (root / "README.md").read_text(encoding="utf-8")
     template = (HERE / "template.html").read_text(encoding="utf-8")
 
-    title = page_title(markdown)
+    heading = page_title(markdown)
     content = render(markdown)
     if "<h1" not in content:
         # The README leads with the wordmark image; keep a real heading for
         # screen readers and search engines.
-        content = '<h1 class="sr-only">%s</h1>\n\n%s' % (title, content)
+        content = '<h1 class="sr-only">%s</h1>\n\n%s' % (heading, content)
 
-    page = template.replace("{{TITLE}}", title)
+    page = template.replace("{{TITLE}}", SITE_TITLE)
     page = page.replace("{{REPO_URL}}", REPO_URL)
     page = page.replace("{{CONTENT}}", content)
 
