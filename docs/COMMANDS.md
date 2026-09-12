@@ -1,6 +1,6 @@
 # Command Reference
 
-Detailed reference for every slash command in Glean Code. Looking for a quick overview? See the [README's Commands at a glance](../README.md#commands-at-a-glance).
+Detailed reference for every slash command in Glean Code. Looking for a quick overview? See the [command index](COMMAND_INDEX.md).
 
 Commands marked **Mock mode** below read from the built-in fake corpus when no credentials are configured — seventy interlinked documents spread evenly across five faux datasources (`gdrive`, `confluence`, `jira`, `github`, `slack` — 14 each). Full inventory and the people roster: [Mock Corpus](MOCK_CORPUS.md).
 

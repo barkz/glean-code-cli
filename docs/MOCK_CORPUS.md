@@ -9,8 +9,8 @@
 > Glean index, and both say so in every response.
 
 
-Reference for the fake corpus that backs **mock mode**. See [Mock corpus](../README.md#mock-mode)
-in the README for the short version, and [Command Reference](COMMANDS.md) for the commands themselves.
+Reference for the fake corpus that backs **mock mode**. See [Configuration](CONFIGURATION.md#modes)
+for how modes resolve, and the [Command Reference](COMMANDS.md) for the commands themselves.
 
 Mock mode is what runs when no Client API credentials are configured — no `/auth` session
 and no `/login` token — or when you force it with `/mode mock`. Instead of returning
@@ -361,7 +361,7 @@ shortcuts, answers, insights — returns its own realistic shapes and does not r
 corpus. Indexing mock mode is documented separately in
 [Mock mode for indexing](INDEXING.md#mock-mode-for-indexing).
 
-The [MCP server](../README.md#mcp-server) forces `mode = "live"` and ignores the `mode` in
+The [MCP server](MCP.md) forces `mode = "live"` and ignores the `mode` in
 config, so agents get real data unless you explicitly start the server with `GLEAN_MOCK=1`.
 When you do, every tool response is prefixed with a `[MOCK MODE]` banner naming the data as
 fictional — see
