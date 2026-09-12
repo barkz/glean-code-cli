@@ -589,7 +589,28 @@ Four kinds of node, four kinds of edge, and every edge carries the evidence that
 /graph "access review" --datasource confluence --min-shared 3
 ```
 
-**Output** — A terminal summary: node and edge counts by kind, the hubs by degree, connected clusters with the node anchoring each, and the strongest content links with their shared terms. With `--html`, also an interactive page: pan, zoom, drag, and click a node to see every edge and why it exists.
+**Output** — A terminal summary: node and edge counts by kind, the hubs by degree, connected clusters with the node anchoring each, and the strongest content links with their shared terms.
+
+```text
+27 nodes   10 doc  ·  4 person  ·  5 source  ·  8 container
+43 edges   10 authored_by  ·  10 in_source  ·  10 in_container  ·  13 shares_term
+
+hubs
+  ▪ doc       Quarterly Access Review Procedure   9 edges
+  ▪ doc       SEC-241 — Enforce MFA on internal service dashboards   7 edges
+  ◆ person    Nina Kowalski   6 edges
+
+strongest content links
+  Quarterly Access Review Procedure
+    ↓ shares account, long-lived, access, service (5.1)
+  SEC-233 — Rotate service account keys before audit window
+```
+
+With `--html`, also an interactive page — pan, zoom, drag, and click a node to see every edge and why it exists:
+
+![The /graph HTML view with one document selected and its edges listed](../assets/graph_example.png)
+
+Full detail on the model and the scoring: [Knowledge Graph](GRAPH.md).
 
 **Mock mode** — Fully supported. The mock corpus carries an author, datasource and container on all seventy documents, so the graph is complete offline.
 

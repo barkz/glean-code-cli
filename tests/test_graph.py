@@ -305,5 +305,30 @@ class TestGraphCommand(unittest.TestCase):
         self.assertIn("--html", DOCS["graph"]["usage"])
 
 
+class TestDocs(unittest.TestCase):
+    """The screenshot in the docs is an asset like any other: it can go missing."""
+
+    REPO = Path(__file__).resolve().parents[1]
+
+    def test_screenshot_exists_and_is_a_png(self):
+        shot = self.REPO / "assets" / "graph_example.png"
+        self.assertTrue(shot.is_file(), "assets/graph_example.png is missing")
+        self.assertEqual(shot.read_bytes()[:8], b"\x89PNG\r\n\x1a\n")
+
+    def test_docs_reference_the_screenshot_with_a_working_path(self):
+        for name in ("GRAPH.md", "COMMANDS.md"):
+            doc = self.REPO / "docs" / name
+            body = doc.read_text(encoding="utf-8")
+            self.assertIn("../assets/graph_example.png", body, name)
+            # the path is relative to the document, so resolve it from there
+            self.assertTrue((doc.parent / "../assets/graph_example.png").resolve().is_file())
+
+    def test_screenshot_has_alt_text(self):
+        body = (self.REPO / "docs" / "GRAPH.md").read_text(encoding="utf-8")
+        line = next(l for l in body.split("\n") if "graph_example.png" in l)
+        alt = line[line.index("![") + 2:line.index("]")]
+        self.assertGreater(len(alt), 20, "alt text should describe the image")
+
+
 if __name__ == "__main__":
     unittest.main()

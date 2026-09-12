@@ -83,7 +83,15 @@ edges in score order.
 ## The HTML view
 
 `--html <path>` writes a self-contained page: one file, no CDN, no framework, no network —
-the same constraint `/flow timeline` works under. Inside it:
+the same constraint `/flow timeline` works under.
+
+![The /graph HTML view: a force-directed graph of the access review result set, with one document selected and its edges listed](../assets/graph_example.png)
+
+*`/graph "access review" --html access.html` against the mock corpus, with the hub document
+selected. Its neighbours stay lit while everything else dims, and the panel lists all nine of
+its edges — each with the words that earned it and the score they carry.*
+
+Inside it:
 
 - A force-directed layout, seeded from deterministic ring positions so the same graph opens
   the same way, then relaxed in the browser.
