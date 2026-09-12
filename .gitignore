@@ -16,3 +16,6 @@ new_feature_research/
 .env.*
 *.pem
 auth.json
+
+# Generated site (built from README.md by .github/pages/build.py)
+_site/

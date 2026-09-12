@@ -18,7 +18,7 @@ python3 install.py           # --cli-only, --dev, --prefix, --verify, --uninstal
 # Pipe a single command (non-interactive; cli.py detects a non-tty stdin)
 echo '/search "q2 plan"' | python3 -m glean_code
 
-# Run the full test suite (1,049 tests, stdlib unittest — works with or without pytest)
+# Run the full test suite (1,076 tests, stdlib unittest — works with or without pytest)
 python3 -m pytest tests/
 python3 -m unittest discover tests/
 
