@@ -548,6 +548,57 @@ Search the Glean index and display ranked results with snippets.
 
 ---
 
+#### /graph
+
+Build a knowledge graph over the documents a query returns — how they relate to each other, who wrote them, and where they live. Glean's Client API has no graph endpoint, so the graph is synthesised locally from the search response, which means it works identically in mock, local and live mode.
+
+```text
+/graph <query> [--html <path>] [--page-size <n>] [--datasource <name>] [--min-shared <n>] [--no-terms]
+```
+
+| Parameter | Description |
+| --- | --- |
+| `query` | Free text query. The graph covers the documents it returns, not the whole index. |
+| `--html` | Write a self-contained interactive page to this path. No CDN, no framework, no network. |
+| `--page-size` | How many results to graph. Default 25. |
+| `--datasource` | Restrict the result set to one datasource. |
+| `--min-shared` | Shared terms needed before two documents are linked. Default 2. |
+| `--no-terms` | Structural edges only: author, datasource, container. |
+
+Four kinds of node, four kinds of edge, and every edge carries the evidence that produced it:
+
+| Node | From |
+| --- | --- |
+| `doc` | A document in the result set |
+| `person` | Its author, from `metadata.author` |
+| `source` | The datasource it was indexed from |
+| `container` | The folder, channel or space it lives in |
+
+| Edge | Meaning |
+| --- | --- |
+| `authored_by` | `doc` → `person` |
+| `in_source` | `doc` → `source` |
+| `in_container` | `doc` → `container` |
+| `shares_term` | `doc` ↔ `doc`, weighted by how rare the shared vocabulary is across the result set |
+
+`shares_term` is the interesting one. Terms carried by most of the result set are dropped before scoring — those are usually the query itself — so what remains is what actually distinguishes one pair of documents from the rest. The edge's evidence names the shared words, so a link can be read rather than trusted.
+
+```text
+/graph "quarterly planning"
+/graph "checkout incident" --html incident-graph.html
+/graph "access review" --datasource confluence --min-shared 3
+```
+
+**Output** — A terminal summary: node and edge counts by kind, the hubs by degree, connected clusters with the node anchoring each, and the strongest content links with their shared terms. With `--html`, also an interactive page: pan, zoom, drag, and click a node to see every edge and why it exists.
+
+**Mock mode** — Fully supported. The mock corpus carries an author, datasource and container on all seventy documents, so the graph is complete offline.
+
+**Local mode** — `/search` resolves to the personal index, so the graph covers your own files. Local files have no author metadata, so the graph has no `person` nodes; the command says so rather than leaving you to notice.
+
+**Endpoint** — `POST /rest/api/v1/search` (the graph itself is built locally)
+
+---
+
 #### /datasources.list
 
 List all datasources visible to the current token, derived from a faceted search call.

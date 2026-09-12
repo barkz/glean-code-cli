@@ -68,6 +68,7 @@ python3 install.py && glean    # installed, with a macOS Spotlight app
 | `/index.bulk-documents --path ./docs/ --datasource custom1 --object-type Article --dry-run` | Index a folder, inspecting the payload first |
 | `/metadata.attach --doc-id <id> --group tickets --values owner=alice` | Enrich docs without re-uploading them |
 | `/personal index ~/Documents --label docs` | Index your own files, locally |
+| `/graph "quarterly planning" --html graph.html` | Graph how that content relates — documents, authors, sources |
 | `/flow show` | Draw the investigations you ran |
 
 <table>
@@ -75,6 +76,8 @@ python3 install.py && glean    # installed, with a macOS Spotlight app
 
 ### 🔎 Search &amp; chat
 Search, autocomplete, recommendations, threaded chat, summarize, answers, feedback — plus docs, people, entities, announcements, collections, pins, Go Links, and verification.
+`/graph` turns any result set into a knowledge graph of documents, authors and sources.
+[Knowledge graph](docs/GRAPH.md)
 
 </td><td width="50%" valign="top">
 
@@ -172,11 +175,12 @@ The full Glean Code REPL — slash commands, status bar, mock/live switching, se
 | 📊 **[Insights](docs/INSIGHTS.md)** | Flags, output, and CSV export |
 | 🧪 **[Mock corpus](docs/MOCK_CORPUS.md)** | The offline corpus — inventory, ranking, bring-your-own format |
 | 🏠 **[Local indexing](docs/LOCAL_INDEXING.md)** · **[Personal](docs/PERSONAL.md)** | Index your own folders, search them, keep them current |
+| 🕸️ **[Knowledge graph](docs/GRAPH.md)** | How `/graph` builds nodes and edges, and how shared terms are scored |
 | 🗺️ **[Flow mapper](docs/FLOW_MAPPER.md)** | Capturing investigations, linking them, retention questions |
 | 🔐 **[SSO / OAuth](docs/SSO_OAUTH.md)** · **[Secure tokens](docs/SECURE_TOKENS.md)** | Browser sign-in, secure refs, the masking matrix |
 | 🔌 **[MCP server](docs/MCP.md)** | Glean as native tools in Claude Code, Claude Desktop, Cursor |
 | 🏛️ **[Architecture](docs/ARCHITECTURE.md)** · **[REST paths](docs/REST_PATHS.md)** | Module map, request flow, endpoints, how to add a command |
-| ✅ **[Testing](docs/TESTING.md)** | Running the 1,109-test suite and what it covers |
+| ✅ **[Testing](docs/TESTING.md)** | Running the 1,148-test suite and what it covers |
 | 🛟 **[Support](SUPPORT.md)** · **[Changelog](CHANGELOG.md)** | How to report a bug · release history |
 
 > [!NOTE]

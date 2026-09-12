@@ -17,6 +17,27 @@ CommandDoc = Dict[str, object]
 DOCS: Dict[str, CommandDoc] = {
 
     # ---------------- core shell ----------------
+    "graph": {
+        "summary": ("Knowledge graph over a query's result set — documents, authors, "
+                    "datasources and containers, with the evidence behind every edge."),
+        "usage": ("/graph <query> [--html <path>] [--page-size <n>] "
+                  "[--datasource <name>] [--min-shared <n>] [--no-terms]"),
+        "params": [
+            ["query", "Free text query. The graph covers the documents it returns."],
+            ["--html", "Write a self-contained interactive page to this path."],
+            ["--page-size", "How many results to graph. Default 25."],
+            ["--datasource", "Restrict the result set to one datasource."],
+            ["--min-shared", "Shared terms needed before two documents are linked. Default 2."],
+            ["--no-terms", "Only structural edges: author, datasource, container."],
+        ],
+        "examples": [
+            '/graph "quarterly planning"',
+            '/graph "checkout incident" --html incident-graph.html',
+            '/graph "access review" --datasource confluence --min-shared 3',
+        ],
+        "endpoint": ("POST /rest/api/v1/search — the graph is built locally from the "
+                     "results; there is no graph endpoint in the Client API."),
+    },
     "help": {
         "summary": "Show help for a command, or list all commands.",
         "usage": "/help [command]",
