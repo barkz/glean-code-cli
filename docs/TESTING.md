@@ -1,6 +1,31 @@
-# Test Harness
+# Testing
 
-Notes on the test suite added during development of glean-code-cli. See [Running tests](../README.md#running-tests) for the user-facing instructions on how to run the tests.
+## Running the tests
+
+The test suite uses only the standard library (no mocking frameworks, no network calls).
+
+```bash
+python3 -m pytest tests/
+```
+
+Or without pytest:
+
+```bash
+python3 -m unittest discover tests/
+```
+
+On macOS, keep bytecode caches out of the working tree — Spotlight indexes stray `.pyc`
+files, and they outrank the `Glean Code.app` launcher in `Cmd+Space`:
+
+```bash
+export PYTHONPYCACHEPREFIX="$HOME/.cache/python"
+```
+
+1,049 tests covering the client and every mock response, commands and dispatch, config, UI, auth, completion, help docs, the mock corpus, indexing-walk, scaffold, the installer, the MCP server, the flow mapper, and Glean Personal (text extraction, the index, the content graph, ranking explanations, local mode, and the local MCP tools).
+
+## Development notes
+
+Notes on the test suite added during development of glean-code-cli.
 
 All 1,049 tests pass. Here's what was added across the development passes:
 
