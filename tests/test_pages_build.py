@@ -102,6 +102,22 @@ class TestBlocks(unittest.TestCase):
         self.assertIn("<thead><tr><th>Flag</th><th>Effect</th></tr></thead>", out)
         self.assertIn("<code>--dev</code>", out)
 
+    def test_command_table_is_tagged(self):
+        out = build.render(
+            "| Command | What it does |\n| --- | --- |\n"
+            "| `/search \"x\"` | Search |\n| `/flow show` | Draw |")
+        self.assertIn('<table class="cmd">', out)
+
+    def test_a_prose_table_is_not_a_command_table(self):
+        out = build.render("|  |  |\n| --- | --- |\n| ⚡ **Fast** | it is quick |")
+        self.assertIn("<table>", out)
+        self.assertNotIn('class="cmd"', out)
+
+    def test_command_table_needs_every_row_to_lead_with_code(self):
+        body = [["`/search`", "Search"], ["plain text", "Nope"]]
+        self.assertFalse(build.is_command_table(body))
+        self.assertTrue(build.is_command_table([["`/a`", "x"], ["`/b`", "y"]]))
+
     def test_divider_detection(self):
         self.assertTrue(build.is_table_divider(["---", ":---:"]))
         self.assertFalse(build.is_table_divider(["Flag", "Effect"]))
@@ -221,6 +237,21 @@ class TestBuild(unittest.TestCase):
             stale.write_text("old", encoding="utf-8")
             build.build(out_dir=out_dir)
             self.assertFalse(stale.exists())
+
+    def test_no_code_block_is_wide_enough_to_overflow(self):
+        """Long space-aligned listings used to force a horizontal scroll inside
+        the card. Command listings belong in tables, which wrap; code blocks
+        stay narrow enough to fit the content column."""
+        import html as html_mod
+        import re as re_mod
+
+        with tempfile.TemporaryDirectory() as tmp:
+            page = (build.build(out_dir=pathlib.Path(tmp) / "_site") / "index.html").read_text()
+        widest = 0
+        for block in re_mod.findall(r"<pre><code[^>]*>(.*?)</code></pre>", page, re_mod.S):
+            for line in html_mod.unescape(block).split("\n"):
+                widest = max(widest, len(line))
+        self.assertLessEqual(widest, 80, "a code block is %d chars wide" % widest)
 
     def test_no_unresolved_repo_relative_links_remain(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -44,12 +44,12 @@ python3 install.py && glean    # installed, with a macOS Spotlight app
 ```
 
 ```text
-/login acme                    # browser SSO — or /login --token <bearer_token>
+/login acme
 /search "quarterly planning"
 /chat "summarise the Q2 plan"
 ```
 
-No login? You're still up and running — mock mode serves ranked results from a real corpus.
+`/login acme` opens browser SSO; `/login --token <bearer_token>` takes a Glean-issued token instead. No login at all? You're still up and running — mock mode serves ranked results from a real corpus.
 
 **→ [Install guide](docs/INSTALL.md)** · **[Configuration](docs/CONFIGURATION.md)** · **[Command index](docs/COMMAND_INDEX.md)**
 
@@ -57,20 +57,18 @@ No login? You're still up and running — mock mode serves ranked results from a
 
 ## What you can do
 
-```text
-?login into acme and search for "Q2 plan"            ← natural language, planned + confirmed
-/search "checkout incident" --datasource jira        ← search every connected source
-/chat "what changed in the pricing doc?"             ← threaded Glean Assistant chat
-/agents.run <agent-id> "draft the release notes"     ← run agents, call tools
-/insights --all --export insights.csv                ← usage metrics straight to CSV
-/debug.user gdrive alice@example.com                 ← why can't Alice see that doc?
-/index.bulk-documents --path ./docs/ --datasource custom1 --object-type Article --dry-run
-                                                     ← index a folder, inspect the payload first
-/metadata.attach --doc-id <id> --group tickets --values owner=alice
-                                                     ← enrich docs without re-uploading
-/personal index ~/Documents --label docs             ← index your own files, locally
-/flow show                                           ← draw the investigations you ran
-```
+| Command | What it does |
+| --- | --- |
+| `?login into acme and search for "Q2 plan"` | Natural language, planned and confirmed before anything runs |
+| `/search "checkout incident" --datasource jira` | Search every connected source |
+| `/chat "what changed in the pricing doc?"` | Threaded Glean Assistant chat |
+| `/agents.run <agent-id> "draft the release notes"` | Run agents, call tools |
+| `/insights --all --export insights.csv` | Usage metrics straight to CSV |
+| `/debug.user gdrive alice@example.com` | Why can't Alice see that doc? |
+| `/index.bulk-documents --path ./docs/ --datasource custom1 --object-type Article --dry-run` | Index a folder, inspecting the payload first |
+| `/metadata.attach --doc-id <id> --group tickets --values owner=alice` | Enrich docs without re-uploading them |
+| `/personal index ~/Documents --label docs` | Index your own files, locally |
+| `/flow show` | Draw the investigations you ran |
 
 <table>
 <tr><td width="50%" valign="top">
@@ -138,12 +136,12 @@ Sessions run down a rail in the order you worked; each connection branches off i
 
 Mock mode proves every command works offline against a fictional corpus. `/personal` points the same machinery at content that is actually yours.
 
-```text
-/personal index ~/Documents --label docs
-/personal search "salary bands" --explain    # which terms hit, which missed, and the bm25 score
-/personal link && /personal related roadmap  # a phrase graph, with shared phrases as evidence
-/mode local                                  # /search and /chat now answer from your files
-```
+| Command | What it does |
+| --- | --- |
+| `/personal index ~/Documents --label docs` | Build the index from a folder |
+| `/personal search "salary bands" --explain` | Which terms hit, which missed, and the bm25 score |
+| `/personal link && /personal related roadmap` | A phrase graph, with shared phrases as evidence |
+| `/mode local` | `/search` and `/chat` now answer from your files |
 
 SQLite FTS5, incremental on a content hash, `.docx`/`.xlsx`/`.pptx` read straight out of their ZIP-XML with the stdlib. **No server, no daemon, no Docker, no network, no credentials** — the whole index is one file you can copy between machines. Answers are labelled `[LOCAL INDEX]` and quote your passages verbatim; the REPL has no model in-process and will not invent prose. Four MCP tools expose the same index to an agent that does.
 
@@ -178,7 +176,7 @@ The full Glean Code REPL — slash commands, status bar, mock/live switching, se
 | 🔐 **[SSO / OAuth](docs/SSO_OAUTH.md)** · **[Secure tokens](docs/SECURE_TOKENS.md)** | Browser sign-in, secure refs, the masking matrix |
 | 🔌 **[MCP server](docs/MCP.md)** | Glean as native tools in Claude Code, Claude Desktop, Cursor |
 | 🏛️ **[Architecture](docs/ARCHITECTURE.md)** · **[REST paths](docs/REST_PATHS.md)** | Module map, request flow, endpoints, how to add a command |
-| ✅ **[Testing](docs/TESTING.md)** | Running the 1,090-test suite and what it covers |
+| ✅ **[Testing](docs/TESTING.md)** | Running the 1,094-test suite and what it covers |
 | 🛟 **[Support](SUPPORT.md)** · **[Changelog](CHANGELOG.md)** | How to report a bug · release history |
 
 > [!NOTE]

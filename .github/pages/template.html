@@ -203,6 +203,18 @@
   .doc td + td { color: var(--ink-2); }
   .doc td p { color: var(--ink-2); }
   .doc td :last-child { margin-bottom: 0; }
+  /* command listings: the command needs room, and must wrap rather than scroll */
+  .doc table.cmd td:first-child { width: 50%; font-weight: 400; }
+  .doc table.cmd td:first-child code {
+    background: none; padding: 0; font-size: .8em;
+    color: var(--accent-ink);
+    /* break between words only: hyphens are line-break opportunities in
+       Unicode, which would split "--object-type" after the dashes.
+       break-word stays as the fallback for a token wider than the column. */
+    word-break: keep-all; overflow-wrap: break-word;
+  }
+  .doc table.cmd td + td { color: var(--ink-2); }
+
   /* the README's two-column feature table is layout, not data */
   .doc td[width="50%"] { width: 50%; font-weight: 400; padding: 20px 22px; }
   .doc td[width="50%"] p { color: var(--ink-2); max-width: 46ch; }
