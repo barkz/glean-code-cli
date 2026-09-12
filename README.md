@@ -176,7 +176,7 @@ The full Glean Code REPL — slash commands, status bar, mock/live switching, se
 | 🔐 **[SSO / OAuth](docs/SSO_OAUTH.md)** · **[Secure tokens](docs/SECURE_TOKENS.md)** | Browser sign-in, secure refs, the masking matrix |
 | 🔌 **[MCP server](docs/MCP.md)** | Glean as native tools in Claude Code, Claude Desktop, Cursor |
 | 🏛️ **[Architecture](docs/ARCHITECTURE.md)** · **[REST paths](docs/REST_PATHS.md)** | Module map, request flow, endpoints, how to add a command |
-| ✅ **[Testing](docs/TESTING.md)** | Running the 1,103-test suite and what it covers |
+| ✅ **[Testing](docs/TESTING.md)** | Running the 1,108-test suite and what it covers |
 | 🛟 **[Support](SUPPORT.md)** · **[Changelog](CHANGELOG.md)** | How to report a bug · release history |
 
 > [!NOTE]

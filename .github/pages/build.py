@@ -224,7 +224,12 @@ def render(markdown):
         if heading:
             level = len(heading.group(1))
             text = heading.group(2).strip()
-            out.append('<h%d id="%s">%s</h%d>' % (level, slug(text), inline(text), level))
+            anchor = slug(text)
+            body = inline(text)
+            if anchor and "<a " not in body:
+                # every heading is a link to itself, so a section can be shared
+                body = '<a class="anchor" href="#%s">%s</a>' % (anchor, body)
+            out.append('<h%d id="%s">%s</h%d>' % (level, anchor, body, level))
             seen_prose = True
             i += 1
             continue
