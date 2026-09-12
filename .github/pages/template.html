@@ -103,15 +103,25 @@
 
   /* ---- prose ---- */
   h1, h2, h3 {
-    font-family: var(--mono); font-weight: 700;
-    letter-spacing: -0.035em; line-height: 1.25; text-wrap: balance;
+    font-family: var(--mono); font-weight: 500;
+    letter-spacing: -0.03em; line-height: 1.25; text-wrap: balance;
   }
+
+  /* headings link to themselves, prefixed with their markdown level */
+  .anchor { color: inherit; text-decoration: none; }
+  h2 .anchor::before, h3 .anchor::before {
+    color: var(--ink-3); font-weight: 400; margin-right: .5ch;
+  }
+  h2 .anchor::before { content: "##"; }
+  h3 .anchor::before { content: "###"; }
+  .anchor:hover { text-decoration: none; }
+  .anchor:hover::before { color: var(--accent-ink); }
   h1 { font-size: clamp(1.9rem, 4.6vw, 2.3rem); margin: 0 0 .3em; }
   h2 {
     font-size: 1.26rem; margin: 2.2em 0 1em;
     padding-bottom: .4em; border-bottom: 1px solid var(--rule);
   }
-  h3 { font-size: 1rem; font-weight: 500; letter-spacing: -0.025em; margin: 1.5em 0 .45em; }
+  h3 { font-size: 1rem; letter-spacing: -0.025em; margin: 1.5em 0 .45em; }
 
   /* the wordmark leads the page; the h1 stays for readers and search */
   .sr-only {
@@ -209,7 +219,11 @@
     border: 1px solid var(--rule); border-radius: 8px;
   }
   .doc th, .doc td { text-align: left; padding: 15px 18px; vertical-align: top; }
-  .doc thead th { background: var(--surface-2); font-weight: 600; border-bottom: 1px solid var(--rule); }
+  .doc thead th {
+    background: var(--surface-2); border-bottom: 1px solid var(--rule);
+    font-family: var(--mono); font-weight: 500; font-size: .84rem;
+    letter-spacing: -0.02em; color: var(--ink-2);
+  }
   .doc tbody tr + tr td { border-top: 1px solid var(--rule-soft); }
   .doc td:first-child { font-weight: 600; }
   /* key/value rows: hold the value column to a readable measure */

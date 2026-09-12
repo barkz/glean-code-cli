@@ -88,6 +88,21 @@ class TestBlocks(unittest.TestCase):
     def test_heading_gets_an_anchor_id(self):
         self.assertIn('<h2 id="quickstart">', build.render("## Quickstart"))
 
+    def test_heading_links_to_itself(self):
+        out = build.render("## Quickstart")
+        self.assertEqual(
+            out, '<h2 id="quickstart"><a class="anchor" href="#quickstart">Quickstart</a></h2>')
+
+    def test_every_heading_level_gets_an_anchor(self):
+        out = build.render("# One\n\n## Two\n\n### Three")
+        self.assertEqual(out.count('class="anchor"'), 3)
+        self.assertIn('href="#three"', out)
+
+    def test_a_heading_that_already_holds_a_link_is_not_double_wrapped(self):
+        out = build.render("## See [the docs](docs/COMMANDS.md)")
+        self.assertNotIn('class="anchor"', out)
+        self.assertEqual(out.count("<a "), 1)
+
     def test_fenced_code_is_escaped_and_tagged(self):
         out = build.render("```bash\necho '<a>' && x\n```")
         self.assertIn('<pre><code class="language-bash">', out)
@@ -136,7 +151,8 @@ class TestBlocks(unittest.TestCase):
     def test_raw_html_passes_through_untouched(self):
         out = build.render('<div align="center">\n\n# Glean Code\n\n</div>')
         self.assertIn('<div align="center">', out)
-        self.assertIn('<h1 id="glean-code">Glean Code</h1>', out)
+        self.assertIn(
+            '<h1 id="glean-code"><a class="anchor" href="#glean-code">Glean Code</a></h1>', out)
         self.assertIn("</div>", out)
 
     def test_horizontal_rule(self):
@@ -282,6 +298,15 @@ class TestTemplate(unittest.TestCase):
     def test_tagline_is_set_in_the_mono_face(self):
         rule = self.css[self.css.index('[align="center"] .banner + p {'):]
         self.assertIn("font-family: var(--mono)", rule[:rule.index("}")])
+
+    def test_headings_carry_their_markdown_level(self):
+        self.assertIn('h2 .anchor::before { content: "##"; }', self.css)
+        self.assertIn('h3 .anchor::before { content: "###"; }', self.css)
+
+    def test_headings_and_table_headers_use_the_mono_face(self):
+        for selector in ("h1, h2, h3 {", ".doc thead th {"):
+            rule = self.css[self.css.index(selector):]
+            self.assertIn("font-family: var(--mono)", rule[:rule.index("}")], selector)
 
     def test_image_rows_do_not_stretch_their_items(self):
         row = self.css[self.css.index("p.imgrow {"):]
