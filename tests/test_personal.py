@@ -136,6 +136,47 @@ class TestNoFts5Fallback(_Index):
         doc = personal.fetch("work-comp", db=self.db)
         self.assertIn("Salary bands", doc["text"])
 
+    def test_the_fallback_scans_past_the_fts5_candidate_window(self):
+        """Regression: the scan was capped at 200 rows for both stores.
+
+        The plain store cannot rank in SQL — scoring happens in Python after the
+        fetch — so a candidate window sized for FTS5 silently lost recall on any
+        corpus bigger than the window.
+        """
+        big = self.root / "big"
+        big.mkdir()
+        for i in range(130):
+            (big / f"f{i}.md").write_text(f"# Doc {i}\n\n" + "filler payments text here. " * 100)
+        (big / "needle.md").write_text("# Needle\n\nThe rare token zebra appears only here.\n")
+        personal.index_source(str(big), label="big", db=self.db)
+        conn = personal.connect(self.db)
+        chunks = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+        conn.close()
+        self.assertGreater(chunks, 200)
+
+        # Reachable on its own term...
+        self.assertEqual([h["doc_id"] for h in personal.search("zebra", db=self.db)],
+                         ["big-needle"])
+        # ...and alongside a term that 130 other documents share. This needs all
+        # three fixes together: the scan window, a prefilter covering every term,
+        # and rarity weighting so the common term does not bury the rare one.
+        for query in ("payments zebra", "zebra payments"):
+            with self.subTest(query=query):
+                hits = [h["doc_id"] for h in personal.search(query, db=self.db)]
+                self.assertIn("big-needle", hits, query)
+                self.assertEqual(hits[0], "big-needle", query)
+
+    def test_fallback_weights_favour_the_rarer_term(self):
+        rows = [{"text": "common word here", "title": "", "heading": ""}] * 9
+        rows.append({"text": "rare zebra here", "title": "", "heading": ""})
+        weights = personal._fallback_weights(rows, ["common", "zebra"])
+        self.assertGreater(weights["zebra"], weights["common"])
+
+    def test_python_score_without_weights_still_works(self):
+        # weights=None is the documented unweighted path.
+        self.assertGreater(
+            personal._python_score("salary bands", "Comp", "", ["salary"]), 0)
+
     def test_an_existing_database_keeps_its_store_choice(self):
         personal.connect(self.db).close()
         # Even with FTS5 working again, switching would orphan every chunk.
@@ -335,6 +376,20 @@ class TestIndexSource(_Index):
         self.assertEqual(len(ids), len(set(ids)))
         self.assertEqual(len(ids), 2)
 
+    def test_doc_ids_are_unique_across_sources(self):
+        """Regression: doc_id is what users and agents pass back, and
+        _resolve_doc looks it up without a source, so two folders defaulting to
+        the same label both minted the same id and every lookup returned one."""
+        for parent in ("a", "b"):
+            folder = self.root / parent / "docs"
+            folder.mkdir(parents=True)
+            (folder / "readme.md").write_text(f"readme belonging to {parent}")
+            personal.index_source(str(folder), db=self.db)   # label defaults to "docs"
+        ids = [d["doc_id"] for d in personal.list_documents(db=self.db)]
+        self.assertEqual(len(ids), len(set(ids)), ids)
+        for doc_id in ids:
+            self.assertIsNotNone(personal.fetch(doc_id, db=self.db))
+
     def test_progress_callback_sees_every_file(self):
         seen = []
         self.index(progress=seen.append)
@@ -395,6 +450,26 @@ class TestSearch(_Index):
     def test_an_all_stopword_query_returns_nothing(self):
         self.assertEqual(personal.search("the and of", db=self.db), [])
 
+    def test_non_ascii_content_is_searchable(self):
+        """Regression: an ASCII-only term regex made non-English text unreachable.
+
+        "München" tokenized to "nchen" and a CJK query to nothing at all, so the
+        content was indexed but could never be found.
+        """
+        self.write("intl.md", "# Standorte\n\n"
+                              "Das Büro in München eröffnet im Frühling. "
+                              "Zürich folgt. 日本語のドキュメント。 Café Ubersicht.\n")
+        self.index()
+        for query in ("München", "Zürich", "Frühling", "日本語", "Café"):
+            with self.subTest(query=query):
+                hits = [h["doc_id"] for h in personal.search(query, db=self.db)]
+                self.assertIn("work-intl", hits, query)
+
+    def test_non_ascii_terms_survive_tokenisation(self):
+        self.assertEqual(personal._tokens("München Zürich café"),
+                         ["münchen", "zürich", "café"])
+        self.assertEqual(personal._tokens("日本語"), ["日本語"])
+
     def test_results_expose_a_file_url(self):
         hit = personal.search("calibration", db=self.db)[0]
         self.assertTrue(hit["url"].startswith("file://"))
@@ -443,6 +518,19 @@ class TestFetchAndList(_Index):
         self.index()
         headings = personal.fetch("work-long", db=self.db)["headings"]
         self.assertEqual(headings, ["Alpha", "Beta"])
+
+    def test_fetch_cuts_inside_an_oversized_first_chunk(self):
+        """Regression: bailing out returned an empty body marked truncated.
+
+        Any max_chars below the first chunk's length hit this, which is the
+        common case for a small budget against a real document.
+        """
+        self.write("long.md", "# Long\n\n" + "word " * 400)
+        self.index()
+        doc = personal.fetch("work-long", max_chars=500, db=self.db)
+        self.assertTrue(doc["truncated"])
+        self.assertGreater(len(doc["text"]), 100)
+        self.assertLessEqual(len(doc["text"]), 500)
 
     def test_fetch_of_an_unknown_reference_is_none(self):
         self.assertIsNone(personal.fetch("nothing-like-this", db=self.db))
@@ -679,25 +767,54 @@ class TestGleanShapes(_Index):
         self.assertIn(personal.LOCAL_BANNER, text)
         self.assertEqual(resp["messages"][0]["citations"], [])
 
-    def test_documents_response_keys_by_the_reference_given(self):
+    def test_documents_response_returns_a_list_like_the_client_api(self):
+        # A map here made flow.enrich iterate dict keys and enrich nothing.
         resp = personal.documents_response(
             {"documentSpecs": [{"id": "work-comp"}]}, db=self.db)
-        self.assertIn("work-comp", resp["documents"])
-        self.assertIn("content", resp["documents"]["work-comp"])
+        self.assertIsInstance(resp["documents"], list)
+        doc = resp["documents"][0]
+        self.assertEqual(doc["id"], "work-comp")
+        self.assertIn("content", doc)
+
+    def test_documents_response_shape_matches_the_mock(self):
+        from glean_code.client import _mock_response
+        mock_docs = _mock_response("/getdocuments",
+                                   {"documentSpecs": [{"id": "acme-1"}]})["documents"]
+        local_docs = personal.documents_response(
+            {"documentSpecs": [{"id": "work-comp"}]}, db=self.db)["documents"]
+        self.assertIs(type(local_docs), type(mock_docs))
+        for key in ("id", "title", "url"):
+            self.assertIn(key, local_docs[0])
 
     def test_documents_response_accepts_a_urls_list(self):
         url = personal.fetch("work-notes", db=self.db)["url"]
         resp = personal.documents_response({"urls": [url]}, db=self.db)
-        self.assertIn(url, resp["documents"])
+        self.assertEqual([d["requestedRef"] for d in resp["documents"]], [url])
 
     def test_documents_response_ignores_unknown_references(self):
         resp = personal.documents_response({"ids": ["nope"]}, db=self.db)
-        self.assertEqual(resp["documents"], {})
+        self.assertEqual(resp["documents"], [])
 
-    def test_autocomplete_offers_titles_and_headings(self):
+    def test_autocomplete_uses_the_key_the_renderer_reads(self):
+        # cmd_autocomplete and the mock both read `suggestion`; emitting `text`
+        # printed "(no suggestions)" despite real matches.
         resp = personal.autocomplete_response("cal", db=self.db)
         self.assertTrue(resp["results"])
-        self.assertIn("text", resp["results"][0])
+        self.assertIn("suggestion", resp["results"][0])
+        self.assertNotIn("text", resp["results"][0])
+
+    def test_autocomplete_shape_matches_the_mock(self):
+        from glean_code.client import _mock_response
+        mock_keys = set(_mock_response("/autocomplete", {"query": "pay"})["results"][0])
+        local_keys = set(personal.autocomplete_response("cal", db=self.db)["results"][0])
+        self.assertEqual(local_keys, mock_keys)
+
+    def test_autocomplete_renders_in_the_repl(self):
+        session = Session(Config(mode="local"))
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            HANDLERS["autocomplete"](session, ["cal"], {})
+        self.assertNotIn("(no suggestions)", buf.getvalue())
 
     def test_ago_formats_relative_times(self):
         now = time.time()
@@ -841,8 +958,8 @@ class TestLocalMode(_Index):
 
     def test_autocomplete_and_getdocuments_route_locally(self):
         self.assertTrue(self.client.autocomplete("cal")["localIndex"])
-        self.assertIn("work-comp",
-                      self.client.get_documents(ids=["work-comp"])["documents"])
+        docs = self.client.get_documents(ids=["work-comp"])["documents"]
+        self.assertEqual([d["id"] for d in docs], ["work-comp"])
 
     def test_an_endpoint_with_no_local_equivalent_explains_itself(self):
         with self.assertRaises(GleanError) as ctx:

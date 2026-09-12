@@ -18,9 +18,38 @@ _W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 _A = "http://schemas.openxmlformats.org/drawingml/2006/main"
 _S = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 
+_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+_PKG = "http://schemas.openxmlformats.org/package/2006/relationships"
+_PML = "http://schemas.openxmlformats.org/presentationml/2006/main"
+
 _CORE = ('<cp:coreProperties xmlns:cp="x" '
          'xmlns:dc="http://purl.org/dc/elements/1.1/">'
          '<dc:title>{}</dc:title></cp:coreProperties>')
+
+
+def _rels_part(pairs):
+    """A .rels part mapping rId -> target, as both Office formats use."""
+    items = "".join(f'<Relationship Id="{rid}" Target="{target}" Type="x"/>'
+                    for rid, target in pairs)
+    return f'<Relationships xmlns="{_PKG}">{items}</Relationships>'
+
+
+def _workbook(sheets):
+    """workbook.xml listing (name, rId) in workbook order."""
+    items = "".join(f'<sheet name="{n}" r:id="{r}"/>' for n, r in sheets)
+    return f'<workbook xmlns="{_S}" xmlns:r="{_R}"><sheets>{items}</sheets></workbook>'
+
+
+def _sheet_xml(text):
+    return (f'<worksheet xmlns="{_S}"><sheetData><row>'
+            f'<c t="inlineStr"><is><t>{text}</t></is></c>'
+            '</row></sheetData></worksheet>')
+
+
+def _presentation(rids):
+    items = "".join(f'<p:sldId r:id="{r}"/>' for r in rids)
+    return (f'<p:presentation xmlns:p="{_PML}" xmlns:r="{_R}">'
+            f'<p:sldIdLst>{items}</p:sldIdLst></p:presentation>')
 
 
 class _Tmp(unittest.TestCase):
@@ -142,8 +171,8 @@ class TestOfficeFormats(_Tmp):
 
     def test_xlsx_shared_strings_inline_and_sheet_names(self):
         path = self.zipped("a.xlsx", {
-            "xl/workbook.xml": f'<workbook xmlns="{_S}"><sheets>'
-                               '<sheet name="Headcount"/></sheets></workbook>',
+            "xl/workbook.xml": _workbook([("Headcount", "rId1")]),
+            "xl/_rels/workbook.xml.rels": _rels_part([("rId1", "worksheets/sheet1.xml")]),
             "xl/sharedStrings.xml": f'<sst xmlns="{_S}">'
                                     '<si><t>Region</t></si><si><t>EMEA</t></si></sst>',
             "xl/worksheets/sheet1.xml": f'<worksheet xmlns="{_S}"><sheetData>'
@@ -158,6 +187,37 @@ class TestOfficeFormats(_Tmp):
         self.assertIn("EMEA", text)
         self.assertIn("42", text)
         self.assertIn("inline", text)
+
+    def test_xlsx_sheet_names_follow_relationships_not_position(self):
+        """Regression: a reordered workbook must not pair names with the wrong sheet.
+
+        Position in workbook.xml is unrelated to the sheetN.xml number. Keying by
+        position produced "## Beta" above sheet1.xml's content, and sheet names
+        carry bm25 weight.
+        """
+        path = self.zipped("a.xlsx", {
+            "xl/workbook.xml": _workbook([("Beta", "rId2"), ("Alpha", "rId1")]),
+            "xl/_rels/workbook.xml.rels": _rels_part([
+                ("rId1", "worksheets/sheet1.xml"),
+                ("rId2", "worksheets/sheet2.xml")]),
+            "xl/worksheets/sheet1.xml": _sheet_xml("ALPHA-CONTENT"),
+            "xl/worksheets/sheet2.xml": _sheet_xml("BETA-CONTENT"),
+        })
+        text, _ = extract.extract(path)
+        self.assertIn("## Beta\nBETA-CONTENT", text)
+        self.assertIn("## Alpha\nALPHA-CONTENT", text)
+        # Workbook order, not filename order.
+        self.assertLess(text.index("Beta"), text.index("Alpha"))
+
+    def test_xlsx_without_relationships_uses_generic_labels(self):
+        """A real name paired with the wrong sheet is worse than no name."""
+        path = self.zipped("a.xlsx", {
+            "xl/workbook.xml": _workbook([("Beta", "rId2"), ("Alpha", "rId1")]),
+            "xl/worksheets/sheet1.xml": _sheet_xml("ALPHA-CONTENT"),
+        })
+        text, _ = extract.extract(path)
+        self.assertIn("## Sheet 1", text)
+        self.assertNotIn("Beta", text)
 
     def test_xlsx_out_of_range_shared_string_does_not_raise(self):
         path = self.zipped("a.xlsx", {
@@ -178,9 +238,28 @@ class TestOfficeFormats(_Tmp):
             "ppt/slides/slide2.xml": f'<sld xmlns:a="{_A}"><a:t>Second</a:t></sld>',
         })
         text, _ = extract.extract(path)
-        # Numeric ordering, not lexicographic: slide2 precedes slide10.
+        # No relationships: numeric filename ordering, not lexicographic.
         self.assertLess(text.index("Second"), text.index("Tenth"))
         self.assertIn("## Slide 2", text)
+
+    def test_pptx_order_and_numbering_follow_sldidlst(self):
+        """Regression: slideN.xml is creation order, not display order.
+
+        Move slide 1 to the end of a deck and the file keeps its name, so citing
+        "Slide 1" would point a reader at the wrong slide.
+        """
+        path = self.zipped("a.pptx", {
+            "ppt/presentation.xml": _presentation(["rId3", "rId1"]),
+            "ppt/_rels/presentation.xml.rels": _rels_part([
+                ("rId1", "slides/slide1.xml"),
+                ("rId3", "slides/slide3.xml")]),
+            "ppt/slides/slide1.xml": f'<sld xmlns:a="{_A}"><a:t>WAS-FIRST</a:t></sld>',
+            "ppt/slides/slide3.xml": f'<sld xmlns:a="{_A}"><a:t>NOW-FIRST</a:t></sld>',
+        })
+        text, _ = extract.extract(path)
+        # slide3.xml is presented first, so it is "Slide 1".
+        self.assertIn("## Slide 1\nNOW-FIRST", text)
+        self.assertIn("## Slide 2\nWAS-FIRST", text)
 
     def test_pptx_without_slides_raises(self):
         with self.assertRaises(extract.ExtractError):

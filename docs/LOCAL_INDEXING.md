@@ -306,7 +306,8 @@ can be read without adding a dependency, which would cost the "one portable
 file, nothing to install" property this feature is built around.
 
 Also worth knowing: search matches whole words and prefixes, not substrings.
-Searching `calib` finds "calibration", but `libration` does not.
+Searching `calib` finds "calibration", but `libration` does not. Non-English
+text works — `München`, `Zürich` and CJK content all index and search normally.
 
 ## Start over, or remove a folder
 

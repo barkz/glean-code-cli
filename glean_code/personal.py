@@ -454,15 +454,23 @@ def _sha256(path: Path) -> str:
 
 def _unique_doc_id(conn: sqlite3.Connection, source_id: int,
                    base: str, rel_path: str) -> str:
-    """A stable slug, disambiguated when two paths slug to the same string."""
+    """A stable slug, unique across every source.
+
+    Global rather than per-source because this id is what `/personal show`,
+    `local_fetch` and search results hand back, and `_resolve_doc` looks it up
+    without a source. Two folders that default to the same label — `~/a/docs`
+    and `~/b/docs` — would otherwise both mint `docs-readme`, and every lookup
+    would silently return whichever came first.
+    """
     base = base or "doc"
     candidate = base
     n = 2
     while True:
         row = conn.execute(
-            "SELECT rel_path FROM documents WHERE source_id = ? AND doc_id = ?",
-            (source_id, candidate)).fetchone()
-        if row is None or row["rel_path"] == rel_path:
+            "SELECT source_id, rel_path FROM documents WHERE doc_id = ?",
+            (candidate,)).fetchone()
+        if row is None or (row["source_id"] == source_id
+                           and row["rel_path"] == rel_path):
             return candidate
         candidate = f"{base}-{n}"
         n += 1
@@ -633,10 +641,16 @@ def _default_label(root: Path) -> str:
 
 # ---------------------------------------------------------------- retrieval
 
+# Unicode-aware on purpose. An ASCII-only class silently mangles non-English
+# content: "Munchen" with an umlaut tokenized to "nchen", "Zurich" with one to
+# "rich", and a CJK query to nothing at all — indexed but unreachable. FTS5's
+# unicode61 tokenizer keeps those characters, so the query builder has to as
+# well. The leading [^\W_] excludes underscores from starting a term.
+#
 # Inner punctuation is kept so "comp-plan", "v1.2" and "q3.report" survive
 # as single terms; the trailing run is then stripped, or "weekly." and
 # "weekly" become different terms and stop matching each other.
-_WORD_RE = re.compile(r"[a-z0-9][a-z0-9'’._-]*")
+_WORD_RE = re.compile(r"[^\W_][\w'\u2019._-]*", re.UNICODE)
 _EDGE_PUNCT = "._-" + "'\u2019"
 
 _STOPWORDS = frozenset("""
@@ -647,6 +661,11 @@ the their there this to us was we what when where which who why will with you yo
 # Ceiling for the no-FTS5 fallback scan. Reached only on an interpreter whose
 # SQLite lacks FTS5, where the alternative is no search at all.
 MAX_SCAN_ROWS = 50_000
+
+# Above this many query terms the no-FTS5 prefilter is dropped and the scan runs
+# unfiltered: a long OR-chain stops narrowing anything, and correctness on the
+# fallback path matters more than the rows saved.
+_MAX_PREFILTER_TERMS = 12
 
 
 def _words(text: str) -> List[str]:
@@ -794,15 +813,24 @@ def _hit_rows(conn: sqlite3.Connection, query: str, source: Optional[str],
         ) + " ORDER BY score LIMIT :scan"
         return conn.execute(sql, {"match": match, "label": source, "scan": scan}).fetchall()
 
-    # No FTS5: pull rows and score them here. LIKE prefilters on the longest
-    # token, which is the cheapest way to avoid reading the whole corpus.
+    # No FTS5: pull candidate rows and score them in Python. The prefilter has
+    # to cover *every* term, not just one — filtering on the longest token alone
+    # dropped any document that matched only a different term, so
+    # search("payments zebra") could not return the one file containing "zebra".
+    # Past a handful of terms the prefilter stops paying for itself and is
+    # skipped entirely, because losing recall is worse than reading more rows.
     tokens = _tokens(query)
     where = "1=1 " + label_clause
     params: Dict[str, Any] = {"label": source, "scan": min(scan, MAX_SCAN_ROWS)}
-    if tokens:
-        longest = max(tokens, key=len)
-        where = "chunks_text.text LIKE :like " + label_clause
-        params["like"] = f"%{longest}%"
+    if tokens and len(tokens) <= _MAX_PREFILTER_TERMS:
+        clauses = []
+        for i, token in enumerate(tokens):
+            key = f"like{i}"
+            clauses.append(f"(chunks_text.text LIKE :{key} "
+                           f"OR chunks_text.title LIKE :{key} "
+                           f"OR chunks_text.heading LIKE :{key})")
+            params[key] = f"%{token}%"
+        where = "(" + " OR ".join(clauses) + ") " + label_clause
     sql = _HIT_SQL.format(store="chunks_text", score="0.0", where=where) + " LIMIT :scan"
     return conn.execute(sql, params).fetchall()
 
@@ -820,7 +848,16 @@ def search(query: str, limit: int = 10, source: Optional[str] = None,
     try:
         store = text_store(conn)
         tokens = _tokens(query)
-        rows = _hit_rows(conn, query, source, store, scan=max(200, limit * 20))
+        # FTS5 ranks in SQL, so a modest candidate window is enough. The plain
+        # store cannot rank at all — scoring happens in Python afterwards — so
+        # it has to see the whole corpus or it silently loses recall.
+        scan = (max(200, limit * 20) if store == STORE_FTS else MAX_SCAN_ROWS)
+        rows = _hit_rows(conn, query, source, store, scan=scan)
+
+        # The fallback scorer needs rarity weights, which only exist once the
+        # candidate set is known.
+        weights = (None if store == STORE_FTS or not tokens
+                   else _fallback_weights(rows, tokens))
 
         best: Dict[int, Dict[str, Any]] = {}
         counts: Counter = Counter()
@@ -829,7 +866,8 @@ def search(query: str, limit: int = 10, source: Optional[str] = None,
                 # bm25 returns negatives, better being more negative.
                 score = -float(row["score"])
             else:
-                score = _python_score(row["text"], row["title"], row["heading"], tokens)
+                score = _python_score(row["text"], row["title"], row["heading"],
+                                      tokens, weights)
                 if score <= 0:
                     continue
             doc = row["document_id"]
@@ -874,7 +912,34 @@ def search(query: str, limit: int = 10, source: Optional[str] = None,
             conn.close()
 
 
-def _python_score(text: str, title: str, heading: str, tokens: Sequence[str]) -> float:
+def _token_hit(token: str, words: set) -> bool:
+    return token in words or any(word.startswith(token) for word in words)
+
+
+def _fallback_weights(rows: Sequence[sqlite3.Row],
+                      tokens: Sequence[str]) -> Dict[str, float]:
+    """Rarity weight per query term, measured over the candidate rows.
+
+    bm25 gets this from the index; the plain scorer has no statistics at all, so
+    without it every term counts the same and a word appearing in most documents
+    outranks the one rare word that actually distinguishes a hit. Measured on a
+    131-document fallback corpus, `search("payments zebra")` scored the single
+    file containing "zebra" identically to all 130 containing "payments", so it
+    placed by mtime rather than relevance and fell outside the results.
+    """
+    n = max(1, len(rows))
+    df: Counter = Counter()
+    for row in rows:
+        words = (set(_words(row["text"])) | set(_words(row["title"]))
+                 | set(_words(row["heading"])))
+        for token in tokens:
+            if _token_hit(token, words):
+                df[token] += 1
+    return {t: math.log((n + 1.0) / (df.get(t, 0) + 0.5)) for t in tokens}
+
+
+def _python_score(text: str, title: str, heading: str, tokens: Sequence[str],
+                  weights: Optional[Dict[str, float]] = None) -> float:
     """Fallback relevance when FTS5 is unavailable. Same weighting spirit as bm25."""
     if not tokens:
         return 0.0
@@ -883,16 +948,19 @@ def _python_score(text: str, title: str, heading: str, tokens: Sequence[str]) ->
     head_words = set(_words(heading))
     score = 0.0
     for token in tokens:
+        weight = 1.0 if weights is None else max(0.05, weights.get(token, 1.0))
+        field = 0.0
         if token in title_words:
-            score += 8.0
+            field += 8.0
         elif any(w.startswith(token) for w in title_words):
-            score += 4.0
+            field += 4.0
         if token in head_words:
-            score += 2.0
+            field += 2.0
         if token in body_words:
-            score += 4.0
+            field += 4.0
         elif any(w.startswith(token) for w in body_words):
-            score += 1.0
+            field += 1.0
+        score += field * weight
     return score
 
 
@@ -972,6 +1040,13 @@ def fetch(ref: str, db: Optional[Path] = None,
         for piece in pieces:
             text = piece["text"] or ""
             if used + len(text) > max_chars:
+                # Cut inside this chunk rather than dropping it. Bailing out
+                # returned an empty body whenever the first chunk alone
+                # exceeded the budget, which is the common case for a small
+                # max_chars against any real document.
+                room = max_chars - used
+                if room > 0:
+                    body_parts.append(text[:room].rsplit(" ", 1)[0] or text[:room])
                 truncated = True
                 break
             body_parts.append(text)
@@ -1513,7 +1588,9 @@ def documents_response(body: Dict[str, Any], db: Optional[Path] = None) -> Dict[
             specs = [{"id": i} for i in (body.get(key) or [])] or specs
         for url in (body.get("urls") or []):
             specs.append({"url": url})
-    out: Dict[str, Any] = {}
+    # A list, matching the Client API and the mock. A map here meant
+    # flow.enrich iterated dict keys and silently enriched nothing.
+    out: List[Dict[str, Any]] = []
     for spec in specs:
         ref = ""
         if isinstance(spec, dict):
@@ -1526,7 +1603,8 @@ def documents_response(body: Dict[str, Any], db: Optional[Path] = None) -> Dict[
         if doc:
             shaped = as_document(doc)
             shaped["content"] = doc["text"]
-            out[ref] = shaped
+            shaped["requestedRef"] = ref
+            out.append(shaped)
     return {"documents": out, "localIndex": True}
 
 
@@ -1539,4 +1617,6 @@ def autocomplete_response(query: str, db: Optional[Path] = None) -> Dict[str, An
             candidate = (candidate or "").strip()
             if candidate and candidate.lower() != query and candidate not in seen:
                 seen.append(candidate)
-    return {"results": [{"text": t} for t in seen[:6]], "localIndex": True}
+    # The Client API (and the mock, and cmd_autocomplete) read `suggestion`.
+    # Emitting `text` here rendered "(no suggestions)" despite real matches.
+    return {"results": [{"suggestion": t} for t in seen[:6]], "localIndex": True}

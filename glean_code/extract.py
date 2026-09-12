@@ -72,6 +72,11 @@ _W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 _A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
 _S = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
 _DC = "{http://purl.org/dc/elements/1.1/}"
+_P = "{http://schemas.openxmlformats.org/presentationml/2006/main}"
+# The r:id attribute on a <sheet> or <sldId>, and the Relationship elements in
+# a .rels part, live in two different namespaces despite both being "rels".
+_R_ID = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"
+_PKG_REL = "{http://schemas.openxmlformats.org/package/2006/relationships}"
 
 _WS_RUN = re.compile(r"[ \t ]+")
 _BLANK_RUN = re.compile(r"\n{3,}")
@@ -237,6 +242,43 @@ def _xml(data: bytes) -> ElementTree.Element:
         raise ExtractError(f"malformed XML inside the document: {e}") from None
 
 
+def _rels(zf: zipfile.ZipFile, part: str) -> Dict[str, str]:
+    """Relationship id -> archive path, for one part's `_rels` companion.
+
+    Needed because a part's *position* in workbook.xml or presentation.xml says
+    nothing about which sheetN.xml or slideN.xml it refers to. The link is the
+    r:id, resolved through here. Reordering a workbook or deck breaks any code
+    that assumes the two orders agree.
+    """
+    directory, _, name = part.rpartition("/")
+    data = _member(zf, f"{directory}/_rels/{name}.rels" if directory else f"_rels/{name}.rels")
+    if not data:
+        return {}
+    try:
+        root = _xml(data)
+    except ExtractError:
+        return {}
+    out: Dict[str, str] = {}
+    for rel in root.iter(f"{_PKG_REL}Relationship"):
+        rid, target = rel.get("Id"), rel.get("Target")
+        if not rid or not target:
+            continue
+        if target.startswith("/"):
+            out[rid] = target.lstrip("/")
+        else:
+            # Targets are relative to the owning part's directory.
+            parts = [p for p in f"{directory}/{target}".split("/") if p and p != "."]
+            resolved: List[str] = []
+            for piece in parts:
+                if piece == "..":
+                    if resolved:
+                        resolved.pop()
+                else:
+                    resolved.append(piece)
+            out[rid] = "/".join(resolved)
+    return out
+
+
 def _core_title(zf: zipfile.ZipFile) -> Optional[str]:
     """The document's own title from docProps/core.xml, when it set one."""
     data = _member(zf, "docProps/core.xml")
@@ -294,37 +336,49 @@ def _shared_strings(zf: zipfile.ZipFile) -> List[str]:
     return out
 
 
-def _sheet_names(zf: zipfile.ZipFile) -> Dict[str, str]:
-    """sheetId-ordered names, keyed by the sheetN.xml index we can see."""
+def _sheet_order(zf: zipfile.ZipFile) -> List[Tuple[str, str]]:
+    """[(archive path, sheet name)] in workbook order.
+
+    Resolved through the workbook's relationships, because a sheet's position in
+    workbook.xml is unrelated to its sheetN.xml number — reorder a workbook and
+    the second listed sheet may well be sheet1.xml. Keying by position pairs
+    every name with the wrong content, and those names carry bm25 weight.
+    """
     data = _member(zf, "xl/workbook.xml")
     if not data:
-        return {}
+        return []
     try:
         root = _xml(data)
     except ExtractError:
-        return {}
-    names: Dict[str, str] = {}
-    for i, sheet in enumerate(root.iter(f"{_S}sheet"), 1):
-        name = sheet.get("name")
-        if name:
-            names[str(i)] = name
-    return names
+        return []
+    rels = _rels(zf, "xl/workbook.xml")
+    out: List[Tuple[str, str]] = []
+    for sheet in root.iter(f"{_S}sheet"):
+        name = sheet.get("name") or ""
+        target = rels.get(sheet.get(_R_ID) or "")
+        if target and name:
+            out.append((target, name))
+    return out
 
 
 def _extract_xlsx(path: Path) -> Tuple[str, Optional[str]]:
     zf = _open_zip(path)
     try:
         strings = _shared_strings(zf)
-        names = _sheet_names(zf)
-        sheets = sorted(
-            ((m.group(1), n) for m, n in
-             ((_SHEET_RE.match(name), name) for name in zf.namelist()) if m),
-            key=lambda pair: int(pair[0]),
-        )
+        present = set(zf.namelist())
+        sheets = [(name, target) for target, name in _sheet_order(zf)
+                  if target in present]
+        if not sheets:
+            # No usable relationships: fall back to file order with generic
+            # labels rather than risk pairing a real name with another sheet.
+            sheets = [(f"Sheet {m.group(1)}", n) for m, n in
+                      sorted(((_SHEET_RE.match(n), n) for n in present),
+                             key=lambda p: int(p[0].group(1)) if p[0] else 0)
+                      if m]
         if not sheets:
             raise ExtractError("no worksheets found — not a Workbook")
         blocks: List[str] = []
-        for index, member in sheets:
+        for heading, member in sheets:
             root = _xml(_member(zf, member) or b"<x/>")
             rows: List[str] = []
             for row in root.iter(f"{_S}row"):
@@ -335,7 +389,6 @@ def _extract_xlsx(path: Path) -> Tuple[str, Optional[str]]:
                 if line:
                     rows.append(line)
             if rows:
-                heading = names.get(index, f"Sheet {index}")
                 blocks.append(f"## {heading}\n" + "\n".join(rows))
         return "\n\n".join(blocks), _core_title(zf)
     finally:
@@ -366,14 +419,43 @@ def _cell_text(cell: ElementTree.Element, strings: List[str]) -> str:
 _SLIDE_RE = re.compile(r"^ppt/slides/slide(\d+)\.xml$")
 
 
+def _slide_order(zf: zipfile.ZipFile) -> List[str]:
+    """Slide archive paths in presentation order, from `sldIdLst`.
+
+    slideN.xml numbers are creation order, not display order: move slide 1 to
+    the end of a deck and the file keeps its name. Citing "Slide 1" for it
+    would point a reader at the wrong slide.
+    """
+    data = _member(zf, "ppt/presentation.xml")
+    if not data:
+        return []
+    try:
+        root = _xml(data)
+    except ExtractError:
+        return []
+    rels = _rels(zf, "ppt/presentation.xml")
+    out: List[str] = []
+    for sld in root.iter(f"{_P}sldId"):
+        target = rels.get(sld.get(_R_ID) or "")
+        if target:
+            out.append(target)
+    return out
+
+
 def _extract_pptx(path: Path) -> Tuple[str, Optional[str]]:
     zf = _open_zip(path)
     try:
-        slides = sorted(
-            ((m.group(1), n) for m, n in
-             ((_SLIDE_RE.match(name), name) for name in zf.namelist()) if m),
-            key=lambda pair: int(pair[0]),
-        )
+        present = set(zf.namelist())
+        slides = [(str(i), target) for i, target
+                  in enumerate(_slide_order(zf), 1) if target in present]
+        if not slides:
+            # No usable relationships: fall back to filename order, which is
+            # usually but not always the presentation order.
+            slides = sorted(
+                ((m.group(1), n) for m, n in
+                 ((_SLIDE_RE.match(name), name) for name in present) if m),
+                key=lambda pair: int(pair[0]),
+            )
         if not slides:
             raise ExtractError("no slides found — not a Presentation")
         blocks: List[str] = []

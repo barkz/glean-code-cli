@@ -2,7 +2,7 @@
 
 Notes on the test suite added during development of glean-code-cli. See [Running tests](../README.md#running-tests) for the user-facing instructions on how to run the tests.
 
-All 1,036 tests pass. Here's what was added across the development passes:
+All 1,049 tests pass. Here's what was added across the development passes:
 
 `tests/test_commands_extended.py` (155 new tests) — covers all previously untested commands:
 
@@ -94,7 +94,7 @@ Every test redirects the state and log paths at a temp directory, so `~/.gleanco
 
 The module patches out the mock client's simulated 0.25s network latency; without that these 58 tests take 31 seconds instead of 2.
 
-`tests/test_extract.py` (23 new tests) — covers local text extraction:
+`tests/test_extract.py` (26 tests) — covers local text extraction:
 
 - Registry — `INCLUDE_PATTERNS` is derived from `SUPPORTED_EXTS`, so the walker's globs cannot drift from what the extractor actually handles; an unsupported extension raises with the supported list in the message
 - Normalisation — spaces and tabs collapse but paragraph breaks survive, because chunking splits on them; line endings normalise; an oversized document is truncated with a visible marker
@@ -102,8 +102,9 @@ The module patches out the mock client's simulated 0.25s network latency; withou
 - JSON — flattened to `key.path: value` lines so both halves are searchable; invalid JSON is indexed verbatim rather than discarded, since JSONL and truncated exports are still worth finding
 - Office — every fixture is built with `zipfile` rather than committed as a binary, which keeps the repo text-only and documents exactly which parts of each format the extractor depends on. Word runs join within a paragraph and paragraphs stay separate; Excel reads shared strings, inline strings and sheet names; PowerPoint orders `slide2` before `slide10`, which lexicographic sorting would get wrong
 - Failure modes — a file that is not a zip, malformed XML inside a valid zip, a missing `word/document.xml`, an out-of-range shared-string index, and an archive declaring more uncompressed content than the limit allows. Each raises `ExtractError` with a reason rather than crashing an index run
+- Part ordering — sheet names and slide order resolve through each part's relationships, not filenames. A reordered workbook must not pair a real sheet name with another sheet's content, a moved slide must not be cited under its old number, and a workbook with no usable relationships must fall back to generic `Sheet N` labels rather than a confidently wrong name
 
-`tests/test_personal.py` (153 tests) — covers Glean Personal:
+`tests/test_personal.py` (163 tests) — covers Glean Personal:
 
 - Schema — tables, `meta` versioning, `0600` permissions, and idempotent reopening
 - FTS5 fallback — a forced-broken FTS5 schema exercises the plain-table path end to end: indexing, search and fetch all still work, and an existing database keeps the store it was built with even once FTS5 is available again, because switching would orphan every chunk
@@ -119,6 +120,9 @@ The module patches out the mock client's simulated 0.25s network latency; withou
 - Commands — every `/personal` subcommand, bad flag values, the purge confirmation prompt in both directions, and `/mode local` on a populated and an empty index
 - Graph scale — near-duplicate documents must link at full strength, and phrase pruning must be symmetric across documents. Both are regressions with a measured origin: a per-document rank cut left two real 20 KB decks that shared 1,495 phrases sharing none, scoring the strongest link in the corpus at 0.0. The symmetry test was verified to fail against the broken implementation before being kept
 - `--explain` — matched and missed terms (including the porter-stemmed plural/singular case the re-derivation has to cover), passage counts as a real fraction of the document, tie grouping, score-ratio ordering, bar clamping at every ratio, sparse payloads, empty result sets, and that the default result carries **no** `explain` key so the Client API shape stays byte-compatible
+- Response shapes — `/autocomplete` and `/getdocuments` are asserted against the *mock's* shape rather than a hand-written expectation, since the whole point of the local adapters is byte-compatibility with the Client API. Both originally diverged, and the original tests locked the divergence in
+- Unicode — non-English content is searchable, and terms survive tokenisation intact rather than being mangled to ASCII fragments
+- Fallback recall — a rare term stays reachable on a 391-chunk plain-store index even alongside a term that 130 other documents share. This needs the scan window, a prefilter covering every term, and rarity weighting all working together; each was broken independently
 - Mode plumbing — indexing commands explain local mode rather than asking for a token that would not help, `--dry-run` still works with no credentials in any mode, and `/ask` falls back to the local pattern-matcher instead of advising `/login` from inside local mode
 
 `tests/test_mcp.py` (56 tests, +17 for Glean Personal) — covers the four local MCP tools:

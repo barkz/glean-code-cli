@@ -42,8 +42,21 @@ connectors, org-wide reach, and a model.
 | `.html`, `.htm` | tags stripped with `html.parser`; `<script>`/`<style>` bodies dropped; `<title>` becomes the document title |
 | `.json` | flattened to `key.path: value` lines so both halves are searchable; a top-level `title`/`name`/`subject` becomes the title |
 | `.docx` | `zipfile` → `word/document.xml` → `xml.etree`; runs join within a paragraph, paragraphs stay separate; `docProps/core.xml` supplies the title |
-| `.xlsx` | shared strings + each worksheet, row-wise, one section per sheet using the sheet's real name |
-| `.pptx` | every text run per slide, one section per slide, ordered numerically |
+| `.xlsx` | shared strings + each worksheet, row-wise, one section per sheet under the sheet's real name |
+| `.pptx` | every text run per slide, one section per slide, in presentation order |
+
+Sheet names and slide order come from each part's relationships
+(`xl/_rels/workbook.xml.rels`, `ppt/_rels/presentation.xml.rels`), not from
+filenames. A sheet's position in `workbook.xml` has nothing to do with its
+`sheetN.xml` number, and `slideN.xml` is creation order rather than display
+order — so reordering a workbook or moving a slide would otherwise pair a real
+name with the wrong content, or cite "Slide 1" for a slide that now sits last.
+Where the relationships are missing or unreadable, sheets fall back to generic
+`Sheet N` labels rather than risk a confidently wrong name.
+
+Terms are Unicode-aware, matching FTS5's `unicode61` tokenizer: `München`,
+`Zürich`, `café` and CJK text index and search correctly rather than being
+mangled to ASCII fragments.
 
 The Office formats are ZIP archives of XML, which is why they cost no
 dependencies. **PDF and legacy binary `.doc`/`.xls`/`.ppt` are out of scope** —
@@ -66,7 +79,10 @@ paragraph can.
 beats a heading hit beats a body hit. FTS5 is compiled into essentially every
 SQLite the stdlib ships against. A capability probe runs at connect time, and on
 an interpreter that lacks it the index falls back to a plain table plus a Python
-scorer — degraded ranking rather than no search. `/personal status` says which
+scorer — degraded ranking rather than no search. The fallback weights each query
+term by how rare it is across the candidate rows, because without index
+statistics a word appearing in most documents would otherwise outrank the one
+rare word that actually distinguishes a hit. `/personal status` says which
 is in use. An existing database keeps the store it was built with; switching
 would orphan every chunk.
 
