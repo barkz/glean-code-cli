@@ -114,6 +114,14 @@ MAU/WAU, sign-ups, search satisfaction, clicks by datasource, Assistant and Agen
 
 <br>
 
+## How it works
+
+Every command takes the same path: parsed, dispatched to a handler, turned into one REST call. The mode decides who answers it — and mock and local replies are labelled in the output, so you always know which index you are reading.
+
+![How a command flows through Glean Code](assets/request-flow.svg)
+
+<br>
+
 ## Flow mapper
 
 `/flow` records the investigations you run — every `/chat` and `/search`, and the documents they cited — then finds the connections between them. Not only "both mentioned INC-1183", but the indirect case: two conversations sharing no vocabulary, linked because a document cited by one refers to the other's subject in passing.
@@ -170,7 +178,7 @@ The full Glean Code REPL — slash commands, status bar, mock/live switching, se
 | 🔐 **[SSO / OAuth](docs/SSO_OAUTH.md)** · **[Secure tokens](docs/SECURE_TOKENS.md)** | Browser sign-in, secure refs, the masking matrix |
 | 🔌 **[MCP server](docs/MCP.md)** | Glean as native tools in Claude Code, Claude Desktop, Cursor |
 | 🏛️ **[Architecture](docs/ARCHITECTURE.md)** · **[REST paths](docs/REST_PATHS.md)** | Module map, request flow, endpoints, how to add a command |
-| ✅ **[Testing](docs/TESTING.md)** | Running the 1,076-test suite and what it covers |
+| ✅ **[Testing](docs/TESTING.md)** | Running the 1,081-test suite and what it covers |
 | 🛟 **[Support](SUPPORT.md)** · **[Changelog](CHANGELOG.md)** | How to report a bug · release history |
 
 > [!NOTE]

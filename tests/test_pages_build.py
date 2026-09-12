@@ -116,13 +116,39 @@ class TestBlocks(unittest.TestCase):
     def test_horizontal_rule(self):
         self.assertIn("<hr>", build.render("---"))
 
-    def test_paragraph_of_only_images_is_flagged(self):
-        out = build.render("![a](x.png)\n![b](y.png)")
-        self.assertIn('<p class="imgrow">', out)
+    def test_screenshot_paragraph_is_classified(self):
+        out = build.render("![shot](assets/a.png)")
+        self.assertIn('<p class="imgrow shot">', out)
+
+    def test_badge_row_is_classified(self):
+        out = build.render(
+            "![a](https://img.shields.io/badge/a-b)\n![b](https://img.shields.io/badge/c-d)")
+        self.assertIn('<p class="imgrow badges">', out)
+
+    def test_diagram_paragraph_is_classified(self):
+        out = build.render("![flow](assets/request-flow.svg)")
+        self.assertIn('<p class="imgrow diagram">', out)
+
+    def test_linked_badge_still_counts_as_a_badge_row(self):
+        out = build.render("[![r](https://img.shields.io/badge/r-x)](https://example.com)")
+        self.assertIn('<p class="imgrow badges">', out)
 
     def test_paragraph_with_text_is_not_flagged(self):
         out = build.render("![a](x.png) and words")
         self.assertNotIn("imgrow", out)
+
+    def test_bare_line_breaks_are_dropped(self):
+        # The README uses them for spacing on github.com; the site sets its own.
+        for spacer in ("<br>", "<br/>", "<br />", "<BR>"):
+            out = build.render("text\n\n%s\n\nmore" % spacer)
+            self.assertNotIn("<br", out, spacer)
+            self.assertIn("<p>text</p>", out)
+            self.assertIn("<p>more</p>", out)
+
+    def test_a_real_html_block_is_still_passed_through(self):
+        out = build.render('<table>\n<tr><td width="50%">\n\ncell\n\n</td></tr>\n</table>')
+        self.assertIn('<td width="50%">', out)
+        self.assertIn("<p>cell</p>", out)
 
     def test_consecutive_lines_join_into_one_paragraph(self):
         out = build.render("one\ntwo")
@@ -153,6 +179,9 @@ class TestBuild(unittest.TestCase):
             # the real README's own content made it through
             self.assertIn('<h2 id="why-glean-code">', page)
             self.assertIn('<h2 id="documentation">', page)
+            self.assertIn('<h2 id="how-it-works">', page)
+            # the README's <br> spacers must not survive into the site
+            self.assertNotIn("\n<br>\n", page)
 
     def test_build_replaces_a_previous_output_dir(self):
         with tempfile.TemporaryDirectory() as tmp:

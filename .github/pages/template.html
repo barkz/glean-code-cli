@@ -13,7 +13,7 @@
     color-scheme: light dark;
     --ground: #fbfbfd;
     --surface: #ffffff;
-    --surface-2: #f4f4f9;
+    --surface-2: #f5f5fa;
     --ink: #1b1b23;
     --ink-2: #4c4c5c;
     --ink-3: #76768c;
@@ -21,29 +21,34 @@
     --rule-soft: #eeeef5;
     --accent: #343ced;
     --accent-ink: #343ced;
+    --accent-wash: rgba(52, 60, 237, .06);
     --note-bg: #eff3ff;
     --note-edge: #4b62d8;
-    --code-bg: #f5f5fa;
-    --term-bg: #14141d;
-    --term-ink: #d9d9e6;
+    --code-bg: #f2f2f8;
+    --pad: clamp(20px, 4.5vw, 52px);
+    --measure: 66ch;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --ground: #0f0f16;
-      --surface: #15151e;
-      --surface-2: #1b1b26;
+      --ground: #0e0e15;
+      --surface: #14141d;
+      --surface-2: #1a1a24;
       --ink: #e9e9f1;
-      --ink-2: #adadc0;
-      --ink-3: #7e7e95;
-      --rule: #2a2a38;
-      --rule-soft: #21212c;
+      --ink-2: #b0b0c2;
+      --ink-3: #82829a;
+      --rule: #282834;
+      --rule-soft: #1f1f29;
       --accent: #8f94ff;
       --accent-ink: #a3a7ff;
+      --accent-wash: rgba(143, 148, 255, .08);
       --note-bg: #181b30;
       --note-edge: #6f7bea;
-      --code-bg: #1a1a24;
+      --code-bg: #1e1e28;
     }
   }
+
+  /* terminal surfaces keep one identity in both themes */
+  :root { --term-bg: #13131c; --term-ink: #d9d9e6; --term-bar: #1e1e2a; --term-thumb: #3d3d50; }
 
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
@@ -54,7 +59,7 @@
     color: var(--ink);
     font-family: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
     font-size: 16px;
-    line-height: 1.65;
+    line-height: 1.62;
     -webkit-font-smoothing: antialiased;
   }
   img { max-width: 100%; }
@@ -62,115 +67,157 @@
   /* ---- site chrome ---- */
   .topbar {
     position: sticky; top: 0; z-index: 10;
-    background: var(--surface);
+    background: color-mix(in srgb, var(--surface) 86%, transparent);
+    backdrop-filter: blur(8px);
     border-bottom: 1px solid var(--rule);
   }
+  @supports not (background: color-mix(in srgb, red 50%, transparent)) {
+    .topbar { background: var(--surface); }
+  }
   .topbar-in {
-    max-width: 1040px; margin: 0 auto; padding: 11px 24px;
-    display: flex; align-items: baseline; gap: 18px;
+    max-width: 1000px; margin: 0 auto; padding: 11px 24px;
+    display: flex; align-items: baseline; gap: 12px 20px; flex-wrap: wrap;
     font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px;
   }
-  .topbar .mark { font-weight: 500; color: var(--ink); }
-  .topbar .mark span { color: var(--accent-ink); }
-  .topbar nav { margin-left: auto; display: flex; gap: 16px; }
-  .topbar a { color: var(--ink-3); text-decoration: none; }
+  .topbar .mark { font-weight: 500; color: var(--ink); white-space: nowrap; }
+  .topbar .mark i { color: var(--accent-ink); font-style: normal; }
+  .topbar nav { margin-left: auto; display: flex; gap: 18px; }
+  .topbar a { color: var(--ink-3); text-decoration: none; white-space: nowrap; }
   .topbar a:hover { color: var(--accent-ink); }
   .topbar a:focus-visible, .doc a:focus-visible {
     outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px;
   }
 
-  main { max-width: 1040px; margin: 0 auto; padding: 44px 24px 96px; }
+  main { max-width: 1000px; margin: 0 auto; padding: 40px 24px 88px; }
   .doc {
     background: var(--surface);
     border: 1px solid var(--rule);
-    border-radius: 6px;
-    padding: 44px clamp(20px, 5vw, 56px) 56px;
+    border-radius: 10px;
+    padding: 0 var(--pad) 52px;
+    overflow: hidden;
   }
 
   /* ---- prose ---- */
-  .doc > *:first-child { margin-top: 0; }
-  h1, h2, h3 { font-weight: 600; letter-spacing: -0.015em; line-height: 1.25; text-wrap: balance; }
-  h1 { font-size: 2.35rem; margin: 0 0 .3em; }
-  h2 { font-size: 1.45rem; margin: 2.4em 0 .9em; padding-bottom: .3em; border-bottom: 1px solid var(--rule); }
-  h3 { font-size: 1.06rem; margin: 1.6em 0 .45em; }
+  h1, h2, h3 { font-weight: 600; letter-spacing: -0.017em; line-height: 1.22; text-wrap: balance; }
+  h1 { font-size: clamp(2.1rem, 5vw, 2.6rem); margin: 0 0 .3em; }
+  h2 {
+    font-size: 1.4rem; margin: 2.1em 0 1em;
+    padding-bottom: .35em; border-bottom: 1px solid var(--rule);
+  }
+  h3 { font-size: 1.05rem; margin: 1.5em 0 .4em; }
   td h3:first-child { margin-top: 0; }
-  p { margin: 0 0 1em; max-width: 68ch; }
+  p { margin: 0 0 .9em; max-width: var(--measure); text-wrap: pretty; }
+  .doc > p:last-child { margin-bottom: 0; }
   a { color: var(--accent-ink); text-decoration: none; }
   a:hover { text-decoration: underline; }
   strong { font-weight: 600; color: var(--ink); }
-  hr { border: 0; border-top: 1px solid var(--rule); margin: 2.6em 0; }
+  hr { border: 0; border-top: 1px solid var(--rule); margin: 2.4em 0 1.6em; }
 
-  /* centred blocks come from the README's own <div align="center"> */
+  /* ---- hero: the README's own centred header, bled to the card edges ---- */
+  .doc > div[align="center"]:first-child {
+    margin: 0 calc(var(--pad) * -1) 8px;
+    padding: 56px var(--pad) 44px;
+    border-bottom: 1px solid var(--rule);
+    background:
+      radial-gradient(120% 130% at 50% -25%, var(--accent-wash) 0%, transparent 62%),
+      radial-gradient(closest-side, var(--rule-soft) 1px, transparent 1px) 0 0 / 22px 22px;
+  }
   [align="center"] { text-align: center; }
-  [align="center"] p { margin-left: auto; margin-right: auto; }
-  [align="center"] h1 + p { font-size: 1.12rem; font-weight: 600; }
-  [align="center"] p { max-width: 62ch; color: var(--ink-2); }
-  [align="center"] h1 { color: var(--ink); }
+  [align="center"] p { margin-left: auto; margin-right: auto; max-width: 60ch; color: var(--ink-2); }
+  [align="center"] h1 + p { font-size: 1.14rem; font-weight: 600; color: var(--ink); max-width: 42ch; }
 
-  /* badge rows and screenshots */
-  p.imgrow {
-    display: flex; flex-wrap: wrap; gap: 8px;
-    justify-content: center; align-items: center;
-    max-width: none;
+  /* ---- image paragraphs: badges, screenshots, diagrams ---- */
+  p.imgrow { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-width: none; }
+
+  p.badges { margin: 1.5em 0 0; gap: 7px; }
+
+  /* screenshots get a terminal frame rather than a bare border */
+  p.shot {
+    display: block; margin: 2em 0 1.2em; padding: 30px 0 0;
+    background: var(--term-bar); border: 1px solid var(--rule);
+    border-radius: 10px; position: relative; overflow: hidden; max-width: none;
   }
-  .imgrow img:not([src*="shields.io"]) {
-    border: 1px solid var(--rule); border-radius: 6px; display: block;
+  p.shot::before {
+    content: ""; position: absolute; top: 11px; left: 14px;
+    width: 38px; height: 8px;
+    background:
+      radial-gradient(circle 4px at 4px 4px, #ff5f57 98%, transparent) 0 0,
+      radial-gradient(circle 4px at 4px 4px, #febc2e 98%, transparent) 15px 0,
+      radial-gradient(circle 4px at 4px 4px, #28c840 98%, transparent) 30px 0;
+    background-repeat: no-repeat;
   }
+  p.shot img { display: block; width: 100%; border-radius: 0; }
+
+  /* diagrams sit on their own quiet surface */
+  p.diagram {
+    display: block; margin: 1.6em 0 1.2em; padding: 26px clamp(14px, 3vw, 30px);
+    background: var(--surface-2); border: 1px solid var(--rule);
+    border-radius: 10px; max-width: none;
+  }
+  p.diagram img { display: block; width: 100%; }
 
   /* ---- code ---- */
   code {
     font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-size: .875em; background: var(--code-bg);
-    padding: .16em .38em; border-radius: 4px;
+    font-size: .86em; background: var(--code-bg);
+    padding: .16em .4em; border-radius: 4px;
   }
   pre {
     background: var(--term-bg); color: var(--term-ink);
-    border-radius: 8px; padding: 16px 18px; margin: 0 0 1.2em;
-    overflow-x: auto;
+    border-radius: 10px; padding: 18px 20px; margin: 0 0 1.1em;
+    overflow-x: auto; overscroll-behavior-x: contain;
     font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-size: 12.6px; line-height: 1.85;
+    font-size: 12.4px; line-height: 1.8;
+    scrollbar-width: thin; scrollbar-color: var(--term-thumb) transparent;
   }
   pre code { background: none; padding: 0; font-size: inherit; color: inherit; }
+  pre::-webkit-scrollbar { height: 9px; }
+  pre::-webkit-scrollbar-track { background: transparent; }
+  pre::-webkit-scrollbar-thumb { background: var(--term-thumb); border-radius: 5px; }
 
   /* ---- tables ---- */
   .doc table {
-    width: 100%; border-collapse: collapse; margin: 0 0 1.4em;
-    border: 1px solid var(--rule); border-radius: 6px; overflow: hidden;
+    width: 100%; border-collapse: collapse; margin: 0 0 1.2em;
+    border: 1px solid var(--rule); border-radius: 8px;
   }
-  .doc th, .doc td { text-align: left; padding: 14px 16px; vertical-align: top; }
+  .doc th, .doc td { text-align: left; padding: 15px 18px; vertical-align: top; }
   .doc thead th { background: var(--surface-2); font-weight: 600; border-bottom: 1px solid var(--rule); }
   .doc tbody tr + tr td { border-top: 1px solid var(--rule-soft); }
   .doc td:first-child { font-weight: 600; }
-  .doc td:first-child:not(:only-child):not([width]) { width: 30%; }
-  .doc td p { color: var(--ink-2); max-width: 58ch; }
-  .doc td:only-child, .doc td p:last-child { margin-bottom: 0; }
+  /* key/value rows: hold the value column to a readable measure */
+  .doc td:first-child:not(:only-child):not([width]) { width: 33%; }
+  .doc td + td { color: var(--ink-2); }
+  .doc td p { color: var(--ink-2); }
+  .doc td :last-child { margin-bottom: 0; }
   /* the README's two-column feature table is layout, not data */
-  .doc td[width="50%"] { width: 50%; font-weight: 400; }
-  .doc td[width="50%"] p { color: var(--ink-2); }
-  .table-scroll { overflow-x: auto; }
+  .doc td[width="50%"] { width: 50%; font-weight: 400; padding: 20px 22px; }
+  .doc td[width="50%"] p { color: var(--ink-2); max-width: 46ch; }
 
   /* ---- alerts ---- */
   .alert {
     background: var(--note-bg); border-left: 3px solid var(--note-edge);
-    border-radius: 0 6px 6px 0; padding: 14px 20px; margin: 1.6em 0;
+    border-radius: 0 8px 8px 0; padding: 15px 20px; margin: 1.5em 0 0;
   }
   .alert-label {
     font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 600;
     letter-spacing: .1em; text-transform: uppercase; color: var(--note-edge);
-    margin: 0 0 .4em;
+    margin: 0 0 .35em;
   }
   .alert p:last-child { margin-bottom: 0; color: var(--ink-2); }
 
   footer {
-    max-width: 1040px; margin: 0 auto; padding: 0 24px 56px;
+    max-width: 1000px; margin: 0 auto; padding: 0 24px 56px;
     font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--ink-3);
     text-align: center;
   }
   footer a { color: var(--ink-3); }
 
-  @media (max-width: 700px) {
+  @media (max-width: 720px) {
     .doc td, .doc th { display: block; width: auto !important; }
-    .doc td:first-child { padding-bottom: 0; }
+    .doc td:first-child { padding-bottom: 4px; }
+    .doc td + td { padding-top: 0; }
+    .doc td[width="50%"] { padding: 16px 18px; }
+    .topbar nav { gap: 14px; }
   }
 </style>
 </head>
@@ -178,10 +225,10 @@
 
 <div class="topbar">
   <div class="topbar-in">
-    <span class="mark">glean<span>_</span>code</span>
+    <span class="mark">glean<i>_</i>code</span>
     <nav>
+      <a href="#how-it-works">How it works</a>
       <a href="#documentation">Docs</a>
-      <a href="{{REPO_URL}}/releases">Releases</a>
       <a href="{{REPO_URL}}">GitHub</a>
     </nav>
   </div>
