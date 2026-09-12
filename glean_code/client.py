@@ -42,6 +42,7 @@ except Exception:  # pragma: no cover
 
 from . import flow as _flow
 from . import mock_corpus
+from . import personal
 from .config import Config
 
 
@@ -79,6 +80,10 @@ class GleanClient:
             _flow.record(self.config, path, body, resp)
 
     def _post(self, path: str, body: Dict[str, Any]) -> Dict[str, Any]:
+        if self.config.effective_mode == "local":
+            resp = _local_response(path, body)
+            self._capture(path, body, resp)
+            return resp
         if self.config.effective_mode == "mock":
             mock_corpus.use_path(self.config.mock_corpus_path)
             try:
@@ -128,6 +133,12 @@ class GleanClient:
         path: str,
         body: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
+        if self.config.effective_mode == "local":
+            raise GleanError(
+                "The Indexing API pushes content into a Glean tenant, which local "
+                "mode has no equivalent of. Use /personal index <folder> to add "
+                "content to the local index, or /mode live to reach your tenant."
+            )
         if not self.config.effective_indexing_token:
             raise GleanError(
                 "No indexing token set. Add one with: /config set indexing_token <token-or-secure-ref>"
@@ -659,6 +670,47 @@ def _mock_datasource_filter(body: Dict[str, Any]) -> Optional[str]:
             if value:
                 return str(value)
     return None
+
+
+# Client API paths the personal index can answer. Everything else genuinely has
+# no local counterpart — there are no agents, announcements or collections in a
+# folder of files — and saying so beats returning a plausible-looking stub that
+# an agent would treat as real.
+LOCAL_PATHS = ("/search", "/chat", "/autocomplete", "/getdocuments")
+
+
+def _local_response(path: str, body: Dict[str, Any]) -> Dict[str, Any]:
+    """Serve a Client API call from ~/.gleancode/personal.db.
+
+    Responses use the Client API's own shapes, so every renderer in the REPL
+    and every consumer of the MCP server works unchanged — the same reason
+    mock mode can reuse the whole command surface.
+    """
+    if path == "/search":
+        wants_facets = "datasource" in (
+            (body.get("requestOptions") or {}).get("facets") or []
+        )
+        return personal.search_response(
+            body.get("query", ""),
+            page_size=body.get("pageSize", 10),
+            datasource=_mock_datasource_filter(body),
+            facets=wants_facets,
+        )
+    if path == "/chat":
+        try:
+            message = body["messages"][-1]["fragments"][0]["text"]
+        except (KeyError, IndexError, TypeError):
+            message = ""
+        return personal.chat_response(message, chat_id=body.get("chatId"))
+    if path == "/autocomplete":
+        return personal.autocomplete_response(body.get("query", ""))
+    if path == "/getdocuments":
+        return personal.documents_response(body)
+    raise GleanError(
+        f"{path} has no local equivalent. Local mode serves "
+        f"{', '.join(LOCAL_PATHS)} from the personal index; use /mode live for "
+        f"the rest of the Glean API, or /mode mock to explore it offline."
+    )
 
 
 def _mock_response(path: str, body: Dict[str, Any]) -> Dict[str, Any]:

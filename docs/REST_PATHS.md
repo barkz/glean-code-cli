@@ -47,6 +47,24 @@ POST /activity
 POST /insights
 ```
 
+## Paths served locally
+
+In `local` mode four Client API paths are answered from `~/.gleancode/personal.db` instead of
+the network, by `_local_response` in [client.py](../glean_code/client.py):
+
+| Path | Local behaviour |
+| --- | --- |
+| `/search` | ranked results from the personal index |
+| `/chat` | matching passages with citations, extractive — nothing is generated |
+| `/autocomplete` | completions from indexed titles and headings |
+| `/getdocuments` | one document with its text reassembled from chunks |
+
+Every other path raises a `GleanError` naming what local mode does cover. That refusal is
+deliberate: a folder of files has no agents, announcements or collections, and a
+plausible-looking stub is exactly what a consuming agent could not detect as fabricated.
+Responses use the Client API's own shapes, which is what lets every renderer draw them
+unchanged. See [docs/PERSONAL.md](PERSONAL.md).
+
 ## Indexing API paths
 
 Require a separate indexing token. Base: `https://<instance>-be.glean.com/api/index/v1`.

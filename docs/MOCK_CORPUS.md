@@ -1,5 +1,14 @@
 # Mock Corpus
 
+> [!NOTE]
+> **Fictional content, by design.** Mock mode exists so every command works with no token.
+> If you want the same commands over content that is actually yours, that is
+> [Glean Personal](PERSONAL.md) — `/personal index <folder>` and `/mode local`. The two are
+> siblings with opposite guarantees: mock data is fabricated and labelled `[MOCK MODE]`,
+> local data is real but narrow and labelled `[LOCAL INDEX]`. Neither is your organisation's
+> Glean index, and both say so in every response.
+
+
 Reference for the fake corpus that backs **mock mode**. See [Mock corpus](../README.md#mock-mode)
 in the README for the short version, and [Command Reference](COMMANDS.md) for the commands themselves.
 

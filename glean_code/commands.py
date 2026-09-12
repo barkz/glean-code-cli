@@ -11,6 +11,7 @@ import os
 import re
 import shlex
 import socket
+import sys
 import time
 import urllib.error
 import urllib.parse
@@ -23,9 +24,11 @@ from . import ui
 from . import _indexing_walk as _walk
 from . import flow as _flow
 from . import mcp_control as _mcp
+from . import personal as _personal
 from .client import GleanClient, GleanError
 from .config import (
     Config,
+    MODES,
     SECURE_REFS,
     is_secure_ref,
     normalize_instance_host,
@@ -145,11 +148,65 @@ def _result_byline(r: Dict[str, Any]) -> str:
     return "  ·  ".join(p for p in parts if p)
 
 
+_BAR_WIDTH = 8
+
+
+def _score_bar(ratio: float, width: int = _BAR_WIDTH) -> str:
+    """A bar relative to the top hit. Deliberately not labelled as a percentage.
+
+    bm25 scores are corpus-relative and carry no absolute meaning, so a figure
+    like "98% relevant" would manufacture a confidence the algorithm never
+    computed. A bar shows the same spacing without claiming to be a probability.
+    """
+    filled = max(1, min(width, round(width * max(0.0, ratio))))
+    return "\u2588" * filled + "\u00b7" * (width - filled)
+
+
+def _render_explain(ex: Dict[str, Any]) -> List[str]:
+    """The `--explain` block for one result: where it matched and how well."""
+    lines: List[str] = []
+
+    where: List[str] = []
+    if ex.get("heading"):
+        where.append(str(ex["heading"]))
+    matched_chunks, total_chunks = ex.get("matched_chunks"), ex.get("total_chunks")
+    if matched_chunks and total_chunks:
+        where.append(f"{matched_chunks} of {total_chunks} passage"
+                     f"{'s' if total_chunks != 1 else ''} matched")
+    if where:
+        lines.append(ui.style("   \u203a " + "  \u00b7  ".join(where), ui.C.TEAL))
+
+    matched, missed = ex.get("matched_terms") or [], ex.get("missed_terms") or []
+    if matched or missed:
+        text = "matched: " + (", ".join(matched) if matched else "(none)")
+        line = ui.style(f"   \u203a {text}", ui.C.TEAL)
+        if missed:
+            # The whole point of the flag: a hit that matched one term out of
+            # four is here because the query is ORed, not because it is on topic.
+            line += ui.style(f"   missed: {', '.join(missed)}", ui.C.YELLOW)
+        lines.append(line)
+
+    score = ex.get("score")
+    if score is not None:
+        bar = _score_bar(ex.get("score_ratio") or 0.0)
+        tail = f" bm25 {score:g}  {bar}"
+        tied = ex.get("tied_with") or []
+        if tied:
+            joined = ", ".join(f"#{n}" for n in tied)
+            tail += f"   (tied with {joined} \u2014 ordering between them is arbitrary)"
+        lines.append(ui.style(f"   \u203a{tail}", ui.C.GREY))
+    return lines
+
+
 def _render_search(resp: Dict[str, Any]) -> str:
     results = resp.get("results", [])
+    # The banner belongs to the response, not to one command, so a plain
+    # /search in local mode carries it just as /personal search does.
+    banner = ([ui.style(_personal.LOCAL_BANNER, ui.C.YELLOW)]
+              if resp.get("localIndex") else [])
     if not results:
-        return ui.style("No results.", ui.C.GREY)
-    lines = []
+        return "\n\n".join(banner + [ui.style("No results.", ui.C.GREY)])
+    lines = list(banner)
     for i, r in enumerate(results, 1):
         title = r.get("title", "(untitled)")
         url   = r.get("url", "")
@@ -163,7 +220,9 @@ def _render_search(resp: Dict[str, Any]) -> str:
         byline = _result_byline(r)
         byline_line = ui.style(f"   {byline}", ui.C.GREY) if byline else ""
         body = ui.style(f"   {snip}", ui.C.WHITE) if snip else ""
-        lines.append("\n".join(x for x in [header, meta, byline_line, body] if x))
+        explain = _render_explain(r["explain"]) if r.get("explain") else []
+        lines.append("\n".join(
+            x for x in [header, meta, byline_line, *explain, body] if x))
     return "\n\n".join(lines)
 
 
@@ -275,12 +334,21 @@ def cmd_status(s: Session, pos, flags):
         ("mode setting",  cfg.mode),
         ("default_page_size", str(cfg.default_page_size)),
         ("mock_corpus",   cfg.mock_corpus_path or ui.style("(built-in Acme corpus)", ui.C.GREY)),
+        ("local index",   _personal_status_line()),
         ("current_chat_id",   s.current_chat_id or ui.style("(none)", ui.C.GREY)),
         ("config file",   "~/.gleancode/config.json"),
     ]
     print(ui.rule("status"))
     print(ui.kv_table(rows))
     print(ui.rule())
+
+
+def _personal_status_line() -> str:
+    docs = _personal_doc_count()
+    if docs is None:
+        return ui.style("(not built — /personal index <folder>)", ui.C.GREY)
+    return ui.style(f"{docs} document(s)  ~/.gleancode/personal.db",
+                    ui.C.GREEN if docs else ui.C.GREY)
 
 
 def _frontend_host(instance: str) -> str:
@@ -548,12 +616,21 @@ def cmd_mcp(s: Session, pos, flags):
 
 @register("mode")
 def cmd_mode(s: Session, pos, flags):
-    if not pos or pos[0] not in ("live", "mock", "auto"):
-        ui.print_err("Usage: /mode <live|mock|auto>")
+    if not pos or pos[0] not in MODES:
+        ui.print_err(f"Usage: /mode <{'|'.join(MODES)}>")
         return
     s.config.mode = pos[0]
     s.config.save()
+    s.refresh_client()
     ui.print_ok(f"Mode set to {pos[0]}. Effective: {s.config.effective_mode}.")
+    if s.config.effective_mode == "local":
+        docs = _personal_doc_count()
+        if docs:
+            ui.print_info(f"/search and /chat now answer from {docs} locally indexed "
+                          f"document(s). Most other commands need /mode live.")
+        else:
+            ui.print_info("The personal index is empty — add a folder with "
+                          "/personal index <folder>.")
 
 
 @register("doctor")
@@ -736,8 +813,7 @@ def cmd_datasources_list(s: Session, pos, flags):
 
     print(ui.rule("datasources"))
     if with_status:
-        if not s.config.indexing_token:
-            ui.print_err("--with-status requires an indexing token. Set one with: /config set indexing_token <token>")
+        if not _require_indexing_token(s):
             return
         for d in sources:
             name = d["name"]
@@ -794,8 +870,7 @@ def cmd_datasources_status(s: Session, pos, flags):
     if not pos:
         ui.print_err("Usage: /datasources.status <datasource>")
         return
-    if not s.config.indexing_token:
-        ui.print_err("Requires an indexing token. Set one with: /config set indexing_token <token>")
+    if not _require_indexing_token(s):
         return
     datasource = pos[0]
     try:
@@ -830,8 +905,7 @@ def cmd_datasources_status(s: Session, pos, flags):
 
 @register("indexing.rotate-token")
 def cmd_indexing_rotate_token(s: Session, pos, flags):
-    if not s.config.indexing_token:
-        ui.print_err("No indexing token configured. Set one with: /config set indexing_token <token>")
+    if not _require_indexing_token(s):
         return
     try:
         resp = s.client.rotate_indexing_token()
@@ -853,6 +927,18 @@ def cmd_indexing_rotate_token(s: Session, pos, flags):
 # -------------------- shared indexing helpers --------------------
 
 def _require_indexing_token(s: "Session") -> bool:
+    # Mode first. In local mode no token would help — the Indexing API pushes
+    # content into a Glean tenant, which a folder of files has no equivalent of
+    # — so "set a token" is actively misleading advice. This guard runs ahead of
+    # the client for every indexing command, so without the check here the
+    # client's own local-mode message would never be reached.
+    if s.config.effective_mode == "local":
+        ui.print_err(
+            "The Indexing API pushes content into a Glean tenant, which local "
+            "mode has no equivalent of. Use /personal index <folder> to add "
+            "content to the local index, or /mode live to reach your tenant."
+        )
+        return False
     if not s.config.indexing_token:
         ui.print_err(
             "No indexing token configured. Set one with: "
@@ -2728,6 +2814,314 @@ def cmd_flow(s: Session, pos, flags):
         ui.print_err("Usage: /flow <status|enrich|link|show|timeline|purge>")
 
 
+# -------------------- Glean Personal (local index) --------------------
+
+
+def _fmt_bytes(n: Optional[float]) -> str:
+    size = float(n or 0)
+    for unit in ("B", "KB", "MB", "GB"):
+        if size < 1024 or unit == "GB":
+            return f"{size:.0f} {unit}" if unit == "B" else f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} GB"
+
+
+def _csv_list(value: Any) -> Optional[Tuple[str, ...]]:
+    """Parse `--include "*.md,*.txt"` into a pattern tuple."""
+    if not isinstance(value, str):
+        return None
+    parts = tuple(p.strip() for p in value.split(",") if p.strip())
+    return parts or None
+
+
+def _personal_doc_count() -> Optional[int]:
+    """Indexed document count, or None when no index has been built yet.
+
+    Deliberately does not call stats(): connect() creates the database, and
+    merely asking /status about local mode should not leave a file behind.
+    """
+    if not _personal.DB_PATH.exists():
+        return None
+    try:
+        return _personal.stats()["documents"]
+    except Exception:  # a corrupt or busy database must not break /status
+        return None
+
+
+def _personal_banner() -> None:
+    print(ui.style(_personal.LOCAL_BANNER, ui.C.YELLOW))
+
+
+def _personal_index(s: Session, pos, flags) -> None:
+    if not pos:
+        ui.print_err("Usage: /personal index <folder> [--label <name>] [--reindex]")
+        return
+    folder = pos[0]
+    try:
+        max_bytes = int(flags["max-bytes"]) if flags.get("max-bytes") else None
+    except (TypeError, ValueError):
+        ui.print_err("--max-bytes must be an integer number of bytes.")
+        return
+
+    seen = [0]
+    # The counter redraws one line with \r, which only means anything on a
+    # terminal. Piped, every redraw lands in the output as literal text.
+    live = sys.stdout.isatty()
+
+    def progress(rel: str) -> None:
+        seen[0] += 1
+        if live and seen[0] % 25 == 0:
+            print(ui.style(f"  … {seen[0]} files", ui.C.GREY), end="\r", flush=True)
+
+    try:
+        report = _personal.index_source(
+            folder,
+            label=flags.get("label") if isinstance(flags.get("label"), str) else None,
+            include=_csv_list(flags.get("include")),
+            exclude=_csv_list(flags.get("exclude")),
+            max_bytes=max_bytes,
+            reindex=bool(flags.get("reindex")),
+            progress=progress,
+        )
+    except _personal.PersonalError as e:
+        ui.print_err(str(e))
+        return
+    if live and seen[0] >= 25:
+        print(" " * 30, end="\r")
+
+    print(ui.rule(f"indexed: {report['label']}"))
+    print(ui.kv_table([
+        ("folder", report["root"]),
+        ("label", report["label"]),
+        ("files matched", str(report["files"])),
+        ("added", str(report["added"])),
+        ("updated", str(report["updated"])),
+        ("unchanged", str(report["unchanged"])),
+        ("removed", str(report["removed"])),
+        ("chunks written", str(report["chunks"])),
+        ("text index", report["store"]),
+        ("elapsed", f"{report['elapsed']:.1f}s"),
+    ]))
+    skipped = report["skipped"]
+    if skipped:
+        print()
+        print(ui.style(f"  skipped {len(skipped)} file(s):", ui.C.YELLOW))
+        for rel, reason in skipped[:10]:
+            print(ui.style(f"    {rel} — {reason}", ui.C.GREY))
+        if len(skipped) > 10:
+            print(ui.style(f"    … and {len(skipped) - 10} more", ui.C.GREY))
+    print(ui.rule())
+    if report["added"] or report["updated"]:
+        ui.print_info("Search it with /personal search \"...\", or switch the whole "
+                      "REPL over with /mode local.")
+
+
+def _personal_search(s: Session, pos, flags) -> None:
+    if not pos:
+        ui.print_err('Usage: /personal search "<query>" [--source <label>] [--limit <n>]')
+        return
+    query = " ".join(pos)
+    try:
+        limit = int(flags.get("limit") or s.config.default_page_size)
+    except (TypeError, ValueError):
+        ui.print_err("--limit must be an integer.")
+        return
+    source = flags.get("source") if isinstance(flags.get("source"), str) else None
+    try:
+        resp = _personal.search_response(query, page_size=limit, datasource=source,
+                                         explain=bool(flags.get("explain")))
+    except _personal.PersonalError as e:
+        ui.print_err(str(e))
+        return
+    print(ui.rule(f"local search: {query}"))
+    # The local response uses the Client API's result shape, so the same
+    # renderer that draws Glean hits draws these \u2014 banner included.
+    print(_render_search(resp))
+    print(ui.rule())
+
+
+def _personal_status(s: Session) -> None:
+    st = _personal.stats()
+    store = st["store"]
+    store_note = (ui.style("FTS5 (SQLite full-text)", ui.C.GREEN) if store == _personal.STORE_FTS
+                  else ui.style("plain + Python scorer (no FTS5 in this SQLite)", ui.C.YELLOW))
+    rows = [
+        ("database", f"{st['path']}  ({_fmt_bytes(st['size'])})"),
+        ("text index", store_note),
+        ("sources", str(st["sources"])),
+        ("documents", str(st["documents"])),
+        ("chunks", str(st["chunks"])),
+        ("indexed text", _fmt_bytes(st["characters"])),
+        ("graph links", str(st["links"])),
+        ("last indexed", _personal._ago(st["last_indexed"]) or "never"),
+    ]
+    print(ui.rule("personal index"))
+    print(ui.kv_table(rows))
+    print(ui.rule())
+    if not st["documents"]:
+        ui.print_info("Nothing indexed yet. Try: /personal index ~/Documents")
+    elif not st["links"]:
+        ui.print_info("No content graph yet — run /personal link to connect related documents.")
+
+
+def _personal_sources(s: Session) -> None:
+    srcs = _personal.sources()
+    if not srcs:
+        ui.print_info("No folders indexed. Try: /personal index ~/Documents")
+        return
+    print(ui.rule("indexed folders"))
+    for src in srcs:
+        print(ui.style(f"  {src['label']}", ui.C.CYAN, ui.C.BOLD) +
+              ui.style(f"   {src['documents']} docs, {src['chunks']} chunks", ui.C.GREY))
+        print(ui.style(f"    {src['root']}", ui.C.WHITE))
+        print(ui.style(f"    last indexed {_personal._ago(src['last_indexed']) or 'never'}",
+                       ui.C.GREY))
+    print(ui.rule())
+
+
+def _personal_show(s: Session, pos, flags) -> None:
+    if not pos:
+        ui.print_err("Usage: /personal show <doc-id|path|title-fragment>")
+        return
+    ref = " ".join(pos)
+    doc = _personal.fetch(ref)
+    if not doc:
+        ui.print_err(f"No indexed document matching '{ref}'. See /personal sources.")
+        return
+    print(ui.rule(doc["title"]))
+    print(ui.kv_table([
+        ("id", doc["doc_id"]),
+        ("source", doc["datasource"]),
+        ("path", doc["abs_path"]),
+        ("type", doc["mime"]),
+        ("size", f"{_fmt_bytes(doc['bytes'])}  ({doc['nchars']} chars, "
+                 f"{doc['chunk_count']} chunks)"),
+        ("modified", _personal._ago(doc["mtime"])),
+    ]))
+    if doc["headings"]:
+        print()
+        print(ui.style("  Sections", ui.C.CYAN, ui.C.BOLD))
+        print(ui.bullet_list(doc["headings"][:20]))
+    if not flags.get("meta"):
+        print()
+        _personal_banner()
+        print()
+        body = doc["text"]
+        if doc["truncated"]:
+            body += ui.style("\n\n  … truncated; open the file for the rest.", ui.C.GREY)
+        print(body)
+    print(ui.rule())
+
+
+def _personal_related(s: Session, pos, flags) -> None:
+    if not pos:
+        ui.print_err("Usage: /personal related <doc-id|path|title-fragment>")
+        return
+    ref = " ".join(pos)
+    try:
+        limit = int(flags.get("limit") or 8)
+    except (TypeError, ValueError):
+        ui.print_err("--limit must be an integer.")
+        return
+    try:
+        links = _personal.related(ref, limit=limit)
+    except _personal.PersonalError as e:
+        ui.print_err(str(e))
+        return
+    if not links:
+        ui.print_info(f"Nothing linked to '{ref}' yet. Run /personal link first.")
+        return
+    print(ui.rule(f"related to {ref}"))
+    for link in links:
+        print(ui.style(f"  {link['title'] or link['doc_id']}", ui.C.WHITE, ui.C.BOLD) +
+              ui.style(f"   score {link['score']}", ui.C.GREY))
+        print(ui.style(f"    {link['rel_path']}  ({link['label']})", ui.C.GREY))
+        if link["evidence"]:
+            shared = ", ".join(link["evidence"][:5])
+            print(ui.style(f"    shares: {shared}", ui.C.TEAL))
+    print(ui.rule())
+
+
+def _personal_link(s: Session, flags) -> None:
+    try:
+        min_score = float(flags.get("min-score") or flags.get("min_score")
+                          or _personal.DEFAULT_LINK_MIN_SCORE)
+    except (TypeError, ValueError):
+        ui.print_err("--min-score must be a number.")
+        return
+    try:
+        top_k = int(flags.get("top-k") or flags.get("top_k")
+                    or _personal.DEFAULT_LINK_TOP_K)
+    except (TypeError, ValueError):
+        ui.print_err("--top-k must be an integer.")
+        return
+
+    # Linking a few thousand documents takes tens of seconds. Silence for that
+    # long reads as a hang.
+    live = sys.stdout.isatty()
+
+    def progress(message: str) -> None:
+        if live:
+            print(ui.style(f"  {message}", ui.C.GREY))
+
+    count = _personal.link_documents(min_score=min_score, top_k=top_k,
+                                     progress=progress)
+    ui.print_ok(f"{count} document link{'s' if count != 1 else ''} "
+                f"at min-score {min_score:g}, top {top_k} per document.")
+    if count:
+        ui.print_info("Follow them with /personal related <doc>.")
+    else:
+        ui.print_info("Nothing connected at that threshold — try a lower --min-score.")
+
+
+def _personal_purge(s: Session, pos, flags) -> None:
+    target = pos[0] if pos else None
+    what = (f"everything indexed from '{target}'" if target
+            else "the entire personal index (every folder)")
+    try:
+        confirm = input(ui.style(f"Delete {what}? Files on disk are untouched. [y/N]: ",
+                                 ui.C.YELLOW)).strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        ui.print_info("Cancelled.")
+        return
+    if confirm not in ("y", "yes"):
+        ui.print_info("Cancelled.")
+        return
+    try:
+        removed = _personal.purge(source=target)
+    except _personal.PersonalError as e:
+        ui.print_err(str(e))
+        return
+    ui.print_ok(f"Removed {removed['documents']} document(s) and "
+                f"{removed['chunks']} chunk(s) from {removed['root']}.")
+
+
+@register("personal")
+def cmd_personal(s: Session, pos, flags):
+    sub = (pos[0] if pos else "status").lower()
+    rest = pos[1:]
+    if sub == "status":
+        _personal_status(s)
+    elif sub == "index":
+        _personal_index(s, rest, flags)
+    elif sub == "search":
+        _personal_search(s, rest, flags)
+    elif sub == "sources":
+        _personal_sources(s)
+    elif sub == "show":
+        _personal_show(s, rest, flags)
+    elif sub == "related":
+        _personal_related(s, rest, flags)
+    elif sub == "link":
+        _personal_link(s, flags)
+    elif sub == "purge":
+        _personal_purge(s, rest, flags)
+    else:
+        ui.print_err("Usage: /personal "
+                     "<status|index|search|sources|show|related|link|purge>")
+
+
 # -------------------- natural-language planner --------------------
 
 _PLANNER_SYSTEM_PROMPT = (
@@ -2775,12 +3169,22 @@ _NL_DESTRUCTIVE = {
 }
 
 
+_NL_DESTRUCTIVE_SUBS = {
+    # Sub-verbs that mutate, for commands that take their verb positionally.
+    "config":   ("set",),
+    "personal": ("index", "purge", "link"),
+    "flow":     ("purge", "enrich", "link"),
+}
+
+
 def _nl_is_destructive(cmd: str, args: str) -> bool:
     if cmd in _NL_DESTRUCTIVE:
         return True
-    # /config set ... mutates; /config (list/get) does not
-    if cmd == "config" and args.strip().lower().startswith("set"):
-        return True
+    # /config set, /personal purge and friends mutate; their read verbs do not.
+    subs = _NL_DESTRUCTIVE_SUBS.get(cmd)
+    if subs:
+        first = args.strip().lower().split(" ", 1)[0].lstrip("-")
+        return first in subs
     return False
 
 
@@ -2878,9 +3282,14 @@ def cmd_ask(s: Session, pos, flags):
         return
 
     # ---- get a plan ----
-    if s.config.effective_mode == "mock":
+    # Both offline modes fall back to the local pattern-matcher. Local mode has
+    # no model behind /chat — it resolves to the personal index — so asking
+    # Glean to plan is not an option there any more than it is in mock mode.
+    mode = s.config.effective_mode
+    if mode in ("mock", "local"):
         plan = _nl_mock_plan(nl)
-        ui.print_info("[mock] using canned plan; switch to live mode for the real Glean planner")
+        ui.print_info(f"[{mode}] using canned plan; switch to live mode for the "
+                      f"real Glean planner")
     else:
         if not s.config.is_live_ready:
             ui.print_err("Live mode requires an api_token and instance. Run /login first.")

@@ -18,7 +18,7 @@ python3 install.py           # --cli-only, --dev, --prefix, --verify, --uninstal
 # Pipe a single command (non-interactive; cli.py detects a non-tty stdin)
 echo '/search "q2 plan"' | python3 -m glean_code
 
-# Run the full test suite (721 tests, stdlib unittest — works with or without pytest)
+# Run the full test suite (1,049 tests, stdlib unittest — works with or without pytest)
 python3 -m pytest tests/
 python3 -m unittest discover tests/
 
@@ -35,9 +35,13 @@ directory and emits a zipapp, so nothing is ever built inside the repo. On macOS
 `PYTHONPYCACHEPREFIX=~/.cache/python` to keep `__pycache__` out of the working tree —
 Spotlight indexes stray `.pyc` files and they hijack Cmd+Space searches for "glean".
 
-## Mock vs. live mode (central design idea)
+## Mock vs. live vs. local mode (central design idea)
 
-Every command works **offline by default**. `Config.effective_mode` resolves to `live` only when a token + instance are present (`auto` mode), otherwise `mock`. The single chokepoint is in [glean_code/client.py](glean_code/client.py): `_post` / `_indexing_post` check `effective_mode` and return `_mock_response(path, body)` / `_mock_indexing_response(path, body)` instead of hitting the network. This means **mock responses are keyed by REST path**, and every new endpoint needs a matching mock shape or it won't work offline (and tests, which run in mock mode, will fail).
+Every command works **offline by default**. `Config.effective_mode` resolves `auto` to `live` only when a token + instance are present, otherwise `mock`; `live`, `mock` and `local` are taken at their word. The single chokepoint is in [glean_code/client.py](glean_code/client.py): `_post` / `_indexing_post` check `effective_mode` and return `_mock_response(path, body)` / `_mock_indexing_response(path, body)` / `_local_response(path, body)` instead of hitting the network. This means **mock and local responses are keyed by REST path**, and every new endpoint needs a matching mock shape or it won't work offline (and tests, which run in mock mode, will fail).
+
+`local` mode is narrower on purpose: it answers only `/search`, `/chat`, `/autocomplete` and `/getdocuments` from the personal index, and raises a `GleanError` naming its coverage for anything else. Do **not** add a stub shape for an endpoint a folder of files cannot honestly answer — a plausible-looking stub is exactly what an agent cannot detect. The valid modes live in `config.MODES`.
+
+Mock content is fictional and local content is real-but-narrow, and both carry a banner for the same reason: a consumer cannot tell which index answered. `mock_corpus` has `MOCK_BANNER`; `personal` has `LOCAL_BANNER`, surfaced from the `localIndex` marker on a response so `_render_search` shows it for every caller. Preserve both when touching those paths.
 
 ## Architecture
 
@@ -48,6 +52,8 @@ The flow is: `cli.py` (REPL loop) → `dispatch()` → a registered handler → 
 - **[glean_code/client.py](glean_code/client.py)** — `GleanClient` plus all mock responses. Each API method is a thin wrapper around `self._post(path, body)` or `self._indexing_post(path, body)`; to retarget a REST path for a different tenant, edit it here (one line per method).
 - **[glean_code/config.py](glean_code/config.py)** — `Config` dataclass, persisted to `~/.gleancode/config.json` (chmod `0o600`). Computes `effective_base_url`, `effective_indexing_base_url`, `effective_*_token`, and `effective_mode`.
 - **[glean_code/help_docs.py](glean_code/help_docs.py)** — the `DOCS` dict. Drives `/help <command>`, the NL planner's command catalogue, and the generated [docs/COMMANDS.md](docs/COMMANDS.md). A command with no `DOCS` entry is invisible to `/help` and to the planner.
+- **[glean_code/personal.py](glean_code/personal.py)** — Glean Personal: the local content index. SQLite schema + `connect`/`_migrate` (mirroring flow.py), chunking, incremental indexing, FTS5 search with a no-FTS5 fallback, the phrase graph, and the Client-API response adapters that `_local_response` calls. See [docs/PERSONAL.md](docs/PERSONAL.md).
+- **[glean_code/extract.py](glean_code/extract.py)** — text extraction per file type. Office formats (`.docx`/`.xlsx`/`.pptx`) are ZIP+XML, read with `zipfile` + `xml.etree`; `INCLUDE_PATTERNS` is derived from `SUPPORTED_EXTS` so the walker's globs cannot drift from what the extractor handles. PDF and legacy binary formats are deliberately out of scope.
 - **[glean_code/_indexing_walk.py](glean_code/_indexing_walk.py)** — the `--path` file-walking helpers (`path_to_id`, `walk_files`, `file_to_document`, ...) that synthesize Indexing API request bodies from local `.txt/.md/.html/.json` files.
 - **[glean_code/completion.py](glean_code/completion.py)** — readline tab completion (Tab/Shift+Tab cycling).
 - **[glean_code/ui.py](glean_code/ui.py)** — ANSI color/box/status-bar rendering. All terminal output goes through here.
@@ -66,7 +72,7 @@ Client API (`/rest/api/v1`, `api_token`) and Indexing API (`/api/index/v1`, `ind
 
 ### Natural-language planner (`/ask`, `?`)
 
-`cmd_ask` builds a command catalogue from `HANDLERS` + `DOCS` (auto-syncs as commands are added), sends it to Glean's `/chat`, parses a JSON command array out of the reply, validates each step against `HANDLERS`, and dispatches them. Destructive steps (anything in `_NL_DESTRUCTIVE`, plus `/config set`) trigger a single `Run all? [y/N]` gate. In mock mode it uses `_nl_mock_plan` (local pattern-matching) instead of calling Glean.
+`cmd_ask` builds a command catalogue from `HANDLERS` + `DOCS` (auto-syncs as commands are added), sends it to Glean's `/chat`, parses a JSON command array out of the reply, validates each step against `HANDLERS`, and dispatches them. Destructive steps trigger a single `Run all? [y/N]` gate — from `_NL_DESTRUCTIVE` by command name, or `_NL_DESTRUCTIVE_SUBS` for commands whose verb is positional (`/config set`, `/personal purge`, `/flow purge`). In **mock and local** modes it uses `_nl_mock_plan` (local pattern-matching) instead of calling Glean: local mode resolves `/chat` to the personal index, which has no model to plan with.
 
 ## Conventions when changing code
 
@@ -75,11 +81,11 @@ Client API (`/rest/api/v1`, `api_token`) and Indexing API (`/api/index/v1`, `ind
 2. Add a `GleanClient` method in client.py (a wrapper around `_post`/`_indexing_post`).
 3. Add a mock response branch in `_mock_response` / `_mock_indexing_response` — required for offline use and tests.
 4. Add a `DOCS` entry in help_docs.py (summary, usage, params, examples, endpoint) or the command is hidden from `/help` and the planner.
-5. If it writes/deletes/changes auth, add the dotted name to `_NL_DESTRUCTIVE` in commands.py.
+5. If it writes/deletes/changes auth, add the dotted name to `_NL_DESTRUCTIVE` in commands.py. A command that takes its verb positionally (`/config set`, `/personal purge`, `/flow purge`) goes in `_NL_DESTRUCTIVE_SUBS` instead, keyed by command name with the mutating sub-verbs.
 6. Add tests (mock-mode handler test + client/mock test). Reuse the `_mock_session()` helper pattern in the test files.
 
 **Token safety** — never let real secrets reach disk or the history buffer. Secure refs (`token.secure.client` / `token.secure.indexing`) are stored verbatim and resolved from `$GLEAN_CLIENT_TOKEN` / `$GLEAN_INDEXING_TOKEN` at request time via `resolve_secure`. `_sanitize_for_history` masks `--token`/`--indexing-token` values and `/config set <token-key>` values before they enter `command_history`. `_display_token` masks literals to `***1234`. Preserve all of this when adding any command that handles a token.
 
 ## Docs
 
-`docs/COMMANDS.md` (full per-command reference, mirrors `/help`), `docs/NATURAL_LANGUAGE.md` (planner design), and `docs/TESTING.md` (test-suite notes) supplement the README. Keep `docs/COMMANDS.md` and the `DOCS` dict consistent when changing command behavior.
+`docs/COMMANDS.md` (full per-command reference, mirrors `/help`), `docs/NATURAL_LANGUAGE.md` (planner design), `docs/PERSONAL.md` (the local index), and `docs/TESTING.md` (test-suite notes) supplement the README. Keep `docs/COMMANDS.md` and the `DOCS` dict consistent when changing command behavior.

@@ -39,6 +39,7 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 - [Tokens and auth](#tokens-and-auth)
 - [Config keys](#config-keys)
 - [MCP server](#mcp-server)
+- [Glean Personal](#glean-personal) — index local folders, search and chat offline
 - [Flow mapper](#flow-mapper) — map what you have investigated
 - [Project layout](#project-layout)
 - [Running tests](#running-tests)
@@ -58,6 +59,7 @@ A local, terminal-first client for the Glean Client REST API. Inspired by Claude
 - **Offline by default** — a real mock corpus of interlinked documents across five faux datasources, so every command is explorable without credentials. See [docs/MOCK_CORPUS.md](docs/MOCK_CORPUS.md)
 - **Browser SSO or API token** — `/login <hostname-or-instance-id>` starts OAuth 2.1 + PKCE, or `/login --token ...` uses a Glean-issued token. Secure refs keep real secrets in environment variables, never on disk
 - **MCP server** (`glean_mcp.py`) for Claude Code, Claude Desktop, and Cursor
+- **Glean Personal** — `/personal index <folder>` builds a local content index from your own files (`.md`, `.txt`, `.html`, `.json`, plus `.docx`/`.xlsx`/`.pptx` read straight out of their ZIP-XML with the stdlib). `/mode local` then points `/search` and `/chat` at it, and four MCP tools expose it to an agent. SQLite FTS5, incremental on a content hash, a phrase graph over the results. One portable file, no server, no network, no token. See [docs/PERSONAL.md](docs/PERSONAL.md)
 - **Flow mapper** — `/flow` records the investigations you run, enriches their citations with real text, and finds connections between conversations that never shared context. `/flow show` draws them as a rail with each connection branching off it and the evidence that earned it; `/flow timeline` renders the same graph as a self-contained HTML page. Local SQLite, opt-in for live data. See [docs/FLOW_MAPPER.md](docs/FLOW_MAPPER.md)
 - Terminal niceties: `/help <command>` for every command, tab completion that cycles matches, a powerline-style status bar, and `/scaffold` to generate stdlib-only starter projects
 
@@ -143,6 +145,7 @@ A native VS Code extension that brings the full Glean Code REPL — slash comman
 | --- | --- |
 | Shell | `/help` `/status` `/doctor` `/auth` `/login` `/logout` `/open` `/ask` `/config` `/mode` `/mcp` `/flow` `/history` `/clear` `/exit` |
 | Chat and search | `/chat` `/search` `/autocomplete` `/recommendations` `/feedback` `/datasources.list` |
+| Glean Personal | `/personal index` `/personal search` `/personal status` `/personal sources` `/personal show` `/personal related` `/personal link` `/personal purge` |
 | Indexing — read & debug | `/datasources.status` `/datasources.config` `/documents.status` `/documents.count` `/users.count` `/documents.access` `/debug.document` `/debug.documents` `/debug.user` `/indexing.rotate-token` |
 | Indexing — single write | `/index.document` `/index.permissions` `/index.user` `/index.group` `/index.membership` and their `/index.delete-*` partners |
 | Indexing — bulk & process-all | `/index.documents` `/index.bulk-documents` `/index.bulk-users` `/index.bulk-groups` `/index.bulk-memberships` `/shortcuts.bulk-index` `/shortcuts.upload` `/index.process-all-documents` `/index.process-all-memberships` |
@@ -257,6 +260,42 @@ Capture is a local SQLite database at `~/.gleancode/flow.db`, partitioned so moc
 
 The whole feature works offline against the built-in corpus, with no token. Full guide: **[docs/FLOW_MAPPER.md](docs/FLOW_MAPPER.md)**.
 
+## Glean Personal
+
+Mock mode proves every command works offline against a fictional corpus. `/personal` points the same machinery at content that is actually yours.
+
+```text
+/personal index ~/Documents --label docs
+/personal search "salary bands"
+/personal link                        # build the content graph
+/personal related roadmap             # and follow it
+/mode local                           # /search and /chat now answer from your files
+```
+
+It indexes `.txt` `.md` `.markdown` `.html` `.json`, plus `.docx` `.xlsx` `.pptx` — those three are ZIP archives of XML, so `zipfile` and `xml.etree` read them at zero dependency cost. Text is chunked on headings and paragraphs, stored in SQLite FTS5, and ranked with `bm25()`. Re-indexing is incremental on a SHA-256 content hash, so a daily run over a 5,000-file folder re-reads only what changed.
+
+A phrase graph connects documents that discuss the same things, storing the shared phrases as evidence so `/personal related` shows *why* two files connect rather than asserting that they do.
+
+Queries are ORed and ranked by bm25, so a document can rank because it matched one term of three. `--explain` says so:
+
+```text
+/personal search "descaling weekly espresso" --explain
+
+1. SCHEDULING
+   › Scheduling the archive  ·  2 of 4 passages matched
+   › matched: weekly   missed: descaling, espresso
+   › bm25 11.96  ████████
+```
+
+Never as a percentage. bm25 is corpus-relative — the same code scores 25.41 on one index and 3.5e-06 on another — so "98% relevant" would claim a confidence nothing computed, and would render a genuine tie as "100%, 100%, 98%". Results within 1% are reported as tied instead.
+
+**No server, no daemon, no Docker, no network, no credentials.** The whole index is one file — `~/.gleancode/personal.db` — and copying that file is how you move it between machines.
+
+Local answers are always labelled `[LOCAL INDEX]`: the content is real, but its scope is whatever folders you indexed, not organisation-wide Glean. `/chat` in local mode returns matching passages verbatim and generates no prose — the REPL has no model in-process, and inventing an answer would launder a guess. An agent reading the same index through the `local_search` / `local_fetch` / `local_sources` / `local_related` MCP tools brings its own model.
+
+How to use it, step by step: **[docs/LOCAL_INDEXING.md](docs/LOCAL_INDEXING.md)**.
+Reference and design notes: **[docs/PERSONAL.md](docs/PERSONAL.md)**.
+
 ## Project layout
 
 ```text
@@ -272,6 +311,8 @@ glean-code-cli/
     help_docs.py          per-command documentation
     mcp_control.py        /mcp — MCP server diagnostics and process control
     flow.py               /flow — capture, enrich, link, and render investigations
+    personal.py           /personal — local content index, search, and graph
+    extract.py            text extraction, including Office formats via zipfile
     mock_corpus.py        the fake corpus every mock endpoint reads from
     _indexing_walk.py     --path file walking for indexing commands
     completion.py         readline tab completion
@@ -280,7 +321,7 @@ glean-code-cli/
     auth_commands.py      /auth command handlers
     auth/                 OAuth 2.1 + PKCE: oauth, pkce, callback_server,
                           token_store, manager
-  tests/                  18 test modules, stdlib unittest only
+  tests/                  20 test modules, stdlib unittest only
   docs/                   full reference set — see below
 ```
 
@@ -305,7 +346,7 @@ files, and they outrank the `Glean Code.app` launcher in `Cmd+Space`:
 export PYTHONPYCACHEPREFIX="$HOME/.cache/python"
 ```
 
-834 tests covering the client and every mock response, commands and dispatch, config, UI, auth, completion, help docs, the mock corpus, indexing-walk, scaffold, the installer, the MCP server, and the flow mapper. Development notes: [docs/TESTING.md](docs/TESTING.md).
+1,049 tests covering the client and every mock response, commands and dispatch, config, UI, auth, completion, help docs, the mock corpus, indexing-walk, scaffold, the installer, the MCP server, the flow mapper, and Glean Personal (text extraction, the index, the content graph, ranking explanations, local mode, and the local MCP tools). Development notes: [docs/TESTING.md](docs/TESTING.md).
 
 ## Documentation
 
@@ -321,6 +362,8 @@ export PYTHONPYCACHEPREFIX="$HOME/.cache/python"
 | [docs/SECURE_TOKENS.md](docs/SECURE_TOKENS.md) | Secure refs, masking matrix, mock-mode fallback |
 | [docs/MCP.md](docs/MCP.md) | MCP server setup for Claude Code, Claude Desktop, Cursor |
 | [docs/FLOW_MAPPER.md](docs/FLOW_MAPPER.md) | `/flow` — capturing investigations, linking them, and the retention questions |
+| [docs/LOCAL_INDEXING.md](docs/LOCAL_INDEXING.md) | **How to use local indexing** — a task-by-task guide: index a folder, search it, keep it current, troubleshoot |
+| [docs/PERSONAL.md](docs/PERSONAL.md) | `/personal` reference — formats, chunking, the graph, and why there is no bundled model |
 | [docs/REST_PATHS.md](docs/REST_PATHS.md) | Every REST path this client targets, and how to retarget them |
 | [docs/TESTING.md](docs/TESTING.md) | Test-suite development notes |
 | [SUPPORT.md](SUPPORT.md) | Best-effort support expectations, triage order, how to file a good bug report |

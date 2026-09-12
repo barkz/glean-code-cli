@@ -117,6 +117,7 @@ except ImportError:
 from glean_code.config import Config
 from glean_code.client import GleanClient, GleanError
 from glean_code import flow as _flow
+from glean_code import personal as _personal
 
 
 MOCK_ENV_VAR = "GLEAN_MOCK"
@@ -406,6 +407,151 @@ def get_flow_collapsed() -> str:
     if not data["threads"]:
         return _label(f"No captured sessions for {instance} in {mode} mode.")
     return _label(json.dumps(data, indent=2, default=str))
+
+
+# ── Glean Personal (local index) ──────────────────────────────────────────────
+#
+# These tools never touch the network or the Glean API. They read the local
+# index at ~/.gleancode/personal.db, built by `/personal index <folder>` in the
+# REPL, so they work with no token, no instance, and no connection — and they
+# are unaffected by GLEAN_MOCK, which governs the Glean-backed tools above.
+#
+# This is the half of Glean Personal that an external agent consumes: retrieval
+# and a content graph, with the agent supplying the model. Nothing here writes
+# an answer, because this process has no model and inventing one would launder
+# a guess into whatever the agent does next.
+
+
+def _local(text: str) -> str:
+    """Prefix a local-index response so the scope travels with the content."""
+    return f"{_personal.LOCAL_BANNER}\n\n{text}"
+
+
+def _no_index() -> str:
+    return _local(
+        "The local index is empty. Build one by running `/personal index "
+        "<folder>` in the glean-code REPL, then call this tool again."
+    )
+
+
+@mcp.tool()
+def local_search(query: str, source: Optional[str] = None, limit: int = 10) -> str:
+    """Search the user's own indexed local files: notes, documents, spreadsheets, decks.
+
+    This is separate from Glean's company-wide index — it covers only the
+    folders the user chose to index on this machine, and needs no credentials.
+    Use it for anything personal or machine-local: "what did I write about X",
+    "find my notes on Y", questions about files rather than company knowledge.
+
+    Returns ranked passages with a document id for each. Pass an id to
+    local_fetch to read the whole document, or to local_related to see what
+    else connects to it. Use source to restrict to one indexed folder
+    (local_sources lists them).
+    """
+    try:
+        if _personal.is_empty():
+            return _no_index()
+        hits = _personal.search(query, limit=limit, source=source)
+    except _personal.PersonalError as e:
+        return f"Error: {e}"
+    except Exception as e:  # noqa: BLE001 - a broken index must not kill the tool loop
+        return f"Error reading the local index: {e}"
+    if not hits:
+        return _local(f"No local documents match '{query}'.")
+
+    lines = [f"{len(hits)} local result(s) for '{query}':", ""]
+    for i, hit in enumerate(hits, 1):
+        where = f"  \u203a {hit['heading']}" if hit.get("heading") else ""
+        lines.append(f"{i}. {hit['title']}{where}")
+        lines.append(f"   id: {hit['doc_id']}   folder: {hit['datasource']}   "
+                     f"file: {hit['rel_path']}")
+        lines.append(f"   {hit['snippet']}")
+        lines.append("")
+    return _local("\n".join(lines).rstrip())
+
+
+@mcp.tool()
+def local_fetch(doc: str, max_chars: int = 20000) -> str:
+    """Read one indexed local document in full.
+
+    Accepts the id from local_search, a file path, or a distinctive fragment of
+    the filename or title. Use this after local_search when a snippet is not
+    enough to answer.
+    """
+    try:
+        if _personal.is_empty():
+            return _no_index()
+        found = _personal.fetch(doc, max_chars=max_chars)
+    except Exception as e:  # noqa: BLE001
+        return f"Error reading the local index: {e}"
+    if not found:
+        return _local(f"No indexed local document matches '{doc}'.")
+    header = [
+        f"{found['title']}",
+        f"id: {found['doc_id']}   folder: {found['datasource']}",
+        f"file: {found['abs_path']}",
+        f"modified: {_personal._ago(found['mtime'])}",
+        "",
+    ]
+    body = found["text"]
+    if found["truncated"]:
+        body += f"\n\n[truncated at {max_chars} characters]"
+    return _local("\n".join(header) + body)
+
+
+@mcp.tool()
+def local_sources() -> str:
+    """List the local folders the user has indexed, with document counts.
+
+    Call this to find out what local content is available at all, or to get the
+    folder labels that local_search accepts as its source argument.
+    """
+    try:
+        if _personal.is_empty():
+            return _no_index()
+        srcs = _personal.sources()
+    except Exception as e:  # noqa: BLE001
+        return f"Error reading the local index: {e}"
+    lines = ["Indexed local folders:", ""]
+    for src in srcs:
+        lines.append(f"  {src['label']}  \u2014 {src['documents']} documents, "
+                     f"{src['chunks']} passages")
+        lines.append(f"    path: {src['root']}")
+        lines.append(f"    last indexed: {_personal._ago(src['last_indexed']) or 'never'}")
+        lines.append("")
+    return _local("\n".join(lines).rstrip())
+
+
+@mcp.tool()
+def local_related(doc: str, limit: int = 8) -> str:
+    """Find local documents connected to this one, with the shared phrases as evidence.
+
+    The connections come from a phrase graph built over the indexed content, so
+    two files link because they discuss the same things, not because they sit
+    in the same folder. Use it to widen a search that found one relevant
+    document, or to answer "what else covers this".
+    """
+    try:
+        if _personal.is_empty():
+            return _no_index()
+        links = _personal.related(doc, limit=limit)
+    except _personal.PersonalError as e:
+        return _local(str(e))
+    except Exception as e:  # noqa: BLE001
+        return f"Error reading the local index: {e}"
+    if not links:
+        return _local(
+            f"Nothing is linked to '{doc}'. The graph may not be built yet \u2014 "
+            f"`/personal link` in the glean-code REPL builds it."
+        )
+    lines = [f"{len(links)} document(s) related to '{doc}':", ""]
+    for link in links:
+        lines.append(f"  {link['title'] or link['doc_id']}  (score {link['score']})")
+        lines.append(f"    id: {link['doc_id']}   folder: {link['label']}")
+        if link["evidence"]:
+            lines.append(f"    shares: {', '.join(link['evidence'][:6])}")
+        lines.append("")
+    return _local("\n".join(lines).rstrip())
 
 
 # ── entry point ───────────────────────────────────────────────────────────────

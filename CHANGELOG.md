@@ -10,6 +10,72 @@ For what Glean Code is and how to run it, see the [README](README.md).
 
 ### Added
 
+- **Glean Personal (`/personal`)** — a portable local content index. `/personal index
+  <folder>` walks a directory and indexes it into `~/.gleancode/personal.db` (`0600`):
+  `.txt`, `.md`, `.markdown`, `.html`, `.json`, plus `.docx`, `.xlsx` and `.pptx`, which are
+  ZIP archives of XML and so are readable with `zipfile` + `xml.etree` at zero dependency
+  cost. Text is chunked on headings and paragraph boundaries (overlapping only where a cut
+  falls inside a paragraph), stored in SQLite FTS5, and ranked with `bm25()` weighted
+  title > heading > body. Re-indexing is incremental on a SHA-256 content hash, and removes
+  documents that have left the disk or fallen outside the filters. A phrase graph
+  (`/personal link`, `/personal related`) connects documents that discuss the same things
+  and stores the shared phrases as evidence, keeping each document's strongest `--top-k`
+  neighbours (default 10) so a large folder yields a navigable graph rather than tens of
+  thousands of near-threshold links. An FTS5 capability probe at connect time falls
+  back to a plain table and a Python scorer, so an interpreter without FTS5 degrades in
+  ranking quality rather than failing. No server, no daemon, no network, no credentials.
+  How-to guide: [docs/LOCAL_INDEXING.md](docs/LOCAL_INDEXING.md); reference and design
+  notes: [docs/PERSONAL.md](docs/PERSONAL.md).
+- **`/personal search --explain`** — ranking evidence per result: the section that matched,
+  how many of the document's passages matched, which query terms hit and which missed, the
+  raw bm25 score with a bar relative to the top hit, and whether results are tied. Terms are
+  ORed, so "matched one of three terms" is usually the whole explanation for a surprising
+  hit. Scores are never shown as a percentage: bm25 is corpus-relative — the same code scores
+  25.41 on one index and 3.5e-06 on another — so a "98% relevant" figure would manufacture a
+  confidence that was never computed, and would render a genuine tie as "100%, 100%, 98%".
+  The flag is `/personal search` only; plain `/search` in local mode stays byte-compatible
+  with the Client API shape.
+- **`local` mode** — a fourth value for `mode`, alongside `auto`, `live` and `mock`.
+  `/mode local` routes `/search`, `/chat`, `/autocomplete` and `/getdocuments` through the
+  personal index, using the Client API's own response shapes so every existing renderer
+  draws them unchanged. Endpoints with no local counterpart raise an error naming what
+  local mode does cover, rather than returning a plausible-looking stub. Unlike `auto`,
+  `local` is never resolved away by the presence of credentials.
+- **Four MCP tools for the local index** — `local_search`, `local_fetch`, `local_sources`
+  and `local_related` in `glean_mcp.py`. They need no token, never touch the network, and
+  are unaffected by `GLEAN_MOCK`. Every response carries a `[LOCAL INDEX]` banner: the
+  content is real but its scope is only the folders the user indexed, and an agent cannot
+  otherwise tell which index answered.
+### Fixed
+
+Eight defects found by reviewing the Glean Personal branch before merge, each
+verified by running the code rather than reading it:
+
+- `/autocomplete` in local mode printed "(no suggestions)" despite real matches:
+  the response used a `text` key where the Client API, the mock and
+  `cmd_autocomplete` all read `suggestion`. The test asserted the wrong key too.
+- `/getdocuments` in local mode returned a map where the Client API returns a
+  list, so `flow.enrich` iterated dict keys and silently enriched nothing.
+- `fetch(..., max_chars=N)` returned an empty body whenever the first chunk alone
+  exceeded `N` — the common case for a small budget. It now cuts inside the chunk.
+- Query terms were matched with an ASCII-only pattern, so non-English content was
+  indexed but unreachable: "München" tokenized to "nchen" and CJK text to nothing.
+  Now Unicode-aware, matching FTS5's `unicode61` tokenizer.
+- `doc_id` was unique only per source, yet it is the id handed to users and agents
+  and resolved without one. Two folders defaulting to the same label both minted
+  `docs-readme`, and every lookup returned whichever came first. Now unique across
+  sources.
+- Worksheet names were keyed by position in `workbook.xml`, which is unrelated to
+  the `sheetN.xml` number — a reordered workbook paired every name with the wrong
+  sheet, and those names carry bm25 weight. Sheet names and slide order now resolve
+  through each part's relationships; `slideN.xml` is creation order, not display
+  order, so a moved slide was cited under the wrong number.
+- The no-FTS5 fallback lost recall three ways at once: a candidate window sized
+  for FTS5 (200 rows) capped a path that cannot rank in SQL, the prefilter matched
+  only the longest query term so documents matching any other term were excluded
+  outright, and the scorer weighted every term equally so a word in 130 documents
+  tied with the one rare word that distinguished a hit. All three fixed.
+
 - **Visual Studio Code extension** — a native extension bringing the full REPL (slash
   commands, status bar, mock/live switching, secure-token storage) into the editor
   sidebar. In progress.

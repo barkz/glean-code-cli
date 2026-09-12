@@ -93,6 +93,32 @@ by `/login` in the REPL). You can also pass them as environment variables:
 | `get_flow` | The captured investigation graph — sessions, citations, links. See [docs/FLOW_MAPPER.md](FLOW_MAPPER.md) |
 | `get_flow_summary` | What was investigated and what connected to what, in prose |
 | `get_flow_collapsed` | The compact view — threads folded into counted nodes |
+| `local_search` | Search your own indexed local files. See [Glean Personal tools](#glean-personal-tools) |
+| `local_fetch` | Read one indexed local document in full |
+| `local_sources` | List the local folders that have been indexed |
+| `local_related` | Local documents connected to this one, with shared phrases as evidence |
+
+## Glean Personal tools
+
+The four `local_*` tools read the local content index at `~/.gleancode/personal.db`,
+built by `/personal index <folder>` in the REPL. Full guide: [docs/PERSONAL.md](PERSONAL.md).
+
+They behave differently from every other tool on this server, in ways worth knowing:
+
+- **No credentials, no network.** They never call the Glean API. They work with no
+  token, no instance, and no connection.
+- **`GLEAN_MOCK` does not apply.** That variable governs the Glean-backed tools. The
+  local tools always read the real local index, because there is no fictional
+  alternative for them to serve.
+- **Every response carries a `[LOCAL INDEX]` banner.** The content is real, but its
+  scope is whatever folders the user indexed — not organisation-wide Glean. An agent
+  cannot otherwise tell which index answered, and "my Downloads folder" must never be
+  mistaken for company truth. Same reasoning as the mock banner below, different risk:
+  mock data is fabricated, local data is real but narrow.
+- **They return passages, not answers.** Retrieval and a content graph; the model is
+  yours. The server has no model in-process and does not pretend to.
+
+If nothing has been indexed yet, each tool says so and names the command that fixes it.
 
 ## Running the MCP server on mock data
 
