@@ -153,6 +153,9 @@ def render(markdown):
     lines = markdown.split("\n")
     out = []
     i, total = 0, len(lines)
+    # An image standing before any prose is the page's header image, not a
+    # figure inside it, and wants no surface of its own.
+    seen_prose = False
 
     while i < total:
         line = lines[i]
@@ -209,6 +212,7 @@ def render(markdown):
             level = len(heading.group(1))
             text = heading.group(2).strip()
             out.append('<h%d id="%s">%s</h%d>' % (level, slug(text), inline(text), level))
+            seen_prose = True
             i += 1
             continue
 
@@ -237,6 +241,11 @@ def render(markdown):
             i += 1
         markup = inline(" ".join(buf))
         kind = image_paragraph_class(markup)
+        # A strip of badges is never the header image, wherever it sits.
+        if kind and kind != "badges" and not seen_prose:
+            kind = "banner"
+        if not kind:
+            seen_prose = True
         css = ' class="imgrow %s"' % kind if kind else ""
         out.append("<p%s>%s</p>" % (css, markup))
 
@@ -248,8 +257,13 @@ def render(markdown):
 # --------------------------------------------------------------------------
 
 def page_title(markdown):
+    """First real h1, ignoring '#' comments inside fenced code blocks."""
+    in_fence = False
     for line in markdown.split("\n"):
-        if line.startswith("# "):
+        if line.strip().startswith(_FENCE):
+            in_fence = not in_fence
+            continue
+        if not in_fence and line.startswith("# "):
             return line[2:].strip()
     return "Glean Code"
 
@@ -262,9 +276,16 @@ def build(out_dir=None, root=None):
     markdown = (root / "README.md").read_text(encoding="utf-8")
     template = (HERE / "template.html").read_text(encoding="utf-8")
 
-    page = template.replace("{{TITLE}}", page_title(markdown))
+    title = page_title(markdown)
+    content = render(markdown)
+    if "<h1" not in content:
+        # The README leads with the wordmark image; keep a real heading for
+        # screen readers and search engines.
+        content = '<h1 class="sr-only">%s</h1>\n\n%s' % (title, content)
+
+    page = template.replace("{{TITLE}}", title)
     page = page.replace("{{REPO_URL}}", REPO_URL)
-    page = page.replace("{{CONTENT}}", render(markdown))
+    page = page.replace("{{CONTENT}}", content)
 
     if out_dir.exists():
         shutil.rmtree(out_dir)
