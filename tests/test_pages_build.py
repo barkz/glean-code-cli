@@ -279,6 +279,10 @@ class TestTemplate(unittest.TestCase):
         # widest one, clamped by the space left, stayed shorter than the rest.
         self.assertIn("p.badges img { height: 28px; width: auto; flex: 0 0 auto; }", self.css)
 
+    def test_tagline_is_set_in_the_mono_face(self):
+        rule = self.css[self.css.index('[align="center"] .banner + p {'):]
+        self.assertIn("font-family: var(--mono)", rule[:rule.index("}")])
+
     def test_image_rows_do_not_stretch_their_items(self):
         row = self.css[self.css.index("p.imgrow {"):]
         self.assertIn("align-items: center", row[:row.index("}")])
