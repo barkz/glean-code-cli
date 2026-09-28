@@ -104,7 +104,15 @@ python3 tools/set_version.py 41       # or set it explicitly
 ```
 
 The `version` job in `release.yml` fails a PR whose `__version__` does not match its
-number. `client.USER_AGENT` and the auth/doctor User-Agents all derive from
+number.
+
+Tags are the release marker, separate from the per-PR build identity. Pushing
+`v<version>` runs the `publish` job, which refuses a tag that disagrees with
+`__version__`, builds the zipapp and creates a GitHub Release with it attached:
+
+```bash
+git tag -a v0.2.41 -m "Glean Code v0.2.41" && git push origin v0.2.41
+``` `client.USER_AGENT` and the auth/doctor User-Agents all derive from
 `__version__`, and a test asserts no string in `glean_code/` hardcodes a version —
 they were `"glean-code/0.1"` for 38 PRs and went stale immediately.
 
