@@ -348,7 +348,7 @@ Queries the corpus is written to answer well:
 | [`/recommendations`](COMMANDS.md#recommendations) | `/recommendations` | The freshest documents, in full result shape |
 | [`/datasources.list`](COMMANDS.md#datasourceslist) | `/search` (facets) | The five datasource names and their index counts |
 | [`/docs.get`](COMMANDS.md#docsget) | `/getdocuments` | Lookup by id or URL; unknown specs echo back |
-| [`/docs.permissions`](COMMANDS.md#docspermissions) | `/getdocumentpermissions` | Author as `owner`, roster as `viewer` |
+| [`/docs.permissions`](COMMANDS.md#docspermissions) | `/getdocpermissions` | Author as `owner`, roster as `viewer` |
 | [`/summarize`](COMMANDS.md#summarize) | `/summarize` | A summary built from that document's body, author, and age |
 | [`/entities.list`](COMMANDS.md#entitieslist) | `/listentities` | The people roster |
 | [`/people.get`](COMMANDS.md#peopleget) | `/people` | Profile for a roster email |

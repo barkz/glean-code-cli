@@ -695,7 +695,7 @@ class TestCmdPins(unittest.TestCase):
                 s, [], {"url": "https://example.com/pto", "query": "pto policy"}
             )
         s.client.pin_create.assert_called_once_with(
-            "https://example.com/pto", "pto policy"
+            url="https://example.com/pto", query="pto policy", doc_id=None
         )
 
     def test_list_calls_client(self):

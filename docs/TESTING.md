@@ -157,3 +157,35 @@ The module patches out the mock client's simulated 0.25s network latency; withou
 - A corrupt database returns an error string rather than a traceback
 
 The linking fixture deliberately uses five documents rather than two. With two, every shared phrase appears in every document, so IDF cannot distinguish "topically shared" from "common vocabulary" and nothing can score above the threshold — a property of IDF at that scale, not a bug worth distorting the scoring to hide.
+
+## Spec conformance
+
+`tests/test_spec_conformance.py` reads `glean_code/client.py` with `ast` and asserts
+that every REST path and HTTP method it calls exists in Glean's published OpenAPI
+spec. It compares against `tests/spec_manifest.json` rather than the live spec, so
+it stays offline like the rest of the suite.
+
+Regenerate the manifest when Glean ships a spec update:
+
+```bash
+python3 -m pip install pyyaml            # tooling-only dependency
+python3 tools/refresh_spec_manifest.py
+python3 -m unittest tests.test_spec_conformance -v
+```
+
+The check exists because twelve Client API calls once drifted from the spec
+undetected: `_mock_response` is keyed on the same path strings the live client
+posts to, so a wrong path was wrong in both places and every test passed. It
+catches wrong paths, wrong methods, and invented endpoints.
+
+Two deliberate limits:
+
+- It does **not** require the client to call every documented endpoint. Plenty are
+  intentionally unimplemented.
+- It does not check request *body* fields. Those are covered by
+  `TestSpecConformantBodies` in `tests/test_client_extended.py`.
+
+Endpoints the spec declares but leaves undocumented (currently
+`/indexemployeelist`) are tracked in the manifest's `undocumented` section and
+allowed, but the test fails if one becomes documented again — the signal to drop
+the exception.

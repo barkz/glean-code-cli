@@ -30,6 +30,11 @@ python3 -m unittest tests.test_commands.TestParseArgs.test_flag_with_value
 
 There is no build step, no `pip install`, no linter config, and no `pyproject.toml`/`setup.py`. Tests use only the stdlib (`unittest`, `unittest.mock`) and make no network calls.
 
+`tools/refresh_spec_manifest.py` is the single exception: it fetches Glean's OpenAPI
+specs and needs PyYAML. It is tooling only — never imported by the package or the
+tests — so the zero-dependency guarantee still holds. The scheduled `spec-drift`
+workflow runs it with `--check` weekly.
+
 `install.py` is the only thing that produces an artifact: it stages the package in a temp
 directory and emits a zipapp, so nothing is ever built inside the repo. On macOS set
 `PYTHONPYCACHEPREFIX=~/.cache/python` to keep `__pycache__` out of the working tree —
@@ -83,6 +88,7 @@ Client API (`/rest/api/v1`, `api_token`) and Indexing API (`/api/index/v1`, `ind
 4. Add a `DOCS` entry in help_docs.py (summary, usage, params, examples, endpoint) or the command is hidden from `/help` and the planner.
 5. If it writes/deletes/changes auth, add the dotted name to `_NL_DESTRUCTIVE` in commands.py. A command that takes its verb positionally (`/config set`, `/personal purge`, `/flow purge`) goes in `_NL_DESTRUCTIVE_SUBS` instead, keyed by command name with the mutating sub-verbs.
 6. Add tests (mock-mode handler test + client/mock test). Reuse the `_mock_session()` helper pattern in the test files.
+7. Confirm the path exists in the spec. `tests/test_spec_conformance.py` asserts every REST path and method in `client.py` appears in `tests/spec_manifest.json`, which is generated from Glean's published OpenAPI specs by `tools/refresh_spec_manifest.py`. If the test fails, the endpoint is not in the spec — check the path before assuming the manifest is stale. Twelve calls once drifted precisely because mock responses are keyed on the same path strings the live client posts to, so a wrong path was wrong consistently and the suite stayed green.
 
 **Token safety** — never let real secrets reach disk or the history buffer. Secure refs (`token.secure.client` / `token.secure.indexing`) are stored verbatim and resolved from `$GLEAN_CLIENT_TOKEN` / `$GLEAN_INDEXING_TOKEN` at request time via `resolve_secure`. `_sanitize_for_history` masks `--token`/`--indexing-token` values and `/config set <token-key>` values before they enter `command_history`. `_display_token` masks literals to `***1234`. Preserve all of this when adding any command that handles a token.
 

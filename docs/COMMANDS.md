@@ -1385,7 +1385,7 @@ List callable tools exposed to agents in the current workspace.
 
 **Output** — Tool names and descriptions.
 
-**Endpoint** — `POST /rest/api/v1/tools/list`
+**Endpoint** — `GET /rest/api/v1/tools/list`
 
 ---
 
@@ -1461,7 +1461,7 @@ Fetch the permission list for a document.
 
 **Mock mode** — The document's author comes back as `owner` and the rest of the [people roster](MOCK_CORPUS.md#the-people-roster) as `viewer`, e.g. `/docs.permissions doc_plan_process` → `priya.raman@acme.com` as owner.
 
-**Endpoint** — `POST /rest/api/v1/getdocumentpermissions`
+**Endpoint** — `POST /rest/api/v1/getdocpermissions`
 
 ---
 
@@ -1521,24 +1521,6 @@ Look up a person's full profile by email address.
 
 ---
 
-#### /announcements.list
-
-List all current announcements in the workspace.
-
-```text
-/announcements.list
-```
-
-```text
-/announcements.list
-```
-
-**Output** — Announcement ids, titles, and metadata.
-
-**Endpoint** — `POST /rest/api/v1/announcements/list`
-
----
-
 #### /announcements.create
 
 Create a new workspace announcement.
@@ -1560,7 +1542,7 @@ Create a new workspace announcement.
 
 **Output** — The new announcement id and creation status.
 
-**Endpoint** — `POST /rest/api/v1/announcements/create`
+**Endpoint** — `POST /rest/api/v1/createannouncement`
 
 ---
 
@@ -1574,7 +1556,7 @@ Delete an announcement by id.
 
 | Parameter | Description |
 | --- | --- |
-| `id` | The announcement id (from `/announcements.list`). |
+| `id` | The announcement id (returned by `/announcements.create`). |
 
 ```text
 /announcements.delete ann_123
@@ -1582,7 +1564,7 @@ Delete an announcement by id.
 
 **Output** — Confirms the announcement was deleted.
 
-**Endpoint** — `POST /rest/api/v1/announcements/delete`
+**Endpoint** — `POST /rest/api/v1/deleteannouncement`
 
 ---
 

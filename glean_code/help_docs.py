@@ -390,7 +390,7 @@ DOCS: Dict[str, CommandDoc] = {
         "usage": "/tools.list",
         "params": [],
         "examples": ["/tools.list"],
-        "endpoint": "POST /rest/api/v1/tools/list",
+        "endpoint": "GET /rest/api/v1/tools/list",
     },
     "tools.call": {
         "summary": "Invoke a tool with a JSON argument object.",
@@ -422,7 +422,7 @@ DOCS: Dict[str, CommandDoc] = {
         "usage": "/docs.permissions <doc-id>",
         "params": [("doc-id", "Glean document id.")],
         "examples": ["/docs.permissions doc_123"],
-        "endpoint": "POST /rest/api/v1/getdocumentpermissions",
+        "endpoint": "POST /rest/api/v1/getdocpermissions",
     },
     "entities.list": {
         "summary": "List entities such as people, teams or groups.",
@@ -444,13 +444,6 @@ DOCS: Dict[str, CommandDoc] = {
     },
 
     # ---------------- announcements ----------------
-    "announcements.list": {
-        "summary": "List current announcements.",
-        "usage": "/announcements.list",
-        "params": [],
-        "examples": ["/announcements.list"],
-        "endpoint": "POST /rest/api/v1/announcements/list",
-    },
     "announcements.create": {
         "summary": "Create an announcement.",
         "usage": "/announcements.create --title <text> --body <text> [--audience <filter>]",
@@ -460,14 +453,14 @@ DOCS: Dict[str, CommandDoc] = {
             ("--audience", "Optional audience filter string."),
         ],
         "examples": ["/announcements.create --title \"All hands Friday\" --body \"10am PT\""],
-        "endpoint": "POST /rest/api/v1/announcements/create",
+        "endpoint": "POST /rest/api/v1/createannouncement",
     },
     "announcements.delete": {
         "summary": "Delete an announcement by id.",
         "usage": "/announcements.delete <id>",
         "params": [("id", "Announcement id.")],
         "examples": ["/announcements.delete ann_123"],
-        "endpoint": "POST /rest/api/v1/announcements/delete",
+        "endpoint": "POST /rest/api/v1/deleteannouncement",
     },
 
     # ---------------- collections ----------------
@@ -1135,7 +1128,7 @@ COMMAND_GROUPS: List[Tuple[str, List[str]]] = [
     ("Verification",   ["verification.list", "verification.verify", "verification.remind"]),
     ("Messages",       ["messages.get"]),
     ("Activity",       ["activity.report"]),
-    ("Announcements",  ["announcements.list", "announcements.create", "announcements.delete"]),
+    ("Announcements",  ["announcements.create", "announcements.delete"]),
     ("Collections",    ["collections.list", "collections.create", "collections.delete"]),
     ("Pins",           ["pins.list", "pins.create", "pins.delete"]),
     ("Indexing",       ["datasources.status", "datasources.config", "indexing.rotate-token",

@@ -1,5 +1,13 @@
 # API Incompatibility Report — glean-code-cli vs. Glean REST API
 
+> **Status: resolved 2026-09-27.** All twelve findings below have been fixed and
+> the client now conforms to spec 0.9.0 on every Client API path and method.
+> Ten were corrected directly; two needed a product decision:
+> `/announcements.list` was **removed** (no endpoint in the API backs it), and
+> `/pins.create` keeps its `--url` flag by resolving the URL to a document id
+> through `/getdocuments` before pinning, with `--doc-id` added to skip that
+> round trip. The report is kept as the record of what was wrong and why.
+
 **Date:** 2026-08-15
 **Scope:** every REST call made by `glean_code/client.py` — 40 Client API, 32 Indexing API, 5 Custom Metadata.
 
