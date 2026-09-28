@@ -350,3 +350,51 @@ class TestSetTitle(unittest.TestCase):
         with mock.patch.object(ui.sys, "stdout", buf):
             ui.clear_title()
         self.assertEqual(buf.getvalue(), "\033]0;\007")
+
+
+class TestVersionScheme(unittest.TestCase):
+    """__version__ is 0.2.<PR number>, and everything else derives from it.
+
+    The User-Agent strings were hardcoded as "glean-code/0.1" and went stale the
+    moment the version moved, so these assert they are derived rather than
+    duplicated.
+    """
+
+    def test_version_follows_the_pr_series(self):
+        from glean_code import __version__
+        self.assertRegex(__version__, r"^0\.2\.\d+$",
+                         "version must be 0.2.<PR number>")
+
+    def test_client_user_agent_derives_from_the_version(self):
+        from glean_code import __version__
+        from glean_code.client import USER_AGENT
+        self.assertEqual(USER_AGENT, f"glean-code/{__version__}")
+
+    def test_auth_user_agent_derives_from_the_version(self):
+        from glean_code import __version__
+        from glean_code.auth.oauth import _USER_AGENT
+        self.assertIn(__version__, _USER_AGENT)
+
+    def test_no_hardcoded_version_strings_remain(self):
+        # A literal version in any string will go stale the next time the
+        # version moves. Only string tokens are checked, so prose in a
+        # comment that mentions an old value does not trip it.
+        import io as _io
+        import re
+        import token as _token
+        import tokenize
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent / "glean_code"
+        pattern = re.compile(r"glean-code/\d+\.\d+")
+        offenders = []
+        for py in sorted(root.rglob("*.py")):
+            if py.name == "__init__.py" and py.parent == root:
+                continue  # the one place the version may be a literal
+            src = py.read_text(encoding="utf-8")
+            for tok in tokenize.generate_tokens(_io.StringIO(src).readline):
+                if tok.type == _token.STRING and pattern.search(tok.string):
+                    offenders.append(f"{py.relative_to(root)}:{tok.start[0]}")
+        self.assertEqual(
+            offenders, [],
+            "hardcoded version in a string; derive it from __version__")

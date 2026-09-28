@@ -92,6 +92,22 @@ Client API (`/rest/api/v1`, `api_token`) and Indexing API (`/api/index/v1`, `ind
 
 **Token safety** — never let real secrets reach disk or the history buffer. Secure refs (`token.secure.client` / `token.secure.indexing`) are stored verbatim and resolved from `$GLEAN_CLIENT_TOKEN` / `$GLEAN_INDEXING_TOKEN` at request time via `resolve_secure`. `_sanitize_for_history` masks `--token`/`--indexing-token` values and `/config set <token-key>` values before they enter `command_history`. `_display_token` masks literals to `***1234`. Preserve all of this when adding any command that handles a token.
 
+## Versioning
+
+`__version__` in [glean_code/__init__.py](glean_code/__init__.py) is `0.2.<PR>` — the
+patch component is the pull request number, so a build maps to exactly one PR. Bump it
+inside the PR once the number exists:
+
+```bash
+python3 tools/set_version.py          # infers the number from the open PR via gh
+python3 tools/set_version.py 41       # or set it explicitly
+```
+
+The `version` job in `release.yml` fails a PR whose `__version__` does not match its
+number. `client.USER_AGENT` and the auth/doctor User-Agents all derive from
+`__version__`, and a test asserts no string in `glean_code/` hardcodes a version —
+they were `"glean-code/0.1"` for 38 PRs and went stale immediately.
+
 ## Docs
 
 `docs/COMMANDS.md` (full per-command reference, mirrors `/help`), `docs/NATURAL_LANGUAGE.md` (planner design), `docs/PERSONAL.md` (the local index), and `docs/TESTING.md` (test-suite notes) supplement the README. Keep `docs/COMMANDS.md` and the `DOCS` dict consistent when changing command behavior.

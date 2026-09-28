@@ -1,8 +1,14 @@
 # Changelog
 
 All notable changes to Glean Code are documented here. The format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/). This project does not tag
-releases, so entries are grouped by date rather than version number.
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), with entries grouped by date.
+
+**Versioning.** `__version__` is `0.2.<PR>`, where the patch component is the number
+of the pull request that introduced the change — so any build traces straight back to
+one PR and its diff. The number only exists once a PR is open, so the bump happens
+inside the PR (`python3 tools/set_version.py`) and the `version` job in
+`release.yml` fails the PR if the two disagree. Every User-Agent string derives from
+`__version__`; nothing else hardcodes it.
 
 For what Glean Code is and how to run it, see the [README](README.md).
 
