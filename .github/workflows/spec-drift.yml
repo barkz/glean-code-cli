@@ -1,0 +1,45 @@
+name: spec-drift
+
+# Glean publishes its OpenAPI specs independently of this repo. The conformance
+# test (tests/test_spec_conformance.py) checks client.py against a committed
+# manifest so the suite stays offline; this job is what notices the manifest has
+# fallen behind the published spec.
+#
+# Deliberately NOT part of the release workflow: a spec update is an external
+# event, and it should not fail an unrelated pull request.
+
+on:
+  schedule:
+    - cron: "0 7 * * 1"     # Mondays, 07:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: is tests/spec_manifest.json still current?
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # PyYAML is a tooling-only dependency: the package and the test suite
+      # never import it, so the zero-dependency guarantee is unaffected.
+      - name: Install the tooling dependency
+        run: python -m pip install --quiet pyyaml
+
+      - name: Compare the manifest against the published spec
+        run: python3 tools/refresh_spec_manifest.py --check
+
+      - name: What to do if this failed
+        if: failure()
+        run: |
+          echo "::notice::Glean has published a spec change."
+          echo "Refresh the manifest and let the conformance test show what moved:"
+          echo "  python3 -m pip install pyyaml"
+          echo "  python3 tools/refresh_spec_manifest.py"
+          echo "  python3 -m unittest tests.test_spec_conformance -v"
