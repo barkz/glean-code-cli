@@ -3,6 +3,7 @@ name: release
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
@@ -97,3 +98,53 @@ jobs:
           name: glean-code-pyz
           path: ${{ runner.temp }}/glean-code.pyz
           if-no-files-found: error
+
+  # A tag is the release marker; __version__ is the per-PR build identity. This
+  # job turns `git push origin vX.Y.Z` into a GitHub Release with the zipapp
+  # attached, so there is something to download that is not a CI artifact
+  # expiring in 90 days.
+  publish:
+    name: publish ${{ github.ref_name }}
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # required to create a release
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Refuse to publish a tag that disagrees with __version__
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          have=$(python3 -c "import re;print(re.search(r'__version__ = \"([^\"]+)\"', open('glean_code/__init__.py').read()).group(1))")
+          want="${TAG#v}"
+          if [ "$have" != "$want" ]; then
+            echo "::error::tag $TAG does not match __version__ $have"
+            exit 1
+          fi
+          echo "tag $TAG matches __version__ $have"
+
+      - name: Build the zipapp
+        env:
+          PYTHONPYCACHEPREFIX: ${{ runner.temp }}/pycache
+        run: |
+          python -c "
+          import pathlib, install
+          out = install.build_zipapp(pathlib.Path('glean-code.pyz'))
+          print(f'built {out} ({out.stat().st_size / 1024:.0f} KB)')
+          "
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$TAG" glean-code.pyz \
+            --title "Glean Code $TAG" \
+            --generate-notes \
+            --verify-tag
