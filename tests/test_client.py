@@ -125,12 +125,12 @@ class TestMockResponse(unittest.TestCase):
     # --- /agents/runs/wait and /agents/runs/stream ---
 
     def test_agent_run_wait_returns_output(self):
-        resp = _mock_response("/agents/runs/wait", {"agentId": "agt_research", "input": "hello"})
+        resp = _mock_response("/agents/runs/wait", {"agent_id": "agt_research", "input": "hello"})
         self.assertIn("output", resp)
         self.assertIn("agt_research", resp["output"])
 
     def test_agent_run_stream_returns_output(self):
-        resp = _mock_response("/agents/runs/stream", {"agentId": "agt_sales", "input": "hi"})
+        resp = _mock_response("/agents/runs/stream", {"agent_id": "agt_sales", "input": "hi"})
         self.assertIn("output", resp)
         self.assertIn("runId", resp)
 
@@ -173,10 +173,10 @@ class TestMockResponse(unittest.TestCase):
         resp = _mock_response("/getdocuments", {"documentSpecs": specs})
         self.assertEqual(len(resp["documents"]), 3)
 
-    # --- /getdocumentpermissions ---
+    # --- /getdocpermissions ---
 
     def test_document_permissions_returns_permissions_list(self):
-        resp = _mock_response("/getdocumentpermissions", {"documentSpec": {"id": "d1"}})
+        resp = _mock_response("/getdocpermissions", {"documentId": "d1"})
         self.assertIn("permissions", resp)
         self.assertIsInstance(resp["permissions"], list)
 
@@ -196,7 +196,7 @@ class TestMockResponse(unittest.TestCase):
     # --- /people ---
 
     def test_people_returns_profile(self):
-        resp = _mock_response("/people", {"email": "alice@example.com"})
+        resp = _mock_response("/people", {"emailIds": ["alice@example.com"]})
         self.assertEqual(resp["email"], "alice@example.com")
         self.assertIn("name", resp)
 
@@ -207,17 +207,17 @@ class TestMockResponse(unittest.TestCase):
         self.assertIn("announcements", resp)
 
     def test_announcements_create_returns_id_and_status(self):
-        resp = _mock_response("/announcements/create", {"title": "Hi", "body": {"text": "hello"}})
+        resp = _mock_response("/createannouncement", {"title": "Hi", "body": {"text": "hello"}})
         self.assertIn("id", resp)
         self.assertEqual(resp["status"], "created")
 
     def test_announcements_create_unique_ids(self):
-        r1 = _mock_response("/announcements/create", {"title": "A", "body": {}})
-        r2 = _mock_response("/announcements/create", {"title": "B", "body": {}})
+        r1 = _mock_response("/createannouncement", {"title": "A", "body": {}})
+        r2 = _mock_response("/createannouncement", {"title": "B", "body": {}})
         self.assertNotEqual(r1["id"], r2["id"])
 
     def test_announcements_delete_echoes_id(self):
-        resp = _mock_response("/announcements/delete", {"id": "ann_42"})
+        resp = _mock_response("/deleteannouncement", {"id": "ann_42"})
         self.assertEqual(resp["id"], "ann_42")
         self.assertEqual(resp["status"], "deleted")
 
@@ -349,14 +349,14 @@ class TestGleanClientMockMode(unittest.TestCase):
             mock_fn.return_value = {"agents": []}
             self.client.agents_search()
         body = mock_fn.call_args[0][1]
-        self.assertEqual(body["query"], "")
+        self.assertEqual(body["name"], "")
 
     def test_agents_search_with_query(self):
         with patch("glean_code.client._mock_response") as mock_fn:
             mock_fn.return_value = {"agents": []}
             self.client.agents_search(query="sales")
         body = mock_fn.call_args[0][1]
-        self.assertEqual(body["query"], "sales")
+        self.assertEqual(body["name"], "sales")
 
     def test_agent_run_wait_path(self):
         with patch("glean_code.client._mock_response") as mock_fn:
@@ -389,9 +389,11 @@ class TestGleanClientMockMode(unittest.TestCase):
             mock_fn.return_value = {"status": "ok"}
             self.client.feedback("tok_1", "THUMBS_UP", comments="great")
         body = mock_fn.call_args[0][1]
-        self.assertEqual(body["trackingToken"], "tok_1")
-        self.assertEqual(body["category"], "THUMBS_UP")
-        self.assertEqual(body["comments"], "great")
+        # The spec requires event + trackingTokens; THUMBS_UP maps to UPVOTE.
+        self.assertEqual(body["event"], "UPVOTE")
+        self.assertEqual(body["trackingTokens"], ["tok_1"])
+        self.assertEqual(body["manualFeedbackInfo"]["comments"], "great")
+        self.assertNotIn("category", body)  # category is a separate enum
 
     def test_feedback_no_comments(self):
         with patch("glean_code.client._mock_response") as mock_fn:

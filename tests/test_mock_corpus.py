@@ -130,7 +130,7 @@ class TestEndpointsShareTheCorpus(unittest.TestCase):
     def test_search_result_url_summarizes_to_the_same_document(self):
         hit = _mock_response("/search", {"query": "pto policy", "pageSize": 1})["results"][0]
         summary = _mock_response("/summarize",
-                                 {"documentSpec": {"url": hit["url"]}})["summary"]
+                                 {"documentSpecs": [{"url": hit["url"]}]})["summary"]
         self.assertIn(hit["title"], summary)
 
     def test_chat_citations_track_the_question(self):
@@ -154,14 +154,15 @@ class TestEndpointsShareTheCorpus(unittest.TestCase):
 
     def test_permissions_owner_is_the_document_author(self):
         doc = mock_corpus.find({"id": "doc_plan_charter"})
-        perms = _mock_response("/getdocumentpermissions",
-                               {"documentSpec": {"id": "doc_plan_charter"}})["permissions"]
+        perms = _mock_response("/getdocpermissions",
+                               {"documentId": "doc_plan_charter"})["permissions"]
         self.assertEqual(perms[0]["email"], doc["author"])
         self.assertEqual(perms[0]["role"], "owner")
 
     def test_people_lookup_uses_the_roster(self):
-        resp = _mock_response("/people", {"email": "priya.raman@acme.com"})
+        resp = _mock_response("/people", {"emailIds": ["priya.raman@acme.com"]})
         self.assertEqual(resp["name"], "Priya Raman")
+        self.assertEqual(resp["email"], "priya.raman@acme.com")
 
     def test_no_endpoint_leaks_raw_placeholders(self):
         calls = [

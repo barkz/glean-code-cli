@@ -155,12 +155,12 @@ class TestMockResponseNewEndpoints(unittest.TestCase):
 
     def test_summarize_by_url_returns_summary(self):
         resp = _mock_response("/summarize",
-                               {"documentSpec": {"url": "https://example.com/doc"}})
+                               {"documentSpecs": [{"url": "https://example.com/doc"}]})
         self.assertIn("summary", resp)
         self.assertIn("https://example.com/doc", resp["summary"])
 
     def test_summarize_by_id_returns_summary(self):
-        resp = _mock_response("/summarize", {"documentSpec": {"id": "doc_123"}})
+        resp = _mock_response("/summarize", {"documentSpecs": [{"id": "doc_123"}]})
         self.assertIn("summary", resp)
         self.assertIn("doc_123", resp["summary"])
 
@@ -394,14 +394,14 @@ class TestGleanClientNewMethods(unittest.TestCase):
             mock_fn.return_value = {"summary": "..."}
             self.client.summarize(url="https://example.com/doc")
         body = mock_fn.call_args[0][1]
-        self.assertEqual(body["documentSpec"]["url"], "https://example.com/doc")
+        self.assertEqual(body["documentSpecs"], [{"url": "https://example.com/doc"}])
 
     def test_summarize_by_id(self):
         with patch("glean_code.client._mock_response") as mock_fn:
             mock_fn.return_value = {"summary": "..."}
             self.client.summarize(doc_id="doc_123")
         body = mock_fn.call_args[0][1]
-        self.assertEqual(body["documentSpec"]["id"], "doc_123")
+        self.assertEqual(body["documentSpecs"], [{"id": "doc_123"}])
 
     def test_summarize_with_query(self):
         with patch("glean_code.client._mock_response") as mock_fn:
@@ -418,10 +418,11 @@ class TestGleanClientNewMethods(unittest.TestCase):
         self.assertNotIn("count", body)
 
     def test_verification_list_with_count(self):
+        # `count` is a query parameter in the spec, so it must NOT be in the body.
         with patch("glean_code.client._mock_response") as mock_fn:
             mock_fn.return_value = {"verifications": []}
             self.client.verification_list(count=10)
-        self.assertEqual(mock_fn.call_args[0][1]["count"], 10)
+        self.assertEqual(mock_fn.call_args[0][1], {})
 
     def test_verification_verify_body(self):
         with patch("glean_code.client._mock_response") as mock_fn:
@@ -580,3 +581,128 @@ class TestGleanClientCustomMetadata(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestWireLevelRequests(unittest.TestCase):
+    """What actually goes on the wire: HTTP method, URL and body.
+
+    These endpoints diverge from the "everything is a POST with a JSON body"
+    house style, and nothing exercised the live path before, which is how the
+    divergences went unnoticed.
+    """
+
+    def setUp(self):
+        from glean_code.config import Config
+        self.client = GleanClient(
+            Config(instance="acme-be.glean.com", api_token="t", mode="live")
+        )
+
+    def _capture(self, call):
+        """Run `call` against a stubbed urlopen and report the request made."""
+        seen = {}
+
+        class FakeResp:
+            def read(self_inner):
+                return b'{"ok":true}'
+            def __enter__(self_inner):
+                return self_inner
+            def __exit__(self_inner, *a):
+                return False
+
+        def fake_urlopen(req, timeout=None):
+            seen["url"] = req.full_url
+            seen["method"] = req.get_method()
+            seen["data"] = req.data
+            return FakeResp()
+
+        with patch("glean_code.client.urllib.request.urlopen", fake_urlopen):
+            call()
+        return seen
+
+    # --- /tools/list is a GET ---
+
+    def test_tools_list_is_a_get_with_no_body(self):
+        seen = self._capture(lambda: self.client.tools_list())
+        self.assertEqual(seen["method"], "GET")
+        self.assertTrue(seen["url"].endswith("/rest/api/v1/tools/list"))
+        self.assertIsNone(seen["data"], "a GET must not carry a request body")
+
+    def test_tools_list_filter_becomes_repeated_query_params(self):
+        seen = self._capture(lambda: self.client.tools_list(tool_names=["search", "chat"]))
+        self.assertEqual(seen["method"], "GET")
+        self.assertIn("toolNames=search", seen["url"])
+        self.assertIn("toolNames=chat", seen["url"])
+
+    # --- /listverifications takes count as a query param ---
+
+    def test_verification_count_goes_in_the_query_string(self):
+        seen = self._capture(lambda: self.client.verification_list(count=5))
+        self.assertEqual(seen["method"], "POST")
+        self.assertTrue(seen["url"].endswith("/listverifications?count=5"))
+
+    def test_verification_without_count_has_no_query_string(self):
+        seen = self._capture(lambda: self.client.verification_list())
+        self.assertTrue(seen["url"].endswith("/listverifications"))
+        self.assertNotIn("?", seen["url"])
+
+    # --- the ordinary case still behaves ---
+
+    def test_search_is_still_a_post_with_a_body(self):
+        seen = self._capture(lambda: self.client.search("q2 plan"))
+        self.assertEqual(seen["method"], "POST")
+        self.assertIsNotNone(seen["data"])
+        self.assertNotIn("?", seen["url"])
+
+
+class TestSpecConformantBodies(unittest.TestCase):
+    """Request bodies for the endpoints whose field names were wrong."""
+
+    def setUp(self):
+        from glean_code.config import Config
+        self.client = GleanClient(Config(mode="mock", api_token="t",
+                                         instance="acme-be.glean.com"))
+
+    def _body(self, call):
+        with patch("glean_code.client._mock_response") as m:
+            m.return_value = {}
+            call()
+        return m.call_args[0][1]
+
+    def test_tools_call_sends_parameters_not_arguments(self):
+        body = self._body(lambda: self.client.tools_call("search", {"query": "pto"}))
+        self.assertEqual(body["parameters"], {"query": "pto"})
+        self.assertNotIn("arguments", body)
+
+    def test_person_sends_email_ids_as_a_list(self):
+        body = self._body(lambda: self.client.person("a@b.com"))
+        self.assertEqual(body["emailIds"], ["a@b.com"])
+        self.assertNotIn("email", body)
+
+    def test_summarize_sends_document_specs_as_a_list(self):
+        body = self._body(lambda: self.client.summarize(doc_id="d1"))
+        self.assertEqual(body["documentSpecs"], [{"id": "d1"}])
+        self.assertNotIn("documentSpec", body)
+
+    def test_agent_run_sends_snake_case_agent_id(self):
+        body = self._body(lambda: self.client.agent_run("agt_1", "hello"))
+        self.assertEqual(body["agent_id"], "agt_1")
+        self.assertNotIn("agentId", body)
+
+    def test_feedback_maps_thumbs_to_vote_events(self):
+        up = self._body(lambda: self.client.feedback("tok", "THUMBS_UP"))
+        self.assertEqual(up["event"], "UPVOTE")
+        down = self._body(lambda: self.client.feedback("tok", "THUMBS_DOWN"))
+        self.assertEqual(down["event"], "DOWNVOTE")
+
+    def test_feedback_passes_other_events_through(self):
+        body = self._body(lambda: self.client.feedback("tok", "click"))
+        self.assertEqual(body["event"], "CLICK")
+
+    def test_feedback_keeps_category_separate_from_event(self):
+        body = self._body(lambda: self.client.feedback("tok", "UPVOTE", category="search"))
+        self.assertEqual(body["event"], "UPVOTE")
+        self.assertEqual(body["category"], "SEARCH")
+
+    def test_document_permissions_sends_a_bare_document_id(self):
+        body = self._body(lambda: self.client.document_permissions("d1"))
+        self.assertEqual(body, {"documentId": "d1"})

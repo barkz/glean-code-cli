@@ -1385,7 +1385,7 @@ List callable tools exposed to agents in the current workspace.
 
 **Output** — Tool names and descriptions.
 
-**Endpoint** — `POST /rest/api/v1/tools/list`
+**Endpoint** — `GET /rest/api/v1/tools/list`
 
 ---
 
@@ -1461,7 +1461,7 @@ Fetch the permission list for a document.
 
 **Mock mode** — The document's author comes back as `owner` and the rest of the [people roster](MOCK_CORPUS.md#the-people-roster) as `viewer`, e.g. `/docs.permissions doc_plan_process` → `priya.raman@acme.com` as owner.
 
-**Endpoint** — `POST /rest/api/v1/getdocumentpermissions`
+**Endpoint** — `POST /rest/api/v1/getdocpermissions`
 
 ---
 
@@ -1560,7 +1560,7 @@ Create a new workspace announcement.
 
 **Output** — The new announcement id and creation status.
 
-**Endpoint** — `POST /rest/api/v1/announcements/create`
+**Endpoint** — `POST /rest/api/v1/createannouncement`
 
 ---
 
@@ -1582,7 +1582,7 @@ Delete an announcement by id.
 
 **Output** — Confirms the announcement was deleted.
 
-**Endpoint** — `POST /rest/api/v1/announcements/delete`
+**Endpoint** — `POST /rest/api/v1/deleteannouncement`
 
 ---
 

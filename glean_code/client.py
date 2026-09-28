@@ -16,12 +16,12 @@ Endpoints covered (all POST unless noted):
   /tools/list                List callable tools
   /tools/call                Invoke a tool
   /getdocuments              Fetch documents by id or URL
-  /getdocumentpermissions    Fetch permissions for a document
+  /getdocpermissions         Fetch permissions for a document
   /listentities              List entities (people, teams, etc.)
   /people                    Get a person profile
-  /announcements/create      Create an announcement
+  /createannouncement        Create an announcement
   /announcements/list        List announcements
-  /announcements/delete      Delete an announcement
+  /deleteannouncement        Delete an announcement
   /listcollections           List collections
   /createcollection          Create a collection
   /listpins                  List pinned results
@@ -37,6 +37,7 @@ from typing import Any, Dict, List, Optional
 try:
     import urllib.request
     import urllib.error
+    import urllib.parse
 except Exception:  # pragma: no cover
     urllib = None  # type: ignore
 
@@ -79,7 +80,15 @@ class GleanClient:
         if _flow.capture_enabled(setting, self.config.effective_mode):
             _flow.record(self.config, path, body, resp)
 
-    def _post(self, path: str, body: Dict[str, Any]) -> Dict[str, Any]:
+    def _post(self, path: str, body: Dict[str, Any],
+              query: Optional[Dict[str, Any]] = None,
+              method: str = "POST") -> Dict[str, Any]:
+        """Call a Client API endpoint.
+
+        `query` holds parameters the spec defines as query-string rather than
+        body fields; `method` covers the handful of GET endpoints. Mock and
+        local dispatch stay keyed on the bare `path`, so neither is affected.
+        """
         if self.config.effective_mode == "local":
             resp = _local_response(path, body)
             self._capture(path, body, resp)
@@ -97,8 +106,13 @@ class GleanClient:
         if not base:
             raise GleanError("No base URL configured. Run /login or /config set instance <name>.")
         url = f"{base}{path}"
-        data = json.dumps(body).encode("utf-8")
-        req = urllib.request.Request(url, data=data, headers=self._headers(), method="POST")
+        if query:
+            pairs = {k: v for k, v in query.items() if v is not None}
+            if pairs:
+                url += "?" + urllib.parse.urlencode(pairs, doseq=True)
+        # GET endpoints must not carry a body, or the server rejects the request.
+        data = None if method == "GET" else json.dumps(body).encode("utf-8")
+        req = urllib.request.Request(url, data=data, headers=self._headers(), method=method)
         try:
             with urllib.request.urlopen(req, timeout=60) as resp:
                 raw = resp.read().decode("utf-8")
@@ -425,27 +439,49 @@ class GleanClient:
             body["user"] = user
         return self._post("/recommendations", body)
 
+    # Friendly aliases for the two Feedback.event values the CLI exposes.
+    _FEEDBACK_EVENTS = {"THUMBS_UP": "UPVOTE", "THUMBS_DOWN": "DOWNVOTE"}
+
     def feedback(self, tracking_token: str, rating: str,
-                 comments: Optional[str] = None) -> Dict[str, Any]:
-        body = {"trackingToken": tracking_token, "category": rating}
+                 comments: Optional[str] = None,
+                 category: Optional[str] = None) -> Dict[str, Any]:
+        """Send feedback for a tracking token.
+
+        `rating` accepts THUMBS_UP / THUMBS_DOWN (mapped to the spec's
+        UPVOTE / DOWNVOTE) or any Feedback.event value verbatim. `event` and
+        `trackingTokens` are both required by the API; `category` (SEARCH,
+        CHAT, ...) is a separate enum and stays optional.
+        """
+        event = self._FEEDBACK_EVENTS.get(rating.upper(), rating.upper())
+        body: Dict[str, Any] = {
+            "event": event,
+            "trackingTokens": [tracking_token],
+        }
+        if category:
+            body["category"] = category.upper()
         if comments:
-            body["comments"] = comments
+            body["manualFeedbackInfo"] = {"comments": comments}
         return self._post("/feedback", body)
 
     # ---------------- agents and tools ----------------
 
     def agents_search(self, query: Optional[str] = None) -> Dict[str, Any]:
-        return self._post("/agents/search", {"query": query or ""})
+        # The API filters agents by name; `query` is the CLI's flag name.
+        return self._post("/agents/search", {"name": query or ""})
 
     def agent_run(self, agent_id: str, input: str, stream: bool = False) -> Dict[str, Any]:
         path = "/agents/runs/stream" if stream else "/agents/runs/wait"
-        return self._post(path, {"agentId": agent_id, "input": input})
+        return self._post(path, {"agent_id": agent_id, "input": input})
 
-    def tools_list(self) -> Dict[str, Any]:
-        return self._post("/tools/list", {})
+    def tools_list(self, tool_names: Optional[List[str]] = None) -> Dict[str, Any]:
+        # GET, per the spec — the optional filter is a query parameter.
+        return self._post("/tools/list", {}, method="GET",
+                          query={"toolNames": tool_names} if tool_names else None)
 
     def tools_call(self, name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
-        return self._post("/tools/call", {"name": name, "arguments": arguments})
+        # The wire field is `parameters`; `arguments` is kept as the Python
+        # argument name because that is what the /tools.call command calls it.
+        return self._post("/tools/call", {"name": name, "parameters": arguments})
 
     # ---------------- documents and people ----------------
 
@@ -459,7 +495,7 @@ class GleanClient:
         return self._post("/getdocuments", body)
 
     def document_permissions(self, doc_id: str) -> Dict[str, Any]:
-        return self._post("/getdocumentpermissions", {"documentSpec": {"id": doc_id}})
+        return self._post("/getdocpermissions", {"documentId": doc_id})
 
     def list_entities(self, kind: str = "PEOPLE", page_size: int = 10,
                       query: Optional[str] = None) -> Dict[str, Any]:
@@ -469,7 +505,7 @@ class GleanClient:
         return self._post("/listentities", body)
 
     def person(self, email: str) -> Dict[str, Any]:
-        return self._post("/people", {"email": email})
+        return self._post("/people", {"emailIds": [email]})
 
     # ---------------- announcements, collections, pins ----------------
 
@@ -481,10 +517,10 @@ class GleanClient:
         body: Dict[str, Any] = {"title": title, "body": {"text": body_text}}
         if audience:
             body["audienceFilters"] = [{"filter": audience}]
-        return self._post("/announcements/create", body)
+        return self._post("/createannouncement", body)
 
     def announcement_delete(self, ann_id: str) -> Dict[str, Any]:
-        return self._post("/announcements/delete", {"id": ann_id})
+        return self._post("/deleteannouncement", {"id": ann_id})
 
     def collections_list(self) -> Dict[str, Any]:
         return self._post("/listcollections", {})
@@ -581,9 +617,9 @@ class GleanClient:
                   query: Optional[str] = None) -> Dict[str, Any]:
         body: Dict[str, Any] = {}
         if doc_id:
-            body["documentSpec"] = {"id": doc_id}
+            body["documentSpecs"] = [{"id": doc_id}]
         elif url:
-            body["documentSpec"] = {"url": url}
+            body["documentSpecs"] = [{"url": url}]
         if query:
             body["query"] = query
         return self._post("/summarize", body)
@@ -591,10 +627,9 @@ class GleanClient:
     # ---------------- verification ----------------
 
     def verification_list(self, count: Optional[int] = None) -> Dict[str, Any]:
-        body: Dict[str, Any] = {}
-        if count:
-            body["count"] = count
-        return self._post("/listverifications", body)
+        # `count` is a query parameter in the spec, not a body field.
+        return self._post("/listverifications", {},
+                          query={"count": count} if count else None)
 
     def verification_verify(self, doc_id: str,
                              action: Optional[str] = None) -> Dict[str, Any]:
@@ -756,15 +791,21 @@ def _mock_response(path: str, body: Dict[str, Any]) -> Dict[str, Any]:
     if path == "/feedback":
         return {"status": "ok"}
     if path == "/agents/search":
-        return {"agents": [
+        agents = [
             {"id": "agt_research", "name": "Research Agent",
              "description": "Deep research across company knowledge."},
             {"id": "agt_sales", "name": "Sales Assistant",
              "description": "Summarises accounts and prepares call notes."},
-        ]}
+        ]
+        # The API filters by agent name; mirror that so offline behaviour and
+        # live behaviour agree.
+        name = (body.get("name") or "").strip().lower()
+        if name:
+            agents = [a for a in agents if name in a["name"].lower()]
+        return {"agents": agents}
     if path in ("/agents/runs/wait", "/agents/runs/stream"):
         return {"runId": f"run_{uuid.uuid4().hex[:6]}",
-                "output": f"[mock agent {body.get('agentId')}] Finished task: "
+                "output": f"[mock agent {body.get('agent_id')}] Finished task: "
                           f"{body.get('input','')[:60]}..."}
     if path == "/tools/list":
         return {"tools": [
@@ -773,7 +814,7 @@ def _mock_response(path: str, body: Dict[str, Any]) -> Dict[str, Any]:
         ]}
     if path == "/tools/call":
         return {"name": body.get("name"), "result": "ok",
-                "output": f"[mock tool {body.get('name')}] args={body.get('arguments')}"}
+                "output": f"[mock tool {body.get('name')}] args={body.get('parameters')}"}
     if path == "/getdocuments":
         specs = body.get("documentSpecs", [])
         docs = []
@@ -793,8 +834,8 @@ def _mock_response(path: str, body: Dict[str, Any]) -> Dict[str, Any]:
                           "title": "Untitled document (not in the mock corpus)",
                           "url": s.get("url", "https://example.com")})
         return {"documents": docs}
-    if path == "/getdocumentpermissions":
-        doc = mock_corpus.find(body.get("documentSpec") or {})
+    if path == "/getdocpermissions":
+        doc = mock_corpus.find(body)
         owner = (doc or {}).get("author")
         roster = mock_corpus.people(4)
         perms = []
@@ -806,12 +847,13 @@ def _mock_response(path: str, body: Dict[str, Any]) -> Dict[str, Any]:
     if path == "/listentities":
         return {"results": mock_corpus.people(int(body.get("pageSize") or 10))}
     if path == "/people":
-        return mock_corpus.person(body.get("email"))
+        emails = body.get("emailIds") or []
+        return mock_corpus.person(emails[0] if emails else None)
     if path == "/announcements/list":
         return {"announcements": [{"id": "ann_1", "title": "Welcome to Glean"}]}
-    if path == "/announcements/create":
+    if path == "/createannouncement":
         return {"id": f"ann_{uuid.uuid4().hex[:6]}", "status": "created"}
-    if path == "/announcements/delete":
+    if path == "/deleteannouncement":
         return {"id": body.get("id"), "status": "deleted"}
     if path == "/listcollections":
         return {"collections": [
@@ -876,7 +918,8 @@ def _mock_response(path: str, body: Dict[str, Any]) -> Dict[str, Any]:
     if path == "/deleteanswer":
         return {"id": body.get("id"), "status": "deleted"}
     if path == "/summarize":
-        spec = body.get("documentSpec", {})
+        specs = body.get("documentSpecs") or []
+        spec = specs[0] if specs else {}
         src = spec.get("url") or spec.get("id") or "the document"
         doc = mock_corpus.find(spec)
         if doc:
