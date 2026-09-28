@@ -10,6 +10,28 @@ permissions:
   contents: read
 
 jobs:
+  # The patch component of __version__ is the number of the PR that introduces
+  # the change (0.2.<PR>), so it cannot be known until the PR is opened. This
+  # job is what stops the scheme silently rotting.
+  version:
+    name: version matches the PR number
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check 0.2.<PR>
+        env:
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          have=$(python3 -c "import re;print(re.search(r'__version__ = \"([^\"]+)\"', open('glean_code/__init__.py').read()).group(1))")
+          want="0.2.$PR"
+          if [ "$have" != "$want" ]; then
+            echo "::error::__version__ is $have but this is PR #$PR, so it must be $want"
+            echo "Fix it with:  python3 tools/set_version.py $PR"
+            exit 1
+          fi
+          echo "__version__ = $have, matching PR #$PR"
+
   test:
     name: python ${{ matrix.python }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}

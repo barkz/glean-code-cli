@@ -18,7 +18,9 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Dict, Optional
 
-_USER_AGENT = "glean-code/0.1 (auth)"
+from .. import __version__
+
+_USER_AGENT = f"glean-code/{__version__} (auth)"
 _TIMEOUT = 30
 
 

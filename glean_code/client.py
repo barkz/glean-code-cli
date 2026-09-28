@@ -43,7 +43,13 @@ except Exception:  # pragma: no cover
 from . import flow as _flow
 from . import mock_corpus
 from . import personal
+from . import __version__
 from .config import Config
+
+# Sent on every request. Derived from the package version so a version bump
+# cannot leave a stale string behind, which is exactly what happened while this
+# was hardcoded as "glean-code/0.1".
+USER_AGENT = f"glean-code/{__version__}"
 
 
 class GleanError(Exception):
@@ -60,7 +66,7 @@ class GleanClient:
         h = {
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "User-Agent": "glean-code/0.1",
+            "User-Agent": USER_AGENT,
         }
         if self.config.effective_api_token:
             h["Authorization"] = f"Bearer {self.config.effective_api_token}"
@@ -132,7 +138,7 @@ class GleanClient:
         return {
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "User-Agent": "glean-code/0.1",
+            "User-Agent": USER_AGENT,
             "Authorization": f"Bearer {self.config.effective_indexing_token}",
         }
 

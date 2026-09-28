@@ -20,6 +20,7 @@ import webbrowser
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple  # noqa: F401
 
+from . import __version__
 from . import ui
 from . import _indexing_walk as _walk
 from . import flow as _flow
@@ -718,7 +719,7 @@ def cmd_doctor(s: Session, pos, flags):
         f"{base}/search", data=probe_body, method="POST",
         headers={"Content-Type": "application/json",
                  "Authorization": f"Bearer {cfg.api_token}",
-                 "User-Agent": "glean-code/doctor"},
+                 "User-Agent": f"glean-code/{__version__} (doctor)"},
     )
     t0 = time.time()
     try:
