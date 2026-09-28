@@ -1521,24 +1521,6 @@ Look up a person's full profile by email address.
 
 ---
 
-#### /announcements.list
-
-List all current announcements in the workspace.
-
-```text
-/announcements.list
-```
-
-```text
-/announcements.list
-```
-
-**Output** — Announcement ids, titles, and metadata.
-
-**Endpoint** — `POST /rest/api/v1/announcements/list`
-
----
-
 #### /announcements.create
 
 Create a new workspace announcement.
@@ -1574,7 +1556,7 @@ Delete an announcement by id.
 
 | Parameter | Description |
 | --- | --- |
-| `id` | The announcement id (from `/announcements.list`). |
+| `id` | The announcement id (returned by `/announcements.create`). |
 
 ```text
 /announcements.delete ann_123

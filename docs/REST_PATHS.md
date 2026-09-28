@@ -19,7 +19,6 @@ POST /getdocuments
 POST /getdocpermissions
 POST /listentities
 POST /people
-POST /announcements/list
 POST /createannouncement
 POST /deleteannouncement
 POST /listcollections

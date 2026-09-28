@@ -20,12 +20,11 @@ Endpoints covered (all POST unless noted):
   /listentities              List entities (people, teams, etc.)
   /people                    Get a person profile
   /createannouncement        Create an announcement
-  /announcements/list        List announcements
   /deleteannouncement        Delete an announcement
   /listcollections           List collections
   /createcollection          Create a collection
   /listpins                  List pinned results
-  /createpin                 Create a pinned result
+  /pin                       Create a pinned result
 """
 from __future__ import annotations
 
@@ -509,9 +508,6 @@ class GleanClient:
 
     # ---------------- announcements, collections, pins ----------------
 
-    def announcements_list(self) -> Dict[str, Any]:
-        return self._post("/announcements/list", {})
-
     def announcement_create(self, title: str, body_text: str,
                             audience: Optional[str] = None) -> Dict[str, Any]:
         body: Dict[str, Any] = {"title": title, "body": {"text": body_text}}
@@ -534,8 +530,28 @@ class GleanClient:
     def pins_list(self) -> Dict[str, Any]:
         return self._post("/listpins", {})
 
-    def pin_create(self, url: str, query: str) -> Dict[str, Any]:
-        return self._post("/createpin", {"url": url, "query": query})
+    def pin_create(self, url: Optional[str] = None, query: str = "",
+                   doc_id: Optional[str] = None) -> Dict[str, Any]:
+        """Pin a document as a result for one or more queries.
+
+        The API pins by document id, while the CLI has always taken a URL, so a
+        URL is resolved through /getdocuments first. Pass `doc_id` to skip that
+        round trip.
+        """
+        if not doc_id:
+            if not url:
+                raise GleanError("pin_create needs either a url or a doc_id.")
+            resolved = self.get_documents(urls=[url])
+            docs = resolved.get("documents") or resolved.get("results") or []
+            if isinstance(docs, dict):          # some tenants key by spec
+                docs = list(docs.values())
+            doc_id = next((d.get("id") for d in docs if isinstance(d, dict) and d.get("id")), None)
+            if not doc_id:
+                raise GleanError(
+                    f"Could not resolve {url} to a document id, so it cannot be pinned. "
+                    "Pass --doc-id instead."
+                )
+        return self._post("/pin", {"documentId": doc_id, "queries": [query]})
 
     def pin_delete(self, pin_id: str) -> Dict[str, Any]:
         return self._post("/unpin", {"id": pin_id})
@@ -849,8 +865,6 @@ def _mock_response(path: str, body: Dict[str, Any]) -> Dict[str, Any]:
     if path == "/people":
         emails = body.get("emailIds") or []
         return mock_corpus.person(emails[0] if emails else None)
-    if path == "/announcements/list":
-        return {"announcements": [{"id": "ann_1", "title": "Welcome to Glean"}]}
     if path == "/createannouncement":
         return {"id": f"ann_{uuid.uuid4().hex[:6]}", "status": "created"}
     if path == "/deleteannouncement":
@@ -865,8 +879,10 @@ def _mock_response(path: str, body: Dict[str, Any]) -> Dict[str, Any]:
         return {"id": f"col_{uuid.uuid4().hex[:6]}", "name": body.get("name")}
     if path == "/listpins":
         return {"pins": [{"id": "pin_1", "query": "pto", "url": "https://example.com/pto"}]}
-    if path == "/createpin":
-        return {"id": f"pin_{uuid.uuid4().hex[:6]}", "status": "created"}
+    if path == "/pin":
+        return {"id": f"pin_{uuid.uuid4().hex[:6]}", "status": "created",
+                "documentId": body.get("documentId"),
+                "queries": body.get("queries") or []}
     if path == "/unpin":
         return {"id": body.get("id"), "status": "unpinned"}
     if path == "/deletecollection":

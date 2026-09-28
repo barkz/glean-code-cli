@@ -202,10 +202,6 @@ class TestMockResponse(unittest.TestCase):
 
     # --- /announcements/* ---
 
-    def test_announcements_list_returns_list(self):
-        resp = _mock_response("/announcements/list", {})
-        self.assertIn("announcements", resp)
-
     def test_announcements_create_returns_id_and_status(self):
         resp = _mock_response("/createannouncement", {"title": "Hi", "body": {"text": "hello"}})
         self.assertIn("id", resp)
@@ -239,7 +235,7 @@ class TestMockResponse(unittest.TestCase):
         self.assertIn("pins", resp)
 
     def test_pin_create_returns_id_and_status(self):
-        resp = _mock_response("/createpin", {"url": "https://pto.com", "query": "pto"})
+        resp = _mock_response("/pin", {"documentId": "doc_pto", "queries": ["pto"]})
         self.assertIn("id", resp)
         self.assertEqual(resp["status"], "created")
 
@@ -428,12 +424,36 @@ class TestGleanClientMockMode(unittest.TestCase):
         self.assertEqual(body["description"], "New hire docs")
 
     def test_pin_create_body(self):
+        """A URL is resolved to a document id, then pinned by id."""
+        with patch("glean_code.client._mock_response") as mock_fn:
+            mock_fn.side_effect = [
+                {"documents": [{"id": "doc_pto"}]},          # /getdocuments
+                {"id": "pin_1", "status": "created"},        # /pin
+            ]
+            self.client.pin_create("https://example.com/pto", "pto policy")
+        lookup_path, lookup_body = mock_fn.call_args_list[0][0][:2]
+        pin_path, pin_body = mock_fn.call_args_list[1][0][:2]
+        self.assertEqual(lookup_path, "/getdocuments")
+        self.assertEqual(lookup_body["documentSpecs"], [{"url": "https://example.com/pto"}])
+        self.assertEqual(pin_path, "/pin")
+        self.assertEqual(pin_body, {"documentId": "doc_pto", "queries": ["pto policy"]})
+
+    def test_pin_create_with_doc_id_skips_the_lookup(self):
         with patch("glean_code.client._mock_response") as mock_fn:
             mock_fn.return_value = {"id": "pin_1", "status": "created"}
-            self.client.pin_create("https://example.com/pto", "pto policy")
-        body = mock_fn.call_args[0][1]
-        self.assertEqual(body["url"], "https://example.com/pto")
-        self.assertEqual(body["query"], "pto policy")
+            self.client.pin_create(query="pto policy", doc_id="doc_pto")
+        self.assertEqual(mock_fn.call_count, 1, "no /getdocuments round trip needed")
+        path, body = mock_fn.call_args[0][:2]
+        self.assertEqual(path, "/pin")
+        self.assertEqual(body, {"documentId": "doc_pto", "queries": ["pto policy"]})
+
+    def test_pin_create_errors_when_the_url_cannot_be_resolved(self):
+        from glean_code.client import GleanError
+        with patch("glean_code.client._mock_response") as mock_fn:
+            mock_fn.return_value = {"documents": []}
+            with self.assertRaises(GleanError) as ctx:
+                self.client.pin_create("https://example.com/missing", "q")
+        self.assertIn("--doc-id", str(ctx.exception))
 
 
 class TestGleanClientIndexingErrors(unittest.TestCase):

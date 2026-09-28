@@ -15,7 +15,7 @@ Every command, grouped by surface.
 | Insights & activity | `/insights` `/activity.report` |
 | Agents and tools | `/agents.list` `/agents.run` `/tools.list` `/tools.call` |
 | Docs and people | `/docs.get` `/docs.permissions` `/entities.list` `/people.get` |
-| Announcements, collections, pins | `/announcements.list` `/announcements.create` `/announcements.delete` `/collections.list` `/collections.create` `/collections.delete` `/pins.list` `/pins.create` `/pins.delete` |
+| Announcements, collections, pins | `/announcements.create` `/announcements.delete` `/collections.list` `/collections.create` `/collections.delete` `/pins.list` `/pins.create` `/pins.delete` |
 | Shortcuts (Go Links) | `/shortcuts.list` `/shortcuts.get` `/shortcuts.create` `/shortcuts.update` `/shortcuts.delete` |
 | Answers | `/answers.list` `/answers.get` `/answers.create` `/answers.update` `/answers.delete` |
 | Verification | `/verification.list` `/verification.verify` `/verification.remind` |

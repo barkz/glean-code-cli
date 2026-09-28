@@ -2005,14 +2005,6 @@ def cmd_people_get(s: Session, pos, flags):
 
 # -------------------- announcements --------------------
 
-@register("announcements.list")
-def cmd_ann_list(s: Session, pos, flags):
-    try:
-        print(_render_json(s.client.announcements_list()))
-    except GleanError as e:
-        ui.print_err(str(e))
-
-
 @register("announcements.create")
 def cmd_ann_create(s: Session, pos, flags):
     title = flags.get("title")
@@ -2072,12 +2064,17 @@ def cmd_pins_list(s: Session, pos, flags):
 @register("pins.create")
 def cmd_pins_create(s: Session, pos, flags):
     url = flags.get("url")
+    doc_id = flags.get("doc-id") or flags.get("doc_id")
     query = flags.get("query")
-    if not url or not query:
-        ui.print_err("Usage: /pins.create --query <text> --url <url>")
+    if not query or not (url or doc_id):
+        ui.print_err("Usage: /pins.create --query <text> (--url <url> | --doc-id <id>)")
         return
     try:
-        print(_render_json(s.client.pin_create(str(url), str(query))))
+        print(_render_json(s.client.pin_create(
+            url=str(url) if url else None,
+            query=str(query),
+            doc_id=str(doc_id) if doc_id else None,
+        )))
     except GleanError as e:
         ui.print_err(str(e))
 

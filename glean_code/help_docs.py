@@ -444,13 +444,6 @@ DOCS: Dict[str, CommandDoc] = {
     },
 
     # ---------------- announcements ----------------
-    "announcements.list": {
-        "summary": "List current announcements.",
-        "usage": "/announcements.list",
-        "params": [],
-        "examples": ["/announcements.list"],
-        "endpoint": "POST /rest/api/v1/announcements/list",
-    },
     "announcements.create": {
         "summary": "Create an announcement.",
         "usage": "/announcements.create --title <text> --body <text> [--audience <filter>]",
@@ -1135,7 +1128,7 @@ COMMAND_GROUPS: List[Tuple[str, List[str]]] = [
     ("Verification",   ["verification.list", "verification.verify", "verification.remind"]),
     ("Messages",       ["messages.get"]),
     ("Activity",       ["activity.report"]),
-    ("Announcements",  ["announcements.list", "announcements.create", "announcements.delete"]),
+    ("Announcements",  ["announcements.create", "announcements.delete"]),
     ("Collections",    ["collections.list", "collections.create", "collections.delete"]),
     ("Pins",           ["pins.list", "pins.create", "pins.delete"]),
     ("Indexing",       ["datasources.status", "datasources.config", "indexing.rotate-token",
