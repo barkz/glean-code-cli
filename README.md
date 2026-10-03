@@ -156,11 +156,7 @@ SQLite FTS5, incremental on a content hash, `.docx`/`.xlsx`/`.pptx` read straigh
 
 **Released.** The full Glean Code REPL — slash commands, status bar, mock/live switching, secure-token storage — in the editor sidebar of VS Code, Cursor and VSCodium. Run searches, kick off agents, and pin docs without leaving your code window.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/barkz/glean-code-vscode-extension/main/get.sh | bash
-```
-
-That installs the latest release into every VS Code, Cursor and VSCodium it finds. Other install options: **[glean-code-vscode-extension](https://github.com/barkz/glean-code-vscode-extension)**.
+One line installs the latest release into every VS Code, Cursor and VSCodium it finds — no clone, no Node, no build: **[install instructions](https://github.com/barkz/glean-code-vscode-extension#install)**.
 
 ![Glean Code extension in VS Code](assets/vscode_extension_vscode.png)
 
