@@ -152,13 +152,21 @@ SQLite FTS5, incremental on a content hash, `.docx`/`.xlsx`/`.pptx` read straigh
 
 <br>
 
-## Coming soon
+## Visual Studio Code extension
 
-### Visual Studio Code extension
+**Released.** The full Glean Code REPL — slash commands, status bar, mock/live switching, secure-token storage — in the editor sidebar of VS Code, Cursor and VSCodium. Run searches, kick off agents, and pin docs without leaving your code window.
 
-The full Glean Code REPL — slash commands, status bar, mock/live switching, secure-token storage — in the editor sidebar. Run searches, kick off agents, and pin docs without leaving your code window.
+One line installs the latest release into every VS Code, Cursor and VSCodium it finds — no clone, no Node, no build: **[install instructions](https://github.com/barkz/glean-code-vscode-extension#install)**.
 
-![Glean Code VS Code extension preview](assets/vscode_extension_glean-code-cli.png)
+![Glean Code extension in VS Code](assets/vscode_extension_vscode.png)
+
+`/graph` renders as an interactive tab — click a node for its edges, drag to move, scroll to zoom:
+
+![Glean Code /graph opened as an interactive graph in VS Code](assets/vscode_extension_graph.png)
+
+The same extension in VSCodium:
+
+![Glean Code extension in VSCodium](assets/vscode_extension_vscodium.png)
 
 <br>
 
